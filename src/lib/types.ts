@@ -18,6 +18,8 @@ export type LogMode = "raw" | "text";
 export type LogState = "stopped" | "recording" | "paused" | "error";
 export type HexColumns = 8 | 16 | 24 | 32;
 export type HexGroupSize = 1 | 2 | 4 | 8;
+export type SessionProtocol = "serial" | "ssh" | "adb";
+export type SshAuthMode = "agent" | "privateKey";
 
 export interface SerialPortDescriptor {
   path: string;
@@ -46,6 +48,21 @@ export interface SerialConfig {
   autoReconnect: boolean;
 }
 
+export interface SshConfig {
+  host: string;
+  port: number;
+  username: string;
+  authMode: SshAuthMode;
+  privateKeyPath: string;
+  strictHostKeyChecking: boolean;
+  keepAliveSeconds: number;
+}
+
+export interface AdbConfig {
+  deviceId: string;
+  shell: string;
+}
+
 export interface TerminalConfig {
   encoding: string;
   termType: string;
@@ -71,7 +88,10 @@ export interface SessionProfile {
   group: string;
   description: string;
   color: string;
+  protocol: SessionProtocol;
   serial: SerialConfig;
+  ssh: SshConfig;
+  adb: AdbConfig;
   terminal: TerminalConfig;
   logging: LoggingConfig;
   createdAt: string;
@@ -177,6 +197,21 @@ export const DEFAULT_SERIAL_CONFIG: SerialConfig = {
   autoReconnect: false,
 };
 
+export const DEFAULT_SSH_CONFIG: SshConfig = {
+  host: "",
+  port: 22,
+  username: "",
+  authMode: "agent",
+  privateKeyPath: "",
+  strictHostKeyChecking: true,
+  keepAliveSeconds: 30,
+};
+
+export const DEFAULT_ADB_CONFIG: AdbConfig = {
+  deviceId: "",
+  shell: "",
+};
+
 export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   encoding: "utf-8",
   termType: "xterm-256color",
@@ -198,15 +233,26 @@ export const DEFAULT_LOGGING_CONFIG: LoggingConfig = {
 
 export function createSessionProfile(
   port?: SerialPortDescriptor,
+  protocol: SessionProtocol = "serial",
 ): SessionProfile {
   const timestamp = now();
-  const suffix = port?.displayName || port?.path || "新串口会话";
+  const defaults: Record<SessionProtocol, { name: string; group: string; color: string }> = {
+    serial: {
+      name: port?.displayName || port?.path || "新串口会话",
+      group: "串口会话",
+      color: "#17a34a",
+    },
+    ssh: { name: "新 SSH 会话", group: "SSH 会话", color: "#2563eb" },
+    adb: { name: "新 ADB 会话", group: "ADB 会话", color: "#f59e0b" },
+  };
+  const selected = defaults[protocol];
   return {
     id: crypto.randomUUID(),
-    name: suffix,
-    group: "串口会话",
+    name: selected.name,
+    group: selected.group,
     description: "",
-    color: "#17a34a",
+    color: selected.color,
+    protocol,
     serial: {
       ...DEFAULT_SERIAL_CONFIG,
       portPath: port?.path ?? "",
@@ -214,6 +260,8 @@ export function createSessionProfile(
       devicePid: port?.pid,
       deviceSerialNumber: port?.serialNumber,
     },
+    ssh: { ...DEFAULT_SSH_CONFIG },
+    adb: { ...DEFAULT_ADB_CONFIG },
     terminal: { ...DEFAULT_TERMINAL_CONFIG },
     logging: { ...DEFAULT_LOGGING_CONFIG },
     createdAt: timestamp,
@@ -230,6 +278,8 @@ export function duplicateSessionProfile(
     id: crypto.randomUUID(),
     name: `${profile.name} 副本`,
     serial: { ...profile.serial },
+    ssh: { ...profile.ssh },
+    adb: { ...profile.adb },
     terminal: { ...profile.terminal },
     logging: { ...profile.logging },
     createdAt: timestamp,
@@ -242,10 +292,32 @@ export function normalizeSessionProfile(
 ): SessionProfile {
   return {
     ...profile,
+    protocol: profile.protocol ?? "serial",
     serial: { ...DEFAULT_SERIAL_CONFIG, ...profile.serial },
+    ssh: { ...DEFAULT_SSH_CONFIG, ...profile.ssh },
+    adb: { ...DEFAULT_ADB_CONFIG, ...profile.adb },
     terminal: { ...DEFAULT_TERMINAL_CONFIG, ...profile.terminal },
     logging: { ...DEFAULT_LOGGING_CONFIG, ...profile.logging },
   };
+}
+
+export function sessionTargetLabel(profile: SessionProfile): string {
+  switch (profile.protocol) {
+    case "ssh": {
+      const destination = profile.ssh.username
+        ? `${profile.ssh.username}@${profile.ssh.host}`
+        : profile.ssh.host;
+      return destination
+        ? `${destination}:${profile.ssh.port}`
+        : "尚未配置 SSH 主机";
+    }
+    case "adb":
+      return profile.adb.deviceId || "尚未选择 ADB 设备";
+    case "serial":
+      return profile.serial.portPath
+        ? `${profile.serial.portPath} · ${profile.serial.baudRate}`
+        : "尚未选择串口设备";
+  }
 }
 
 export function reconnectDelayMs(attempt: number): number {

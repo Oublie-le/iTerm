@@ -6,6 +6,7 @@ import {
   normalizeSessionProfile,
   reconnectDelayMs,
   requiresCloseConfirmation,
+  sessionTargetLabel,
 } from "./types";
 
 describe("duplicateSessionProfile", () => {
@@ -19,6 +20,8 @@ describe("duplicateSessionProfile", () => {
     expect(duplicate.id).not.toBe(source.id);
     expect(duplicate.name).toBe("开发板 副本");
     expect(duplicate.serial).not.toBe(source.serial);
+    expect(duplicate.ssh).not.toBe(source.ssh);
+    expect(duplicate.adb).not.toBe(source.adb);
     expect(duplicate.terminal).not.toBe(source.terminal);
     expect(duplicate.serial.baudRate).toBe(115_200);
   });
@@ -34,6 +37,43 @@ describe("normalizeSessionProfile", () => {
       append: false,
       autoStart: false,
     });
+  });
+
+  it("migrates serial-only profiles to the multi-protocol schema", () => {
+    const source = createSessionProfile();
+    const legacy = {
+      ...source,
+      protocol: undefined,
+      ssh: undefined,
+      adb: undefined,
+    } as unknown as typeof source;
+
+    const migrated = normalizeSessionProfile(legacy);
+    expect(migrated.protocol).toBe("serial");
+    expect(migrated.ssh.port).toBe(22);
+    expect(migrated.adb.deviceId).toBe("");
+  });
+});
+
+describe("multi-protocol profiles", () => {
+  it("creates SSH and ADB defaults", () => {
+    const ssh = createSessionProfile(undefined, "ssh");
+    const adb = createSessionProfile(undefined, "adb");
+
+    expect(ssh.name).toBe("新 SSH 会话");
+    expect(ssh.ssh.authMode).toBe("agent");
+    expect(adb.name).toBe("新 ADB 会话");
+    expect(adb.adb.shell).toBe("");
+  });
+
+  it("formats targets for every protocol", () => {
+    const ssh = createSessionProfile(undefined, "ssh");
+    ssh.ssh = { ...ssh.ssh, host: "example.com", username: "root" };
+    const adb = createSessionProfile(undefined, "adb");
+    adb.adb.deviceId = "emulator-5554";
+
+    expect(sessionTargetLabel(ssh)).toBe("root@example.com:22");
+    expect(sessionTargetLabel(adb)).toBe("emulator-5554");
   });
 });
 
