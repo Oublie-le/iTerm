@@ -1,15 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import type { RuntimeSession, SessionProfile } from "../lib/types";
+import { formatHexDump } from "../lib/receive";
+import type {
+  ReceiveMode,
+  RuntimeSession,
+  SessionProfile,
+} from "../lib/types";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
   profile: SessionProfile;
   active: boolean;
+  receiveMode: ReceiveMode;
   onInput: (value: string) => void;
 }
 
@@ -17,6 +23,7 @@ export function TerminalPane({
   session,
   profile,
   active,
+  receiveMode,
   onInput,
 }: TerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -24,6 +31,11 @@ export function TerminalPane({
   const fitRef = useRef<FitAddon | null>(null);
   const inputRef = useRef(onInput);
   const decoderRef = useRef<TextDecoder | null>(null);
+  const lastWrittenNonceRef = useRef<number | null>(null);
+  const hexDump = useMemo(
+    () => formatHexDump(session.receiveChunks, session.bytesRead),
+    [session.bytesRead, session.receiveChunks],
+  );
 
   inputRef.current = onInput;
 
@@ -94,6 +106,13 @@ export function TerminalPane({
     decoderRef.current = new TextDecoder(profile.terminal.encoding, {
       fatal: false,
     });
+    for (const chunk of session.receiveChunks) {
+      const text = decoderRef.current.decode(new Uint8Array(chunk.bytes), {
+        stream: true,
+      });
+      if (text) terminal.write(text);
+      lastWrittenNonceRef.current = chunk.nonce;
+    }
     terminal.focus();
 
     return () => {
@@ -103,7 +122,10 @@ export function TerminalPane({
       terminalRef.current = null;
       fitRef.current = null;
       decoderRef.current = null;
+      lastWrittenNonceRef.current = null;
     };
+    // Receive history is intentionally replayed only when the terminal itself
+    // is recreated by one of the terminal configuration dependencies below.
   }, [
     profile.terminal.cursorStyle,
     profile.terminal.encoding,
@@ -115,11 +137,13 @@ export function TerminalPane({
 
   useEffect(() => {
     if (!session.lastChunk || !terminalRef.current || !decoderRef.current) return;
+    if (session.lastChunk.nonce === lastWrittenNonceRef.current) return;
     const text = decoderRef.current.decode(
       new Uint8Array(session.lastChunk.bytes),
       { stream: true },
     );
     if (text) terminalRef.current.write(text);
+    lastWrittenNonceRef.current = session.lastChunk.nonce;
   }, [session.lastChunk]);
 
   useEffect(() => {
@@ -135,7 +159,20 @@ export function TerminalPane({
       className={`terminal-pane ${active ? "is-active" : ""}`}
       aria-label={`${profile.name} 终端`}
     >
-      <div ref={hostRef} className="terminal-host" />
+      <div
+        ref={hostRef}
+        className={`terminal-host ${receiveMode === "text" ? "" : "is-hidden"}`}
+      />
+      {receiveMode === "hex" && (
+        <div className="terminal-hex-view" aria-label="Hex 接收视图">
+          {hexDump.omittedBytes > 0 && (
+            <div className="hex-omitted">
+              已隐藏较早的 {hexDump.omittedBytes.toLocaleString()} 字节
+            </div>
+          )}
+          <pre>{hexDump.text || "等待接收数据…"}</pre>
+        </div>
+      )}
       {session.state === "opening" && (
         <div className="terminal-loading">
           <span className="spinner" />

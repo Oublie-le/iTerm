@@ -1,4 +1,5 @@
 import {
+  Binary,
   Cable,
   ChevronDown,
   CirclePlus,
@@ -36,6 +37,7 @@ import {
   writeSerialBytes,
   writeSerialText,
 } from "./lib/serial";
+import { appendReceiveChunk } from "./lib/receive";
 import {
   createSessionProfile,
   type RuntimeSession,
@@ -135,18 +137,21 @@ export default function App() {
                       }
                     : session.notice,
             };
-          case "data":
+          case "data": {
+            const chunk = {
+              nonce: performance.now(),
+              sequence: event.sequence,
+              receivedAtMs: event.receivedAtMs,
+              bytes: event.bytes,
+            };
             return {
               ...session,
               sequence: event.sequence,
-              lastChunk: {
-                nonce: performance.now(),
-                sequence: event.sequence,
-                receivedAtMs: event.receivedAtMs,
-                bytes: event.bytes,
-              },
+              receiveChunks: appendReceiveChunk(session.receiveChunks, chunk),
+              lastChunk: chunk,
               bytesRead: session.bytesRead + event.bytes.length,
             };
+          }
           case "writeComplete":
             return {
               ...session,
@@ -219,6 +224,8 @@ export default function App() {
             title: profile.name,
             state: "opening",
             sequence: 0,
+            receiveMode: "text",
+            receiveChunks: [],
             bytesRead: 0,
             bytesWritten: 0,
             openedAt: Date.now(),
@@ -549,6 +556,29 @@ export default function App() {
 
             <div className="toolbar-group toolbar-right">
               <button
+                className={`signal-button ${
+                  activeSession?.receiveMode === "hex" ? "is-active" : ""
+                }`}
+                disabled={!activeSession}
+                onClick={() =>
+                  setSessions((current) =>
+                    current.map((session) =>
+                      session.id === activeSession?.id
+                        ? {
+                            ...session,
+                            receiveMode:
+                              session.receiveMode === "text" ? "hex" : "text",
+                          }
+                        : session,
+                    ),
+                  )
+                }
+                title="切换文本与 Hex 接收视图"
+              >
+                <Binary size={15} />
+                HEX
+              </button>
+              <button
                 className={`signal-button ${dtr ? "is-active" : ""}`}
                 disabled={activeSession?.state !== "connected"}
                 onClick={() => void toggleSignal("dtr")}
@@ -673,6 +703,7 @@ export default function App() {
                   session={session}
                   profile={profile}
                   active={session.id === activeSessionId}
+                  receiveMode={session.receiveMode}
                   onInput={(value) =>
                     void writeTerminalInput(session, profile, value)
                   }

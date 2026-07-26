@@ -590,6 +590,10 @@ textarea:disabled {
   inset: 7px 6px 4px 9px;
 }
 
+.terminal-host.is-hidden {
+  visibility: hidden;
+}
+
 .terminal-host .xterm {
   height: 100%;
 }
@@ -597,6 +601,33 @@ textarea:disabled {
 .terminal-host .xterm-viewport {
   scrollbar-color: #64665f #292a26;
   scrollbar-width: thin;
+}
+
+.terminal-hex-view {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 10px 13px 24px;
+  background: var(--terminal);
+  color: #d8ddd8;
+  scrollbar-color: #666 #22231f;
+}
+
+.terminal-hex-view pre {
+  margin: 0;
+  font: 13px/1.48 "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+  white-space: pre;
+}
+
+.hex-omitted {
+  position: sticky;
+  top: 0;
+  margin: -10px -13px 9px;
+  padding: 5px 13px;
+  background: rgba(45, 48, 43, 0.96);
+  border-bottom: 1px solid #4c514b;
+  color: #f4bf75;
+  font-size: 11px;
 }
 
 .terminal-loading {

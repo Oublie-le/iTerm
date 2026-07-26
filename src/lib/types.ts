@@ -12,6 +12,7 @@ export type StopBits = "1" | "1.5" | "2";
 export type FlowControl = "none" | "hardware" | "software";
 export type LineEnding = "none" | "lf" | "cr" | "crlf";
 export type SendMode = "text" | "hex";
+export type ReceiveMode = "text" | "hex";
 
 export interface SerialPortDescriptor {
   path: string;
@@ -80,6 +81,8 @@ export interface RuntimeSession {
     detail?: string;
   };
   sequence: number;
+  receiveMode: ReceiveMode;
+  receiveChunks: ReceiveChunk[];
   lastChunk?: {
     nonce: number;
     sequence: number;
@@ -89,6 +92,13 @@ export interface RuntimeSession {
   bytesRead: number;
   bytesWritten: number;
   openedAt: number;
+}
+
+export interface ReceiveChunk {
+  nonce: number;
+  sequence: number;
+  receivedAtMs: number;
+  bytes: number[];
 }
 
 export type SerialEvent =
