@@ -2,9 +2,12 @@ import {
   Cable,
   ChevronDown,
   CirclePlus,
+  Copy,
   Folder,
+  Pencil,
   RefreshCw,
   Search,
+  Trash2,
   Usb,
 } from "lucide-react";
 import type {
@@ -22,6 +25,8 @@ interface SessionSidebarProps {
   onNew: () => void;
   onOpen: (profile: SessionProfile) => void;
   onEdit: (profile: SessionProfile) => void;
+  onDuplicate: (profile: SessionProfile) => void;
+  onDelete: (profile: SessionProfile) => void;
   onRefresh: () => void;
 }
 
@@ -34,6 +39,8 @@ export function SessionSidebar({
   onNew,
   onOpen,
   onEdit,
+  onDuplicate,
+  onDelete,
   onRefresh,
 }: SessionSidebarProps) {
   const visibleProfiles = profiles.filter((profile) =>
@@ -84,25 +91,49 @@ export function SessionSidebar({
                 (session) => session.profileId === profile.id,
               );
               return (
-                <button
-                  key={profile.id}
-                  className="tree-session"
-                  onDoubleClick={() => onOpen(profile)}
-                  onClick={() => (runtime ? onOpen(profile) : onEdit(profile))}
-                  title="双击连接，单击编辑"
-                >
-                  <span
-                    className={`connection-dot state-${runtime?.state ?? "disconnected"}`}
-                  />
-                  <Cable size={16} />
-                  <span className="tree-session-text">
-                    <strong>{profile.name}</strong>
-                    <small>
-                      {profile.serial.portPath || "尚未选择设备"} ·{" "}
-                      {profile.serial.baudRate}
-                    </small>
-                  </span>
-                </button>
+                <div key={profile.id} className="tree-session-row">
+                  <button
+                    className="tree-session"
+                    onDoubleClick={() => onOpen(profile)}
+                    onClick={() => (runtime ? onOpen(profile) : onEdit(profile))}
+                    title="双击连接，单击打开或编辑"
+                  >
+                    <span
+                      className={`connection-dot state-${runtime?.state ?? "disconnected"}`}
+                    />
+                    <Cable size={16} />
+                    <span className="tree-session-text">
+                      <strong>{profile.name}</strong>
+                      <small>
+                        {profile.serial.portPath || "尚未选择设备"} ·{" "}
+                        {profile.serial.baudRate}
+                      </small>
+                    </span>
+                  </button>
+                  <div className="tree-session-actions">
+                    <button
+                      onClick={() => onEdit(profile)}
+                      title={`编辑 ${profile.name}`}
+                      aria-label={`编辑 ${profile.name}`}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() => onDuplicate(profile)}
+                      title={`复制 ${profile.name}`}
+                      aria-label={`复制 ${profile.name}`}
+                    >
+                      <Copy size={13} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(profile)}
+                      title={`删除 ${profile.name}`}
+                      aria-label={`删除 ${profile.name}`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
               );
             })
           )}

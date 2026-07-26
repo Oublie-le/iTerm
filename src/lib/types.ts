@@ -177,6 +177,21 @@ export function createSessionProfile(
   };
 }
 
+export function duplicateSessionProfile(
+  profile: SessionProfile,
+): SessionProfile {
+  const timestamp = now();
+  return {
+    ...profile,
+    id: crypto.randomUUID(),
+    name: `${profile.name} 副本`,
+    serial: { ...profile.serial },
+    terminal: { ...profile.terminal },
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
 export function createSenderPreset(index = 1): SenderPreset {
   return {
     id: crypto.randomUUID(),

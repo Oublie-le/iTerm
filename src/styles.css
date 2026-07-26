@@ -226,6 +226,47 @@ textarea:disabled {
   font-size: 12px;
 }
 
+.tree-session-row {
+  position: relative;
+}
+
+.tree-session-row .tree-session {
+  padding-right: 68px;
+}
+
+.tree-session-actions {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  display: none;
+  align-items: center;
+  gap: 1px;
+  transform: translateY(-50%);
+}
+
+.tree-session-row:hover .tree-session-actions,
+.tree-session-row:focus-within .tree-session-actions {
+  display: flex;
+}
+
+.tree-session-actions button {
+  display: inline-flex;
+  width: 20px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(238, 241, 241, 0.9);
+  border-radius: 2px;
+  color: #5d6563;
+  cursor: pointer;
+}
+
+.tree-session-actions button:hover {
+  background: #fff;
+  color: var(--green-dark);
+}
+
 .tree-session:hover,
 .tree-port:hover {
   background: #dce8df;

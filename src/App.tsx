@@ -40,6 +40,7 @@ import {
 import { appendReceiveChunk } from "./lib/receive";
 import {
   createSessionProfile,
+  duplicateSessionProfile,
   type RuntimeSession,
   type SenderPreset,
   type SerialEvent,
@@ -324,6 +325,31 @@ export default function App() {
     }
   };
 
+  const duplicateProfile = (profile: SessionProfile) => {
+    const duplicate = duplicateSessionProfile(profile);
+    setProfiles((current) => [...current, duplicate]);
+    setEditingProfile(duplicate);
+    setSessionDialogOpen(true);
+  };
+
+  const deleteProfile = async (profile: SessionProfile) => {
+    const runtime = sessions.find(
+      (session) => session.profileId === profile.id,
+    );
+    if (!window.confirm(`确定删除会话“${profile.name}”吗？此操作无法撤销。`)) {
+      return;
+    }
+    if (runtime) {
+      await closeSerialSession(runtime.id).catch(() => undefined);
+      const remaining = sessions.filter((session) => session.id !== runtime.id);
+      setSessions(remaining);
+      setActiveSessionId((current) =>
+        current === runtime.id ? (remaining.at(-1)?.id ?? null) : current,
+      );
+    }
+    setProfiles((current) => current.filter((item) => item.id !== profile.id));
+  };
+
   const writeTerminalInput = async (
     runtime: RuntimeSession,
     profile: SessionProfile,
@@ -435,6 +461,8 @@ export default function App() {
               setEditingProfile(profile);
               setSessionDialogOpen(true);
             }}
+            onDuplicate={duplicateProfile}
+            onDelete={(profile) => void deleteProfile(profile)}
             onRefresh={() => void refreshPorts()}
           />
         )}
