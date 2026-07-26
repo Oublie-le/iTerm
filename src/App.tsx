@@ -82,6 +82,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [senderOpen, setSenderOpen] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] =
     useState<SessionProfile | null>(null);
@@ -128,6 +129,24 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
   }, [profiles]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (
+        event.key.toLocaleLowerCase() === "f" &&
+        event.ctrlKey &&
+        event.shiftKey
+      ) {
+        event.preventDefault();
+        setFocusMode((current) => !current);
+      }
+      if (event.key === "Escape" && focusMode) {
+        setFocusMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [focusMode]);
 
   const applyEvent = useCallback((event: SerialEvent) => {
     setSessions((current) =>
@@ -434,7 +453,7 @@ export default function App() {
   );
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${focusMode ? "is-focus-mode" : ""}`}>
       <header className="app-menubar">
         <div className="menu-items">
           {["会话", "编辑", "搜索", "选择", "转到", "查看", "模式", "工具", "窗口", "帮助"].map(
@@ -451,7 +470,11 @@ export default function App() {
             <Link2 size={17} />
             隧道
           </button>
-          <button title="专注模式">
+          <button
+            className={focusMode ? "is-active" : ""}
+            title="专注模式（Ctrl+Shift+F）"
+            onClick={() => setFocusMode((current) => !current)}
+          >
             <Zap size={16} />
             专注模式
           </button>
@@ -837,6 +860,16 @@ export default function App() {
         onRefreshPorts={() => void refreshPorts()}
         onSave={saveProfile}
       />
+      {focusMode && (
+        <button
+          className="focus-exit-button"
+          onClick={() => setFocusMode(false)}
+          title="退出专注模式（Esc）"
+        >
+          <Zap size={15} />
+          退出专注
+        </button>
+      )}
     </div>
   );
 }

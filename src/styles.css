@@ -68,6 +68,43 @@ textarea:disabled {
   background: var(--surface);
 }
 
+.app-shell.is-focus-mode {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell.is-focus-mode .app-menubar,
+.app-shell.is-focus-mode .session-sidebar,
+.app-shell.is-focus-mode .tab-strip,
+.app-shell.is-focus-mode .session-toolbar,
+.app-shell.is-focus-mode .sender-pane,
+.app-shell.is-focus-mode .statusbar {
+  display: none;
+}
+
+.focus-exit-button {
+  position: fixed;
+  z-index: 20;
+  top: 10px;
+  right: 12px;
+  display: inline-flex;
+  height: 27px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  background: rgba(47, 49, 44, 0.88);
+  border: 1px solid #5f645b;
+  border-radius: 3px;
+  color: #d7dcd3;
+  cursor: pointer;
+  font-size: 10px;
+  opacity: 0.35;
+}
+
+.focus-exit-button:hover,
+.focus-exit-button:focus-visible {
+  opacity: 1;
+}
+
 .app-menubar {
   display: flex;
   align-items: stretch;
