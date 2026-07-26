@@ -13,6 +13,7 @@ export type FlowControl = "none" | "hardware" | "software";
 export type LineEnding = "none" | "lf" | "cr" | "crlf";
 export type SendMode = "text" | "hex";
 export type ReceiveMode = "text" | "hex";
+export type SyncChannel = "off" | "A" | "B" | "C" | "D";
 
 export interface SerialPortDescriptor {
   path: string;
@@ -84,6 +85,7 @@ export interface RuntimeSession {
   receiveMode: ReceiveMode;
   receiveChunks: ReceiveChunk[];
   receiveBaseOffset: number;
+  syncChannel: SyncChannel;
   lastChunk?: {
     nonce: number;
     sequence: number;

@@ -11,6 +11,7 @@ pub fn run() {
             serial::open_serial_session,
             serial::close_serial_session,
             serial::write_serial_text,
+            serial::write_serial_text_many,
             serial::write_serial_bytes,
             serial::set_serial_signal,
             serial::send_serial_break,

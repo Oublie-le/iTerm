@@ -136,6 +136,11 @@ textarea:disabled {
   background: #dfe4e4;
 }
 
+.menu-actions > button.is-active {
+  background: var(--green-soft);
+  color: var(--green-dark);
+}
+
 .menu-actions {
   padding-right: 5px;
 }

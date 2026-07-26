@@ -191,6 +191,23 @@ export async function writeSerialText(
   return new TextEncoder().encode(payload).length;
 }
 
+export async function writeSerialTextMany(
+  sessionIds: string[],
+  text: string,
+  encoding: string,
+): Promise<Array<{ sessionId: string; byteCount: number }>> {
+  if (isTauriRuntime()) {
+    return invoke<Array<{ sessionId: string; byteCount: number }>>(
+      "write_serial_text_many",
+      {
+        request: { sessionIds, text, encoding },
+      },
+    );
+  }
+  const byteCount = new TextEncoder().encode(text).length;
+  return sessionIds.map((sessionId) => ({ sessionId, byteCount }));
+}
+
 export async function writeSerialBytes(
   sessionId: string,
   bytes: Uint8Array,

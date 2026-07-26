@@ -37,6 +37,7 @@ import {
   setSerialSignal,
   writeSerialBytes,
   writeSerialText,
+  writeSerialTextMany,
 } from "./lib/serial";
 import { appendReceiveChunk } from "./lib/receive";
 import {
@@ -47,6 +48,7 @@ import {
   type SerialEvent,
   type SerialPortDescriptor,
   type SessionProfile,
+  type SyncChannel,
 } from "./lib/types";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
@@ -261,6 +263,7 @@ export default function App() {
             receiveMode: "text",
             receiveChunks: [],
             receiveBaseOffset: 0,
+            syncChannel: "off",
             bytesRead: 0,
             bytesWritten: 0,
             terminalCols: 80,
@@ -390,15 +393,29 @@ export default function App() {
   ) => {
     if (runtime.state !== "connected") return;
     try {
-      const count = await writeSerialText(
-        runtime.id,
+      const targets =
+        runtime.syncChannel === "off"
+          ? [runtime]
+          : sessions.filter(
+              (session) =>
+                session.state === "connected" &&
+                session.syncChannel === runtime.syncChannel,
+            );
+      const results = await writeSerialTextMany(
+        targets.map((session) => session.id),
         value,
         profile.terminal.encoding,
       );
+      const counts = new Map(
+        results.map((result) => [result.sessionId, result.byteCount]),
+      );
       setSessions((current) =>
         current.map((item) =>
-          item.id === runtime.id
-            ? { ...item, bytesWritten: item.bytesWritten + count }
+          counts.has(item.id)
+            ? {
+                ...item,
+                bytesWritten: item.bytesWritten + (counts.get(item.id) ?? 0),
+              }
             : item,
         ),
       );
@@ -447,6 +464,22 @@ export default function App() {
     else setRts(next);
   };
 
+  const cycleSyncChannel = () => {
+    if (!activeSession) return;
+    const channels: SyncChannel[] = ["off", "A", "B", "C", "D"];
+    const next =
+      channels[
+        (channels.indexOf(activeSession.syncChannel) + 1) % channels.length
+      ];
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === activeSession.id
+          ? { ...session, syncChannel: next }
+          : session,
+      ),
+    );
+  };
+
   const profileById = useMemo(
     () => new Map(profiles.map((profile) => [profile.id, profile])),
     [profiles],
@@ -466,9 +499,19 @@ export default function App() {
           <button title="搜索">
             <Search size={17} />
           </button>
-          <button title="同步输入通道">
+          <button
+            className={
+              activeSession?.syncChannel !== "off" ? "is-active" : ""
+            }
+            title="切换同步输入通道 A/B/C/D"
+            disabled={!activeSession}
+            onClick={cycleSyncChannel}
+          >
             <Link2 size={17} />
-            隧道
+            同步{" "}
+            {activeSession?.syncChannel === "off"
+              ? "—"
+              : activeSession?.syncChannel}
           </button>
           <button
             className={focusMode ? "is-active" : ""}

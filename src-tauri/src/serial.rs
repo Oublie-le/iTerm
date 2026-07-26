@@ -80,6 +80,21 @@ pub struct WriteTextRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WriteTextManyRequest {
+    session_ids: Vec<String>,
+    text: String,
+    encoding: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteResult {
+    session_id: String,
+    byte_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WriteBytesRequest {
     session_id: String,
     bytes: Vec<u8>,
@@ -287,14 +302,25 @@ pub fn write_serial_text(
     request: WriteTextRequest,
     registry: State<'_, SerialRegistry>,
 ) -> Result<usize, String> {
-    let label = request.encoding.trim().to_ascii_lowercase();
-    let encoding = Encoding::for_label(label.as_bytes())
-        .ok_or_else(|| format!("不支持字符编码：{}", request.encoding))?;
-    let (payload, _, had_errors) = encoding.encode(&request.text);
-    if had_errors {
-        return Err(format!("文本包含无法由 {} 表示的字符。", request.encoding));
+    let payload = encode_text(&request.text, &request.encoding)?;
+    write_bytes(&registry, &request.session_id, payload)
+}
+
+#[tauri::command]
+pub fn write_serial_text_many(
+    request: WriteTextManyRequest,
+    registry: State<'_, SerialRegistry>,
+) -> Result<Vec<WriteResult>, String> {
+    let payload = encode_text(&request.text, &request.encoding)?;
+    let mut results = Vec::with_capacity(request.session_ids.len());
+    for session_id in request.session_ids {
+        let byte_count = write_bytes(&registry, &session_id, payload.clone())?;
+        results.push(WriteResult {
+            session_id,
+            byte_count,
+        });
     }
-    write_bytes(&registry, &request.session_id, payload.into_owned())
+    Ok(results)
 }
 
 #[tauri::command]
@@ -489,6 +515,17 @@ fn write_bytes(
     receive_reply(reply_rx, "写入串口")
 }
 
+fn encode_text(text: &str, encoding_label: &str) -> Result<Vec<u8>, String> {
+    let label = encoding_label.trim().to_ascii_lowercase();
+    let encoding = Encoding::for_label(label.as_bytes())
+        .ok_or_else(|| format!("不支持字符编码：{encoding_label}"))?;
+    let (payload, _, had_errors) = encoding.encode(text);
+    if had_errors {
+        return Err(format!("文本包含无法由 {encoding_label} 表示的字符。"));
+    }
+    Ok(payload.into_owned())
+}
+
 fn send_command(
     registry: &State<'_, SerialRegistry>,
     session_id: &str,
@@ -590,6 +627,13 @@ mod tests {
     #[test]
     fn timestamp_is_in_unix_milliseconds() {
         assert!(unix_time_ms() > 1_700_000_000_000);
+    }
+
+    #[test]
+    fn encodes_text_once_for_synchronized_writes() {
+        assert_eq!(encode_text("ABC", "utf-8").unwrap(), b"ABC");
+        assert_eq!(encode_text("你好", "gbk").unwrap().len(), 4);
+        assert!(encode_text("🙂", "windows-1252").is_err());
     }
 
     #[test]
