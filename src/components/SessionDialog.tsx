@@ -395,6 +395,19 @@ export function SessionDialog({
                       </label>
                     </div>
                   </div>
+                  <div className="field-row">
+                    <span>设备恢复</span>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={draft.serial.autoReconnect}
+                        onChange={(event) =>
+                          updateSerial({ autoReconnect: event.target.checked })
+                        }
+                      />
+                      设备重新出现后自动重连（最多 8 次）
+                    </label>
+                  </div>
                 </div>
               </>
             )}

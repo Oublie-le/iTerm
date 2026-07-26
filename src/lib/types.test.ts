@@ -3,6 +3,7 @@ import {
   createSessionProfile,
   duplicateSessionProfile,
   normalizeSessionProfile,
+  reconnectDelayMs,
 } from "./types";
 
 describe("duplicateSessionProfile", () => {
@@ -31,5 +32,14 @@ describe("normalizeSessionProfile", () => {
       append: false,
       autoStart: false,
     });
+  });
+});
+
+describe("reconnectDelayMs", () => {
+  it("uses bounded exponential backoff", () => {
+    expect(reconnectDelayMs(1)).toBe(1_000);
+    expect(reconnectDelayMs(4)).toBe(8_000);
+    expect(reconnectDelayMs(8)).toBe(30_000);
+    expect(reconnectDelayMs(100)).toBe(30_000);
   });
 });

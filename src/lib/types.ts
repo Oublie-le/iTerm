@@ -38,6 +38,7 @@ export interface SerialConfig {
   readTimeoutMs: number;
   dtrOnOpen: boolean;
   rtsOnOpen: boolean;
+  autoReconnect: boolean;
 }
 
 export interface TerminalConfig {
@@ -97,6 +98,8 @@ export interface RuntimeSession {
   syncChannel: SyncChannel;
   logState: LogState;
   logPath?: string;
+  reconnectAttempts: number;
+  nextReconnectAt?: number;
   lastChunk?: {
     nonce: number;
     sequence: number;
@@ -163,6 +166,7 @@ export const DEFAULT_SERIAL_CONFIG: SerialConfig = {
   readTimeoutMs: 20,
   dtrOnOpen: true,
   rtsOnOpen: true,
+  autoReconnect: false,
 };
 
 export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
@@ -229,6 +233,11 @@ export function normalizeSessionProfile(
     terminal: { ...DEFAULT_TERMINAL_CONFIG, ...profile.terminal },
     logging: { ...DEFAULT_LOGGING_CONFIG, ...profile.logging },
   };
+}
+
+export function reconnectDelayMs(attempt: number): number {
+  const safeAttempt = Math.max(1, Math.trunc(attempt));
+  return Math.min(30_000, 1_000 * 2 ** (safeAttempt - 1));
 }
 
 export function createSenderPreset(index = 1): SenderPreset {

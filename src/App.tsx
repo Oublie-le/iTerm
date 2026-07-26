@@ -50,6 +50,7 @@ import {
   createSessionProfile,
   duplicateSessionProfile,
   normalizeSessionProfile,
+  reconnectDelayMs,
   type RuntimeSession,
   type SenderPreset,
   type SerialEvent,
@@ -60,6 +61,7 @@ import {
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
+const MAX_RECONNECT_ATTEMPTS = 8;
 
 function loadProfiles(): SessionProfile[] {
   try {
@@ -168,6 +170,12 @@ export default function App() {
             return {
               ...session,
               state: event.state,
+              reconnectAttempts:
+                event.state === "connected" ? 0 : session.reconnectAttempts,
+              nextReconnectAt:
+                event.state === "connected"
+                  ? undefined
+                  : session.nextReconnectAt,
               logState:
                 event.state === "disconnected" ||
                 event.state === "deviceLost" ||
@@ -208,16 +216,28 @@ export default function App() {
               ...session,
               bytesWritten: session.bytesWritten + event.byteCount,
             };
-          case "error":
+          case "error": {
+            const reconnectAttempts = session.reconnectAttempts + 1;
+            const willReconnect =
+              event.recoverable &&
+              reconnectAttempts <= MAX_RECONNECT_ATTEMPTS;
             return {
               ...session,
-              state: event.recoverable ? "deviceLost" : "error",
+              state: willReconnect ? "deviceLost" : "error",
+              reconnectAttempts,
+              nextReconnectAt: willReconnect
+                ? Date.now() +
+                  reconnectDelayMs(reconnectAttempts)
+                : undefined,
               notice: {
                 tone: "error",
                 title: event.message,
-                detail: event.code,
+                detail: willReconnect
+                  ? `${event.code} · 将自动尝试第 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} 次重连`
+                  : event.code,
               },
             };
+          }
           case "log":
             return {
               ...session,
@@ -314,7 +334,7 @@ export default function App() {
               code: "OPEN_FAILED",
               message:
                 error instanceof Error ? error.message : String(error),
-              recoverable: false,
+              recoverable: profile.serial.autoReconnect,
             });
           }
         }
@@ -336,6 +356,7 @@ export default function App() {
             receiveBaseOffset: 0,
             syncChannel: "off",
             logState: "stopped",
+            reconnectAttempts: 0,
             bytesRead: 0,
             bytesWritten: 0,
             terminalCols: 80,
@@ -344,6 +365,7 @@ export default function App() {
           },
         ]);
       } else {
+        await closeSerialSession(sessionId).catch(() => undefined);
         setSessions((current) =>
           current.map((session) =>
             session.id === sessionId
@@ -367,12 +389,37 @@ export default function App() {
           sessionId,
           code: "OPEN_FAILED",
           message: error instanceof Error ? error.message : String(error),
-          recoverable: false,
+          recoverable: profile.serial.autoReconnect,
         });
       }
     },
     [applyEvent, sessions, startLogging],
   );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      for (const session of sessions) {
+        if (
+          session.state !== "deviceLost" ||
+          !session.nextReconnectAt ||
+          session.nextReconnectAt > now
+        ) {
+          continue;
+        }
+        const profile = profiles.find(
+          (item) => item.id === session.profileId,
+        );
+        if (
+          profile?.serial.autoReconnect &&
+          ports.some((port) => port.path === profile.serial.portPath)
+        ) {
+          void connectProfile(profile, session.id);
+        }
+      }
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [connectProfile, ports, profiles, sessions]);
 
   const disconnectSession = async (session: RuntimeSession) => {
     setSessions((current) =>
