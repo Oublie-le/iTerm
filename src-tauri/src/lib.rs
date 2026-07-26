@@ -1,12 +1,18 @@
+mod process;
 mod serial;
 
+use process::ProcessRegistry;
 use serial::SerialRegistry;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(SerialRegistry::default())
+        .manage(ProcessRegistry::default())
         .invoke_handler(tauri::generate_handler![
+            process::open_ssh_session,
+            process::close_process_session,
+            process::write_process_bytes,
             serial::list_serial_ports,
             serial::open_serial_session,
             serial::close_serial_session,

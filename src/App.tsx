@@ -46,8 +46,13 @@ import {
   stopSerialLog,
   writeSerialBytes,
   writeSerialText,
-  writeSerialTextMany,
 } from "./lib/serial";
+import {
+  closeProcessSession,
+  openSshSession,
+  writeProcessBytes,
+  writeProcessText,
+} from "./lib/remote";
 import { appendReceiveChunk } from "./lib/receive";
 import { sendFileInChunks } from "./lib/fileTransfer";
 import {
@@ -57,6 +62,7 @@ import {
   normalizeSessionProfile,
   reconnectDelayMs,
   requiresCloseConfirmation,
+  sessionTargetLabel,
   type RuntimeSession,
   type SenderPreset,
   type SerialEvent,
@@ -98,6 +104,63 @@ function stateLabel(state: RuntimeSession["state"]): string {
   return labels[state];
 }
 
+function hasConnectionTarget(profile: SessionProfile): boolean {
+  if (profile.protocol === "ssh") return Boolean(profile.ssh.host.trim());
+  if (profile.protocol === "adb") return Boolean(profile.adb.deviceId.trim());
+  return Boolean(profile.serial.portPath);
+}
+
+async function openConfiguredSession(
+  sessionId: string,
+  profile: SessionProfile,
+  onEvent: (event: SerialEvent) => void,
+): Promise<void> {
+  if (profile.protocol === "ssh") {
+    return openSshSession(sessionId, profile, onEvent);
+  }
+  if (profile.protocol === "adb") {
+    throw new Error("ADB Shell 后端尚未启用。");
+  }
+  return openSerialSession(sessionId, profile, onEvent);
+}
+
+async function closeConfiguredSession(
+  sessionId: string,
+  profile?: SessionProfile,
+): Promise<void> {
+  if (profile?.protocol === "ssh" || profile?.protocol === "adb") {
+    return closeProcessSession(sessionId);
+  }
+  return closeSerialSession(sessionId);
+}
+
+async function writeConfiguredText(
+  sessionId: string,
+  profile: SessionProfile,
+  text: string,
+  lineEnding: SenderPreset["lineEnding"] = "none",
+): Promise<number> {
+  if (profile.protocol === "ssh" || profile.protocol === "adb") {
+    return writeProcessText(sessionId, text, lineEnding);
+  }
+  return writeSerialText(
+    sessionId,
+    text,
+    profile.terminal.encoding,
+    lineEnding,
+  );
+}
+
+async function writeConfiguredBytes(
+  sessionId: string,
+  profile: SessionProfile,
+  bytes: Uint8Array,
+): Promise<number> {
+  return profile.protocol === "serial"
+    ? writeSerialBytes(sessionId, bytes)
+    : writeProcessBytes(sessionId, bytes);
+}
+
 export default function App() {
   const [initialWorkspace] = useState(loadWorkspaceSnapshot);
   const [profiles, setProfiles] = useState<SessionProfile[]>(loadProfiles);
@@ -111,7 +174,7 @@ export default function App() {
           ...createRuntimeSession(profile),
           notice: {
             tone: "info" as const,
-            title: "会话已从上次工作区恢复，点击连接以打开串口。",
+            title: "会话已从上次工作区恢复，点击连接以建立连接。",
           },
         },
       ];
@@ -182,6 +245,7 @@ export default function App() {
     if (ports.length === 0) return;
     setProfiles((current) =>
       current.map((profile) => {
+        if (profile.protocol !== "serial") return profile;
         const match = findMatchingSerialPort(profile.serial, ports);
         if (!match || match.path === profile.serial.portPath) return profile;
         return {
@@ -369,7 +433,7 @@ export default function App() {
 
   const connectProfile = useCallback(
     async (profile: SessionProfile, existingId?: string) => {
-      if (!profile.serial.portPath) {
+      if (!hasConnectionTarget(profile)) {
         setEditingProfile(profile);
         setSessionDialogOpen(true);
         return;
@@ -385,7 +449,9 @@ export default function App() {
           alreadyOpen.state === "error" ||
           alreadyOpen.state === "deviceLost"
         ) {
-          await closeSerialSession(alreadyOpen.id).catch(() => undefined);
+          await closeConfiguredSession(alreadyOpen.id, profile).catch(
+            () => undefined,
+          );
           setSessions((current) =>
             current.map((item) =>
               item.id === alreadyOpen.id
@@ -394,8 +460,8 @@ export default function App() {
             ),
           );
           try {
-            await openSerialSession(alreadyOpen.id, profile, applyEvent);
-            if (profile.logging.autoStart) {
+            await openConfiguredSession(alreadyOpen.id, profile, applyEvent);
+            if (profile.protocol === "serial" && profile.logging.autoStart) {
               await startLogging(alreadyOpen.id, profile);
             }
           } catch (error) {
@@ -405,7 +471,9 @@ export default function App() {
               code: "OPEN_FAILED",
               message:
                 error instanceof Error ? error.message : String(error),
-              recoverable: profile.serial.autoReconnect,
+              recoverable:
+                profile.protocol === "serial" &&
+                profile.serial.autoReconnect,
             });
           }
         }
@@ -422,7 +490,9 @@ export default function App() {
           },
         ]);
       } else {
-        await closeSerialSession(sessionId).catch(() => undefined);
+        await closeConfiguredSession(sessionId, profile).catch(
+          () => undefined,
+        );
         setSessions((current) =>
           current.map((session) =>
             session.id === sessionId
@@ -432,12 +502,14 @@ export default function App() {
         );
       }
       setActiveSessionId(sessionId);
-      setDtr(profile.serial.dtrOnOpen);
-      setRts(profile.serial.rtsOnOpen);
+      if (profile.protocol === "serial") {
+        setDtr(profile.serial.dtrOnOpen);
+        setRts(profile.serial.rtsOnOpen);
+      }
 
       try {
-        await openSerialSession(sessionId, profile, applyEvent);
-        if (profile.logging.autoStart) {
+        await openConfiguredSession(sessionId, profile, applyEvent);
+        if (profile.protocol === "serial" && profile.logging.autoStart) {
           await startLogging(sessionId, profile);
         }
       } catch (error) {
@@ -446,7 +518,8 @@ export default function App() {
           sessionId,
           code: "OPEN_FAILED",
           message: error instanceof Error ? error.message : String(error),
-          recoverable: profile.serial.autoReconnect,
+          recoverable:
+            profile.protocol === "serial" && profile.serial.autoReconnect,
         });
       }
     },
@@ -468,7 +541,8 @@ export default function App() {
           (item) => item.id === session.profileId,
         );
         if (
-          profile?.serial.autoReconnect &&
+          profile?.protocol === "serial" &&
+          profile.serial.autoReconnect &&
           ports.some((port) => port.path === profile.serial.portPath)
         ) {
           void connectProfile(profile, session.id);
@@ -479,13 +553,14 @@ export default function App() {
   }, [connectProfile, ports, profiles, sessions]);
 
   const disconnectSession = async (session: RuntimeSession) => {
+    const profile = profiles.find((item) => item.id === session.profileId);
     setSessions((current) =>
       current.map((item) =>
         item.id === session.id ? { ...item, state: "closing" } : item,
       ),
     );
     try {
-      await closeSerialSession(session.id);
+      await closeConfiguredSession(session.id, profile);
       setSessions((current) =>
         current.map((item) =>
           item.id === session.id
@@ -495,7 +570,7 @@ export default function App() {
                 logState: "stopped",
                 notice: {
                   tone: "info",
-                  title: "会话已断开，点击重连可再次打开串口。",
+                  title: "会话已断开，点击重连可重新建立连接。",
                 },
               }
             : item,
@@ -523,7 +598,10 @@ export default function App() {
     ) {
       return;
     }
-    await closeSerialSession(sessionId).catch(() => undefined);
+    const profile = target
+      ? profiles.find((item) => item.id === target.profileId)
+      : undefined;
+    await closeConfiguredSession(sessionId, profile).catch(() => undefined);
     setSessions((current) => current.filter((item) => item.id !== sessionId));
     setActiveSessionId((current) => {
       if (current !== sessionId) return current;
@@ -566,7 +644,7 @@ export default function App() {
       return;
     }
     if (runtime) {
-      await closeSerialSession(runtime.id).catch(() => undefined);
+      await closeConfiguredSession(runtime.id, profile).catch(() => undefined);
       const remaining = sessions.filter((session) => session.id !== runtime.id);
       setSessions(remaining);
       setActiveSessionId((current) =>
@@ -591,10 +669,24 @@ export default function App() {
                 session.state === "connected" &&
                 session.syncChannel === runtime.syncChannel,
             );
-      const results = await writeSerialTextMany(
-        targets.map((session) => session.id),
-        value,
-        profile.terminal.encoding,
+      const results = await Promise.all(
+        targets.flatMap((target) => {
+          const targetProfile = profiles.find(
+            (item) => item.id === target.profileId,
+          );
+          return targetProfile
+            ? [
+                writeConfiguredText(
+                  target.id,
+                  targetProfile,
+                  value,
+                ).then((byteCount) => ({
+                  sessionId: target.id,
+                  byteCount,
+                })),
+              ]
+            : [];
+        }),
       );
       const counts = new Map(
         results.map((result) => [result.sessionId, result.byteCount]),
@@ -625,18 +717,22 @@ export default function App() {
       throw new Error("没有活动会话。");
     }
     if (activeSession.state !== "connected") {
-      throw new Error("串口未连接。");
+      throw new Error("会话未连接。");
     }
     if (activeSession.transferActive) {
       throw new Error("文件发送期间不能发送普通数据。");
     }
     const count =
       preset.mode === "hex"
-        ? await writeSerialBytes(activeSession.id, parseHex(preset.payload))
-        : await writeSerialText(
+        ? await writeConfiguredBytes(
             activeSession.id,
+            activeProfile,
+            parseHex(preset.payload),
+          )
+        : await writeConfiguredText(
+            activeSession.id,
+            activeProfile,
             preset.payload,
-            activeProfile.terminal.encoding,
             preset.lineEnding,
           );
     setSessions((current) =>
@@ -654,8 +750,12 @@ export default function App() {
     onProgress: (sentBytes: number, totalBytes: number) => void,
     signal: AbortSignal,
   ): Promise<number> => {
-    if (!activeSession || activeSession.state !== "connected") {
-      throw new Error("串口未连接。");
+    if (
+      !activeSession ||
+      !activeProfile ||
+      activeSession.state !== "connected"
+    ) {
+      throw new Error("会话未连接。");
     }
     const sessionId = activeSession.id;
     setSessions((current) =>
@@ -669,7 +769,11 @@ export default function App() {
       return await sendFileInChunks(
         file,
         async (bytes) => {
-          const count = await writeSerialBytes(sessionId, bytes);
+          const count = await writeConfiguredBytes(
+            sessionId,
+            activeProfile,
+            bytes,
+          );
           setSessions((current) =>
             current.map((session) =>
               session.id === sessionId
@@ -957,10 +1061,12 @@ export default function App() {
               <Info size={17} />
               <span className="breadcrumb-divider" />
               <ChevronDown size={13} />
-              <strong>serial</strong>
+              <strong>{activeProfile?.protocol ?? "session"}</strong>
               <ChevronDown size={13} />
               <span>
-                {activeProfile?.serial.portPath || "尚未打开串口会话"}
+                {activeProfile
+                  ? sessionTargetLabel(activeProfile)
+                  : "尚未打开会话"}
               </span>
             </div>
 
@@ -1000,6 +1106,7 @@ export default function App() {
                   disabled={
                     !activeSession ||
                     !activeProfile ||
+                    activeProfile.protocol !== "serial" ||
                     activeSession.state !== "connected"
                   }
                   onClick={() =>
@@ -1038,7 +1145,10 @@ export default function App() {
               </button>
               <button
                 className={`signal-button ${dtr ? "is-active" : ""}`}
-                disabled={activeSession?.state !== "connected"}
+                disabled={
+                  activeProfile?.protocol !== "serial" ||
+                  activeSession?.state !== "connected"
+                }
                 onClick={() => void toggleSignal("dtr")}
                 title="切换 DTR"
               >
@@ -1046,7 +1156,10 @@ export default function App() {
               </button>
               <button
                 className={`signal-button ${rts ? "is-active" : ""}`}
-                disabled={activeSession?.state !== "connected"}
+                disabled={
+                  activeProfile?.protocol !== "serial" ||
+                  activeSession?.state !== "connected"
+                }
                 onClick={() => void toggleSignal("rts")}
                 title="切换 RTS"
               >
@@ -1054,7 +1167,10 @@ export default function App() {
               </button>
               <button
                 className="icon-button"
-                disabled={activeSession?.state !== "connected"}
+                disabled={
+                  activeProfile?.protocol !== "serial" ||
+                  activeSession?.state !== "connected"
+                }
                 onClick={() =>
                   activeSession && void sendSerialBreak(activeSession.id)
                 }
@@ -1064,7 +1180,10 @@ export default function App() {
               </button>
               <button
                 className="icon-button"
-                disabled={activeSession?.state !== "connected"}
+                disabled={
+                  activeProfile?.protocol !== "serial" ||
+                  activeSession?.state !== "connected"
+                }
                 onClick={() =>
                   activeSession &&
                   void clearSerialBuffers(activeSession.id, "all")
@@ -1141,11 +1260,11 @@ export default function App() {
                   <Cable size={34} />
                 </div>
                 <h1>iTerm</h1>
-                <p>WindTerm 风格的跨平台串口工作区</p>
+                <p>WindTerm 风格的串口、SSH 与 ADB 终端工作区</p>
                 <div className="welcome-actions">
                   <button className="primary-button" onClick={openNewDialog}>
                     <CirclePlus size={17} />
-                    新建串口会话
+                    新建会话
                   </button>
                   <button
                     className="secondary-button"

@@ -17,6 +17,7 @@ import type {
   RuntimeSession,
   SessionProfile,
 } from "../lib/types";
+import { sessionTargetLabel } from "../lib/types";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -331,7 +332,7 @@ export function TerminalPane({
       {session.state === "opening" && (
         <div className="terminal-loading">
           <span className="spinner" />
-          正在打开 {profile.serial.portPath || "串口"}…
+          正在打开 {sessionTargetLabel(profile)}…
         </div>
       )}
     </section>

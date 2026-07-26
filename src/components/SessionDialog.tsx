@@ -3,9 +3,11 @@ import {
   FileClock,
   Info,
   Monitor,
+  Network,
   RefreshCw,
   Settings2,
   SlidersHorizontal,
+  Smartphone,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -14,11 +16,19 @@ import type {
   FlowControl,
   Parity,
   SerialPortDescriptor,
+  SessionProtocol,
   SessionProfile,
   StopBits,
 } from "../lib/types";
 
-type DialogPage = "session" | "serial" | "terminal" | "window" | "logging";
+type DialogPage =
+  | "session"
+  | "serial"
+  | "ssh"
+  | "adb"
+  | "terminal"
+  | "window"
+  | "logging";
 
 interface SessionDialogProps {
   open: boolean;
@@ -36,6 +46,8 @@ const pages: Array<{
 }> = [
   { id: "session", label: "会话", icon: Info },
   { id: "serial", label: "串口", icon: Cable },
+  { id: "ssh", label: "SSH", icon: Network },
+  { id: "adb", label: "ADB", icon: Smartphone },
   { id: "terminal", label: "终端", icon: TerminalSquare },
   { id: "window", label: "窗口", icon: Monitor },
   { id: "logging", label: "日志", icon: FileClock },
@@ -76,6 +88,16 @@ export function SessionDialog({
         : current,
     );
 
+  const updateSsh = (patch: Partial<SessionProfile["ssh"]>) =>
+    setDraft((current) =>
+      current ? { ...current, ssh: { ...current.ssh, ...patch } } : current,
+    );
+
+  const updateAdb = (patch: Partial<SessionProfile["adb"]>) =>
+    setDraft((current) =>
+      current ? { ...current, adb: { ...current.adb, ...patch } } : current,
+    );
+
   const updateTerminal = (patch: Partial<SessionProfile["terminal"]>) =>
     setDraft((current) =>
       current
@@ -96,17 +118,49 @@ export function SessionDialog({
       setError("请输入会话名称。");
       return;
     }
-    if (connect && !draft.serial.portPath) {
+    if (connect && draft.protocol === "serial" && !draft.serial.portPath) {
       setPage("serial");
       setError("请选择串口设备。");
       return;
     }
     if (
+      draft.protocol === "serial" &&
       !Number.isInteger(draft.serial.baudRate) ||
+      draft.protocol === "serial" &&
       draft.serial.baudRate < 1
     ) {
       setPage("serial");
       setError("波特率必须是大于 0 的整数。");
+      return;
+    }
+    if (connect && draft.protocol === "ssh" && !draft.ssh.host.trim()) {
+      setPage("ssh");
+      setError("请输入 SSH 主机地址。");
+      return;
+    }
+    if (
+      draft.protocol === "ssh" &&
+      (!Number.isInteger(draft.ssh.port) ||
+        draft.ssh.port < 1 ||
+        draft.ssh.port > 65_535)
+    ) {
+      setPage("ssh");
+      setError("SSH 端口必须是 1–65535 的整数。");
+      return;
+    }
+    if (
+      connect &&
+      draft.protocol === "ssh" &&
+      draft.ssh.authMode === "privateKey" &&
+      !draft.ssh.privateKeyPath.trim()
+    ) {
+      setPage("ssh");
+      setError("使用私钥认证时必须填写私钥路径。");
+      return;
+    }
+    if (connect && draft.protocol === "adb" && !draft.adb.deviceId.trim()) {
+      setPage("adb");
+      setError("请输入或选择 ADB 设备 ID。");
       return;
     }
     onSave(
@@ -114,6 +168,37 @@ export function SessionDialog({
       connect,
     );
   };
+
+  const protocolDetails: Record<
+    SessionProtocol,
+    { label: string; description: string; icon: typeof Cable }
+  > = {
+    serial: {
+      label: "串口",
+      description: "创建或编辑一个本地串口连接",
+      icon: Cable,
+    },
+    ssh: {
+      label: "SSH",
+      description: "通过本机 OpenSSH 客户端连接远程主机",
+      icon: Network,
+    },
+    adb: {
+      label: "ADB",
+      description: "通过 Android Debug Bridge 打开设备 Shell",
+      icon: Smartphone,
+    },
+  };
+  const protocolDetail = protocolDetails[draft.protocol];
+  const ProtocolIcon = protocolDetail.icon;
+  const visiblePages = pages.filter(
+    (item) =>
+      item.id === "session" ||
+      item.id === draft.protocol ||
+      item.id === "terminal" ||
+      item.id === "window" ||
+      item.id === "logging",
+  );
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -126,11 +211,13 @@ export function SessionDialog({
         <header className="dialog-header">
           <div>
             <span className="dialog-icon">
-              <Cable size={20} />
+              <ProtocolIcon size={20} />
             </span>
             <div>
-              <h2 id="session-dialog-title">串口会话设置</h2>
-              <p>创建或编辑一个本地串口连接</p>
+              <h2 id="session-dialog-title">
+                {protocolDetail.label} 会话设置
+              </h2>
+              <p>{protocolDetail.description}</p>
             </div>
           </div>
           <button className="icon-button" onClick={onCancel} title="关闭">
@@ -140,7 +227,7 @@ export function SessionDialog({
 
         <div className="dialog-content">
           <nav className="dialog-nav" aria-label="设置分类">
-            {pages.map((item) => {
+            {visiblePages.map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -159,11 +246,15 @@ export function SessionDialog({
             <div className="dialog-nav-summary">
               <SlidersHorizontal size={15} />
               <span>
-                {draft.serial.baudRate}/{draft.serial.dataBits}/
-                {draft.serial.parity === "none"
-                  ? "N"
-                  : draft.serial.parity[0].toUpperCase()}
-                /{draft.serial.stopBits}
+                {draft.protocol === "serial"
+                  ? `${draft.serial.baudRate}/${draft.serial.dataBits}/${
+                      draft.serial.parity === "none"
+                        ? "N"
+                        : draft.serial.parity[0].toUpperCase()
+                    }/${draft.serial.stopBits}`
+                  : draft.protocol === "ssh"
+                    ? `${draft.ssh.host || "主机"}:${draft.ssh.port}`
+                    : draft.adb.deviceId || "ADB 设备"}
               </span>
             </div>
           </nav>
@@ -178,10 +269,45 @@ export function SessionDialog({
                 <div className="form-grid">
                   <label className="field-row">
                     <span>协议</span>
-                    <div className="protocol-field">
-                      <Cable size={16} />
-                      串口
-                    </div>
+                    <select
+                      value={draft.protocol}
+                      onChange={(event) => {
+                        const protocol = event.target.value as SessionProtocol;
+                        const names: Record<SessionProtocol, string> = {
+                          serial: "新串口会话",
+                          ssh: "新 SSH 会话",
+                          adb: "新 ADB 会话",
+                        };
+                        const groups: Record<SessionProtocol, string> = {
+                          serial: "串口会话",
+                          ssh: "SSH 会话",
+                          adb: "ADB 会话",
+                        };
+                        const colors: Record<SessionProtocol, string> = {
+                          serial: "#17a34a",
+                          ssh: "#2563eb",
+                          adb: "#f59e0b",
+                        };
+                        setDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                protocol,
+                                name: /^新.*会话$/.test(current.name)
+                                  ? names[protocol]
+                                  : current.name,
+                                group: groups[protocol],
+                                color: colors[protocol],
+                              }
+                            : current,
+                        );
+                        setPage(protocol);
+                      }}
+                    >
+                      <option value="serial">串口</option>
+                      <option value="ssh">SSH</option>
+                      <option value="adb">ADB Shell</option>
+                    </select>
                   </label>
                   <label className="field-row">
                     <span>会话名称</span>
@@ -417,6 +543,140 @@ export function SessionDialog({
               </>
             )}
 
+            {page === "ssh" && (
+              <>
+                <div className="page-heading">
+                  <h3>SSH</h3>
+                  <p>使用本机 OpenSSH、SSH Agent 或私钥连接远程主机。</p>
+                </div>
+                <div className="form-grid">
+                  <label className="field-row">
+                    <span>主机</span>
+                    <input
+                      value={draft.ssh.host}
+                      onChange={(event) =>
+                        updateSsh({ host: event.target.value })
+                      }
+                      placeholder="192.168.1.10 或 example.com"
+                    />
+                  </label>
+                  <label className="field-row">
+                    <span>端口</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={65_535}
+                      value={draft.ssh.port}
+                      onChange={(event) =>
+                        updateSsh({ port: Number(event.target.value) })
+                      }
+                    />
+                  </label>
+                  <label className="field-row">
+                    <span>用户名</span>
+                    <input
+                      value={draft.ssh.username}
+                      onChange={(event) =>
+                        updateSsh({ username: event.target.value })
+                      }
+                      placeholder="留空时由 OpenSSH 决定"
+                    />
+                  </label>
+                  <label className="field-row">
+                    <span>认证方式</span>
+                    <select
+                      value={draft.ssh.authMode}
+                      onChange={(event) =>
+                        updateSsh({
+                          authMode: event.target
+                            .value as SessionProfile["ssh"]["authMode"],
+                        })
+                      }
+                    >
+                      <option value="agent">SSH Agent / 默认密钥</option>
+                      <option value="privateKey">指定私钥</option>
+                    </select>
+                  </label>
+                  {draft.ssh.authMode === "privateKey" && (
+                    <label className="field-row">
+                      <span>私钥路径</span>
+                      <input
+                        value={draft.ssh.privateKeyPath}
+                        onChange={(event) =>
+                          updateSsh({ privateKeyPath: event.target.value })
+                        }
+                        placeholder="/Users/name/.ssh/id_ed25519"
+                      />
+                    </label>
+                  )}
+                  <div className="field-row">
+                    <span>主机密钥</span>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={draft.ssh.strictHostKeyChecking}
+                        onChange={(event) =>
+                          updateSsh({
+                            strictHostKeyChecking: event.target.checked,
+                          })
+                        }
+                      />
+                      严格校验 known_hosts（推荐）
+                    </label>
+                  </div>
+                  <label className="field-row">
+                    <span>保活间隔</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={3600}
+                      value={draft.ssh.keepAliveSeconds}
+                      onChange={(event) =>
+                        updateSsh({
+                          keepAliveSeconds: Number(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            {page === "adb" && (
+              <>
+                <div className="page-heading">
+                  <h3>ADB Shell</h3>
+                  <p>填写 adb devices 显示的设备 ID，后续可从设备列表直接选择。</p>
+                </div>
+                <div className="form-grid">
+                  <label className="field-row">
+                    <span>设备 ID</span>
+                    <input
+                      value={draft.adb.deviceId}
+                      onChange={(event) =>
+                        updateAdb({ deviceId: event.target.value })
+                      }
+                      placeholder="emulator-5554 或 192.168.1.20:5555"
+                    />
+                  </label>
+                  <label className="field-row">
+                    <span>Shell 命令</span>
+                    <input
+                      value={draft.adb.shell}
+                      onChange={(event) =>
+                        updateAdb({ shell: event.target.value })
+                      }
+                      placeholder="留空使用设备默认 Shell"
+                    />
+                  </label>
+                  <div className="settings-note">
+                    <Smartphone size={17} />
+                    需要系统已安装 Android Platform Tools，并且 adb 命令可执行。
+                  </div>
+                </div>
+              </>
+            )}
+
             {page === "terminal" && (
               <>
                 <div className="page-heading">
@@ -620,7 +880,7 @@ export function SessionDialog({
                           updateLogging({ autoStart: event.target.checked })
                         }
                       />
-                      串口连接成功后自动开始
+                      会话连接成功后自动开始
                     </label>
                   </div>
                   <div className="settings-note">

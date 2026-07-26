@@ -1,0 +1,482 @@
+use crate::serial::{ConnectionState, SerialEvent};
+use serde::Deserialize;
+use std::{
+    collections::HashMap,
+    io::{Read, Write},
+    process::{Child, ChildStdin, Command, Stdio},
+    sync::{
+        mpsc::{self, Receiver, Sender, TryRecvError},
+        Arc, Mutex,
+    },
+    thread,
+    time::Duration,
+};
+use tauri::{ipc::Channel, State};
+
+const COMMAND_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
+
+#[derive(Default)]
+pub struct ProcessRegistry {
+    sessions: Arc<Mutex<HashMap<String, ProcessHandle>>>,
+}
+
+struct ProcessHandle {
+    commands: Sender<ProcessCommand>,
+}
+
+enum ProcessCommand {
+    Write(Vec<u8>, Sender<Result<usize, String>>),
+    Close,
+}
+
+enum ProcessOutput {
+    Data(Vec<u8>),
+    Closed,
+    Failed(String),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenSshRequest {
+    session_id: String,
+    host: String,
+    port: u16,
+    username: String,
+    auth_mode: String,
+    private_key_path: String,
+    strict_host_key_checking: bool,
+    keep_alive_seconds: u64,
+    term_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteProcessRequest {
+    session_id: String,
+    bytes: Vec<u8>,
+}
+
+#[tauri::command]
+pub fn open_ssh_session(
+    request: OpenSshRequest,
+    on_event: Channel<SerialEvent>,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<(), String> {
+    validate_ssh_request(&request)?;
+    ensure_session_available(&registry, &request.session_id)?;
+
+    let target = ssh_target(&request.username, &request.host);
+    let mut command = Command::new("ssh");
+    command
+        .args(ssh_arguments(&request))
+        .arg(&target)
+        .env("TERM", &request.term_type)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    hide_console_window(&mut command);
+
+    let message = format!("正在连接 SSH {target}:{}…", request.port);
+    let _ = on_event.send(SerialEvent::State {
+        session_id: request.session_id.clone(),
+        state: ConnectionState::Opening,
+        message: Some(message),
+    });
+
+    let child = command.spawn().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            "找不到 ssh 命令，请安装或启用系统 OpenSSH 客户端。".to_string()
+        } else {
+            format!("无法启动 ssh：{error}")
+        }
+    })?;
+
+    start_process_session(
+        &registry,
+        request.session_id,
+        format!("SSH {target}:{}", request.port),
+        child,
+        on_event,
+    )
+}
+
+#[tauri::command]
+pub fn close_process_session(
+    session_id: String,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<(), String> {
+    let handle = registry
+        .sessions
+        .lock()
+        .map_err(|_| "命令会话注册表已损坏。")?
+        .remove(&session_id);
+    if let Some(handle) = handle {
+        let _ = handle.commands.send(ProcessCommand::Close);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn write_process_bytes(
+    request: WriteProcessRequest,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<usize, String> {
+    if request.bytes.is_empty() {
+        return Ok(0);
+    }
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let sessions = registry
+        .sessions
+        .lock()
+        .map_err(|_| "命令会话注册表已损坏。")?;
+    let handle = sessions
+        .get(&request.session_id)
+        .ok_or_else(|| "SSH/ADB 会话不存在或已经关闭。".to_string())?;
+    handle
+        .commands
+        .send(ProcessCommand::Write(request.bytes, reply_tx))
+        .map_err(|_| "SSH/ADB 会话进程已经退出，请重新连接。".to_string())?;
+    drop(sessions);
+    reply_rx
+        .recv_timeout(COMMAND_REPLY_TIMEOUT)
+        .map_err(|_| "写入 SSH/ADB 会话超时。".to_string())?
+}
+
+fn validate_ssh_request(request: &OpenSshRequest) -> Result<(), String> {
+    validate_argument("SSH 主机", &request.host)?;
+    if request.host.starts_with('-') {
+        return Err("SSH 主机不能以连字符开头。".into());
+    }
+    if !request.username.is_empty() {
+        validate_argument("SSH 用户名", &request.username)?;
+        if request.username.contains('@') || request.username.starts_with('-') {
+            return Err("SSH 用户名不能包含 @ 或以连字符开头。".into());
+        }
+    }
+    match request.auth_mode.as_str() {
+        "agent" => {}
+        "privateKey" => {
+            if request.private_key_path.trim().is_empty() {
+                return Err("使用私钥认证时必须填写私钥路径。".into());
+            }
+        }
+        value => return Err(format!("未知的 SSH 认证方式：{value}")),
+    }
+    Ok(())
+}
+
+fn validate_argument(label: &str, value: &str) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("{label}不能为空。"));
+    }
+    if value.chars().any(char::is_whitespace) || value.chars().any(char::is_control) {
+        return Err(format!("{label}不能包含空白或控制字符。"));
+    }
+    Ok(())
+}
+
+fn ssh_target(username: &str, host: &str) -> String {
+    if username.is_empty() {
+        host.to_string()
+    } else {
+        format!("{username}@{host}")
+    }
+}
+
+fn ssh_arguments(request: &OpenSshRequest) -> Vec<String> {
+    let mut arguments = vec![
+        "-tt".into(),
+        "-p".into(),
+        request.port.to_string(),
+        "-o".into(),
+        "BatchMode=yes".into(),
+        "-o".into(),
+        "ConnectTimeout=10".into(),
+        "-o".into(),
+        format!(
+            "ServerAliveInterval={}",
+            request.keep_alive_seconds.min(3_600)
+        ),
+    ];
+    if request.auth_mode == "privateKey" {
+        arguments.push("-i".into());
+        arguments.push(request.private_key_path.clone());
+        arguments.push("-o".into());
+        arguments.push("IdentitiesOnly=yes".into());
+    }
+    if !request.strict_host_key_checking {
+        arguments.push("-o".into());
+        arguments.push("StrictHostKeyChecking=no".into());
+        arguments.push("-o".into());
+        arguments.push("UserKnownHostsFile=/dev/null".into());
+    }
+    arguments
+}
+
+fn ensure_session_available(
+    registry: &State<'_, ProcessRegistry>,
+    session_id: &str,
+) -> Result<(), String> {
+    let sessions = registry
+        .sessions
+        .lock()
+        .map_err(|_| "命令会话注册表已损坏。")?;
+    if sessions.contains_key(session_id) {
+        Err("该 SSH/ADB 会话已经打开，请先断开。".into())
+    } else {
+        Ok(())
+    }
+}
+
+fn start_process_session(
+    registry: &State<'_, ProcessRegistry>,
+    session_id: String,
+    label: String,
+    mut child: Child,
+    on_event: Channel<SerialEvent>,
+) -> Result<(), String> {
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| format!("{label} 标准输入不可用。"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| format!("{label} 标准输出不可用。"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| format!("{label} 错误输出不可用。"))?;
+
+    let (command_tx, command_rx) = mpsc::channel();
+    registry
+        .sessions
+        .lock()
+        .map_err(|_| "命令会话注册表已损坏。")?
+        .insert(
+            session_id.clone(),
+            ProcessHandle {
+                commands: command_tx,
+            },
+        );
+
+    let sessions = Arc::clone(&registry.sessions);
+    thread::Builder::new()
+        .name(format!("process-{session_id}"))
+        .spawn(move || {
+            process_worker(
+                session_id, label, child, stdin, stdout, stderr, command_rx, on_event, sessions,
+            )
+        })
+        .map_err(|error| format!("无法启动 SSH/ADB 读取线程：{error}"))?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn process_worker<R1, R2>(
+    session_id: String,
+    label: String,
+    mut child: Child,
+    mut stdin: ChildStdin,
+    stdout: R1,
+    stderr: R2,
+    commands: Receiver<ProcessCommand>,
+    on_event: Channel<SerialEvent>,
+    sessions: Arc<Mutex<HashMap<String, ProcessHandle>>>,
+) where
+    R1: Read + Send + 'static,
+    R2: Read + Send + 'static,
+{
+    let (output_tx, output_rx) = mpsc::channel();
+    spawn_reader(stdout, output_tx.clone());
+    spawn_reader(stderr, output_tx);
+
+    let _ = on_event.send(SerialEvent::State {
+        session_id: session_id.clone(),
+        state: ConnectionState::Connected,
+        message: Some(format!("{label} 已启动")),
+    });
+
+    let mut sequence = 0_u64;
+    let mut closed_readers = 0_u8;
+    let mut requested_close = false;
+    let exit_status = loop {
+        loop {
+            match commands.try_recv() {
+                Ok(ProcessCommand::Write(bytes, reply)) => {
+                    let result = stdin
+                        .write_all(&bytes)
+                        .and_then(|_| stdin.flush())
+                        .map(|_| bytes.len())
+                        .map_err(|error| format!("写入 {label} 失败：{error}"));
+                    let _ = reply.send(result);
+                }
+                Ok(ProcessCommand::Close) => {
+                    requested_close = true;
+                    let _ = child.kill();
+                    break;
+                }
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    requested_close = true;
+                    let _ = child.kill();
+                    break;
+                }
+            }
+        }
+
+        match output_rx.recv_timeout(Duration::from_millis(10)) {
+            Ok(ProcessOutput::Data(bytes)) => {
+                sequence += 1;
+                let _ = on_event.send(SerialEvent::Data {
+                    session_id: session_id.clone(),
+                    sequence,
+                    received_at_ms: unix_time_ms(),
+                    bytes,
+                });
+            }
+            Ok(ProcessOutput::Closed) => closed_readers = closed_readers.saturating_add(1),
+            Ok(ProcessOutput::Failed(message)) => {
+                let _ = on_event.send(SerialEvent::Error {
+                    session_id: session_id.clone(),
+                    code: "PROCESS_READ_FAILED".into(),
+                    message,
+                    recoverable: false,
+                });
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => closed_readers = 2,
+        }
+
+        match child.try_wait() {
+            Ok(Some(status)) if closed_readers >= 2 || requested_close => break Some(status),
+            Ok(Some(_)) => {}
+            Ok(None) if requested_close => break child.wait().ok(),
+            Ok(None) => {}
+            Err(_) => break None,
+        }
+    };
+
+    if let Ok(mut active_sessions) = sessions.lock() {
+        active_sessions.remove(&session_id);
+    }
+
+    if requested_close {
+        let _ = on_event.send(SerialEvent::State {
+            session_id,
+            state: ConnectionState::Disconnected,
+            message: Some(format!("{label} 已断开。")),
+        });
+    } else if exit_status.is_some_and(|status| status.success()) {
+        let _ = on_event.send(SerialEvent::State {
+            session_id,
+            state: ConnectionState::Disconnected,
+            message: Some(format!("{label} 已结束。")),
+        });
+    } else {
+        let status = exit_status
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "未知状态".into());
+        let _ = on_event.send(SerialEvent::Error {
+            session_id,
+            code: "PROCESS_EXITED".into(),
+            message: format!("{label} 异常退出（{status}）。"),
+            recoverable: false,
+        });
+    }
+}
+
+fn spawn_reader<R>(mut reader: R, output: Sender<ProcessOutput>)
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut buffer = vec![0_u8; 16 * 1024];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => {
+                    let _ = output.send(ProcessOutput::Closed);
+                    return;
+                }
+                Ok(count) => {
+                    if output
+                        .send(ProcessOutput::Data(buffer[..count].to_vec()))
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                Err(error) => {
+                    let _ = output.send(ProcessOutput::Failed(format!(
+                        "读取 SSH/ADB 输出失败：{error}"
+                    )));
+                    let _ = output.send(ProcessOutput::Closed);
+                    return;
+                }
+            }
+        }
+    });
+}
+
+fn unix_time_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+#[cfg(windows)]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x08000000);
+}
+
+#[cfg(not(windows))]
+fn hide_console_window(_: &mut Command) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request() -> OpenSshRequest {
+        OpenSshRequest {
+            session_id: "session".into(),
+            host: "example.com".into(),
+            port: 22,
+            username: "root".into(),
+            auth_mode: "agent".into(),
+            private_key_path: String::new(),
+            strict_host_key_checking: true,
+            keep_alive_seconds: 30,
+            term_type: "xterm-256color".into(),
+        }
+    }
+
+    #[test]
+    fn builds_safe_ssh_target_and_arguments() {
+        let value = request();
+        assert_eq!(ssh_target(&value.username, &value.host), "root@example.com");
+        assert!(ssh_arguments(&value).contains(&"BatchMode=yes".to_string()));
+        assert!(ssh_arguments(&value).contains(&"ServerAliveInterval=30".to_string()));
+    }
+
+    #[test]
+    fn adds_private_key_and_relaxed_host_key_options() {
+        let mut value = request();
+        value.auth_mode = "privateKey".into();
+        value.private_key_path = "/tmp/test-key".into();
+        value.strict_host_key_checking = false;
+        let arguments = ssh_arguments(&value);
+        assert!(arguments.contains(&"/tmp/test-key".to_string()));
+        assert!(arguments.contains(&"StrictHostKeyChecking=no".to_string()));
+    }
+
+    #[test]
+    fn rejects_option_like_or_whitespace_hosts() {
+        let mut value = request();
+        value.host = "-oProxyCommand=bad".into();
+        assert!(validate_ssh_request(&value).is_err());
+        value.host = "bad host".into();
+        assert!(validate_ssh_request(&value).is_err());
+    }
+}

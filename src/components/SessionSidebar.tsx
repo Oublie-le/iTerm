@@ -4,9 +4,11 @@ import {
   CirclePlus,
   Copy,
   Folder,
+  Network,
   Pencil,
   RefreshCw,
   Search,
+  Smartphone,
   Trash2,
   Usb,
 } from "lucide-react";
@@ -15,6 +17,7 @@ import type {
   SerialPortDescriptor,
   SessionProfile,
 } from "../lib/types";
+import { sessionTargetLabel } from "../lib/types";
 
 interface SessionSidebarProps {
   profiles: SessionProfile[];
@@ -44,17 +47,23 @@ export function SessionSidebar({
   onRefresh,
 }: SessionSidebarProps) {
   const visibleProfiles = profiles.filter((profile) =>
-    `${profile.name} ${profile.group} ${profile.serial.portPath}`
+    `${profile.name} ${profile.group} ${profile.protocol} ${sessionTargetLabel(profile)}`
       .toLocaleLowerCase()
       .includes(filter.toLocaleLowerCase()),
   );
+
+  const protocolIcon = (profile: SessionProfile) => {
+    if (profile.protocol === "ssh") return Network;
+    if (profile.protocol === "adb") return Smartphone;
+    return Cable;
+  };
 
   return (
     <aside className="session-sidebar">
       <header className="dock-title">
         <span className="dock-title-mark" />
         <span>会话管理器</span>
-        <button className="icon-button" title="新建串口会话" onClick={onNew}>
+        <button className="icon-button" title="新建会话" onClick={onNew}>
           <CirclePlus size={17} />
         </button>
       </header>
@@ -77,19 +86,20 @@ export function SessionSidebar({
           <div className="tree-group-label">
             <ChevronDown size={15} />
             <Folder size={16} />
-            <span>串口会话</span>
+            <span>保存的会话</span>
             <span className="tree-count">{visibleProfiles.length}</span>
           </div>
           {visibleProfiles.length === 0 ? (
             <button className="empty-tree-action" onClick={onNew}>
               <CirclePlus size={16} />
-              新建第一个串口会话
+              新建第一个会话
             </button>
           ) : (
             visibleProfiles.map((profile) => {
               const runtime = sessions.find(
                 (session) => session.profileId === profile.id,
               );
+              const ProfileIcon = protocolIcon(profile);
               return (
                 <div key={profile.id} className="tree-session-row">
                   <button
@@ -101,13 +111,10 @@ export function SessionSidebar({
                     <span
                       className={`connection-dot state-${runtime?.state ?? "disconnected"}`}
                     />
-                    <Cable size={16} />
+                    <ProfileIcon size={16} />
                     <span className="tree-session-text">
                       <strong>{profile.name}</strong>
-                      <small>
-                        {profile.serial.portPath || "尚未选择设备"} ·{" "}
-                        {profile.serial.baudRate}
-                      </small>
+                      <small>{sessionTargetLabel(profile)}</small>
                     </span>
                   </button>
                   <div className="tree-session-actions">
