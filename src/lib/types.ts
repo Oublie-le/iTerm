@@ -247,6 +247,17 @@ export function reconnectDelayMs(attempt: number): number {
   return Math.min(30_000, 1_000 * 2 ** (safeAttempt - 1));
 }
 
+export function requiresCloseConfirmation(session: RuntimeSession): boolean {
+  return (
+    session.state === "opening" ||
+    session.state === "connected" ||
+    session.state === "closing" ||
+    session.logState === "recording" ||
+    session.logState === "paused" ||
+    session.transferActive
+  );
+}
+
 export function createSenderPreset(index = 1): SenderPreset {
   return {
     id: crypto.randomUUID(),

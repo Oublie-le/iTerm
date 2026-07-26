@@ -56,6 +56,7 @@ import {
   duplicateSessionProfile,
   normalizeSessionProfile,
   reconnectDelayMs,
+  requiresCloseConfirmation,
   type RuntimeSession,
   type SenderPreset,
   type SerialEvent,
@@ -202,6 +203,16 @@ export default function App() {
         null,
     });
   }, [activeSessionId, senderOpen, sessions, sidebarOpen]);
+
+  useEffect(() => {
+    const confirmWindowClose = (event: BeforeUnloadEvent) => {
+      if (!sessions.some(requiresCloseConfirmation)) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", confirmWindowClose);
+    return () => window.removeEventListener("beforeunload", confirmWindowClose);
+  }, [sessions]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -502,6 +513,16 @@ export default function App() {
   };
 
   const closeTab = async (sessionId: string) => {
+    const target = sessions.find((session) => session.id === sessionId);
+    if (
+      target &&
+      requiresCloseConfirmation(target) &&
+      !window.confirm(
+        `“${target.title}”仍有活动连接或任务，确定要断开并关闭吗？`,
+      )
+    ) {
+      return;
+    }
     await closeSerialSession(sessionId).catch(() => undefined);
     setSessions((current) => current.filter((item) => item.id !== sessionId));
     setActiveSessionId((current) => {

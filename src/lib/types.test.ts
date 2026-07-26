@@ -5,6 +5,7 @@ import {
   duplicateSessionProfile,
   normalizeSessionProfile,
   reconnectDelayMs,
+  requiresCloseConfirmation,
 } from "./types";
 
 describe("duplicateSessionProfile", () => {
@@ -54,5 +55,21 @@ describe("createRuntimeSession", () => {
     expect(runtime.state).toBe("disconnected");
     expect(runtime.bytesRead).toBe(0);
     expect(runtime.logState).toBe("stopped");
+  });
+});
+
+describe("requiresCloseConfirmation", () => {
+  it("protects active connections and transfers", () => {
+    const runtime = createRuntimeSession(createSessionProfile());
+    expect(requiresCloseConfirmation(runtime)).toBe(false);
+    expect(
+      requiresCloseConfirmation({ ...runtime, state: "connected" }),
+    ).toBe(true);
+    expect(
+      requiresCloseConfirmation({ ...runtime, transferActive: true }),
+    ).toBe(true);
+    expect(
+      requiresCloseConfirmation({ ...runtime, logState: "recording" }),
+    ).toBe(true);
   });
 });
