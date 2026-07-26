@@ -16,6 +16,8 @@ export type ReceiveMode = "text" | "hex";
 export type SyncChannel = "off" | "A" | "B" | "C" | "D";
 export type LogMode = "raw" | "text";
 export type LogState = "stopped" | "recording" | "paused" | "error";
+export type HexColumns = 8 | 16 | 24 | 32;
+export type HexGroupSize = 1 | 2 | 4 | 8;
 
 export interface SerialPortDescriptor {
   path: string;
@@ -53,6 +55,8 @@ export interface TerminalConfig {
   lineHeight: number;
   cursorStyle: "block" | "bar" | "underline";
   timestamp: boolean;
+  hexColumns: HexColumns;
+  hexGroupSize: HexGroupSize;
 }
 
 export interface LoggingConfig {
@@ -182,6 +186,8 @@ export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   lineHeight: 1.12,
   cursorStyle: "block",
   timestamp: false,
+  hexColumns: 16,
+  hexGroupSize: 1,
 };
 
 export const DEFAULT_LOGGING_CONFIG: LoggingConfig = {

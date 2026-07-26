@@ -67,6 +67,18 @@ describe("formatHexDump", () => {
 
     expect(result.text.startsWith("[09:08:07.006] 00000000")).toBe(true);
   });
+
+  it("groups hexadecimal bytes without changing ASCII", () => {
+    const result = formatHexDump(
+      [chunk(1, [0x41, 0x42, 0x43, 0x44])],
+      4,
+      4,
+      64,
+      false,
+      2,
+    );
+    expect(result.text).toContain("41 42  43 44  |ABCD|");
+  });
 });
 
 describe("timestampReceivedText", () => {

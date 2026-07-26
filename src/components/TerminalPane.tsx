@@ -55,11 +55,14 @@ export function TerminalPane({
       formatHexDump(
         session.receiveChunks,
         session.bytesRead - session.receiveBaseOffset,
-        16,
+        profile.terminal.hexColumns,
         undefined,
         profile.terminal.timestamp,
+        profile.terminal.hexGroupSize,
       ),
     [
+      profile.terminal.hexColumns,
+      profile.terminal.hexGroupSize,
       profile.terminal.timestamp,
       session.receiveBaseOffset,
       session.bytesRead,

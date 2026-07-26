@@ -530,6 +530,44 @@ export function SessionDialog({
                       在终端左侧显示接收时间
                     </label>
                   </div>
+                  <label className="field-row">
+                    <span>Hex 每行字节</span>
+                    <select
+                      value={draft.terminal.hexColumns}
+                      onChange={(event) =>
+                        updateTerminal({
+                          hexColumns: Number(
+                            event.target.value,
+                          ) as SessionProfile["terminal"]["hexColumns"],
+                        })
+                      }
+                    >
+                      {[8, 16, 24, 32].map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field-row">
+                    <span>Hex 字节分组</span>
+                    <select
+                      value={draft.terminal.hexGroupSize}
+                      onChange={(event) =>
+                        updateTerminal({
+                          hexGroupSize: Number(
+                            event.target.value,
+                          ) as SessionProfile["terminal"]["hexGroupSize"],
+                        })
+                      }
+                    >
+                      {[1, 2, 4, 8].map((value) => (
+                        <option key={value} value={value}>
+                          {value} 字节
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="settings-note">
                     <Settings2 size={17} />
                     终端行列会随窗口尺寸自动调整，当前值显示在底部状态栏。

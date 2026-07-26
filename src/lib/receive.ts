@@ -36,8 +36,13 @@ export function formatHexDump(
   columns = 16,
   maxDisplayBytes = MAX_HEX_DISPLAY_BYTES,
   includeTimestamps = false,
+  groupSize = 1,
 ): { text: string; omittedBytes: number } {
   const safeColumns = Math.max(1, Math.min(32, Math.trunc(columns)));
+  const safeGroupSize = Math.max(
+    1,
+    Math.min(safeColumns, Math.trunc(groupSize)),
+  );
   const allBytes = chunks.flatMap((chunk) =>
     chunk.bytes.map((byte) => ({
       byte,
@@ -51,10 +56,23 @@ export function formatHexDump(
   for (let index = 0; index < visibleBytes.length; index += safeColumns) {
     const row = visibleBytes.slice(index, index + safeColumns);
     const address = (omittedBytes + index).toString(16).padStart(8, "0");
-    const hex = row
-      .map(({ byte }) => byte.toString(16).padStart(2, "0").toUpperCase())
-      .join(" ")
-      .padEnd(safeColumns * 3 - 1, " ");
+    const groups: string[] = [];
+    for (let groupIndex = 0; groupIndex < row.length; groupIndex += safeGroupSize) {
+      groups.push(
+        row
+          .slice(groupIndex, groupIndex + safeGroupSize)
+          .map(({ byte }) => byte.toString(16).padStart(2, "0").toUpperCase())
+          .join(" "),
+      );
+    }
+    const groupGap =
+      safeGroupSize === 1
+        ? 0
+        : Math.max(0, Math.ceil(safeColumns / safeGroupSize) - 1);
+    const hexWidth = safeColumns * 3 - 1 + groupGap;
+    const hex = groups
+      .join(safeGroupSize === 1 ? " " : "  ")
+      .padEnd(hexWidth, " ");
     const ascii = row
       .map(({ byte }) =>
         byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : ".",
