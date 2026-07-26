@@ -226,6 +226,7 @@ export default function App() {
             sequence: 0,
             receiveMode: "text",
             receiveChunks: [],
+            receiveBaseOffset: 0,
             bytesRead: 0,
             bytesWritten: 0,
             openedAt: Date.now(),
@@ -704,6 +705,20 @@ export default function App() {
                   profile={profile}
                   active={session.id === activeSessionId}
                   receiveMode={session.receiveMode}
+                  onClear={() =>
+                    setSessions((current) =>
+                      current.map((item) =>
+                        item.id === session.id
+                          ? {
+                              ...item,
+                              receiveChunks: [],
+                              receiveBaseOffset: item.bytesRead,
+                              lastChunk: undefined,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
                   onInput={(value) =>
                     void writeTerminalInput(session, profile, value)
                   }

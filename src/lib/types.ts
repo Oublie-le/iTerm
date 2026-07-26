@@ -83,6 +83,7 @@ export interface RuntimeSession {
   sequence: number;
   receiveMode: ReceiveMode;
   receiveChunks: ReceiveChunk[];
+  receiveBaseOffset: number;
   lastChunk?: {
     nonce: number;
     sequence: number;
