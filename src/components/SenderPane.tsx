@@ -1,27 +1,31 @@
 import {
   CirclePlus,
+  Eraser,
   Play,
   Square,
   Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { loadSenderPresets, saveSenderPresets } from "../lib/senders";
 import { createSenderPreset, type SenderPreset } from "../lib/types";
 
 interface SenderPaneProps {
+  profileId: string;
   connected: boolean;
   onClose: () => void;
   onSend: (preset: SenderPreset) => Promise<number>;
 }
 
 export function SenderPane({
+  profileId,
   connected,
   onClose,
   onSend,
 }: SenderPaneProps) {
-  const [presets, setPresets] = useState<SenderPreset[]>([
-    createSenderPreset(),
-  ]);
+  const [presets, setPresets] = useState<SenderPreset[]>(() =>
+    loadSenderPresets(profileId),
+  );
   const [activeId, setActiveId] = useState(presets[0].id);
   const [running, setRunning] = useState(false);
   const [sentBytes, setSentBytes] = useState(0);
@@ -51,6 +55,10 @@ export function SenderPane({
     if (!connected) stop();
     return stop;
   }, [connected]);
+
+  useEffect(() => {
+    saveSenderPresets(profileId, presets);
+  }, [presets, profileId]);
 
   const sendOnce = async () => {
     setLastError("");
@@ -136,6 +144,14 @@ export function SenderPane({
           >
             <Trash2 size={16} />
           </button>
+          <button
+            className="icon-button"
+            onClick={() => updateActive({ payload: "" })}
+            disabled={running || !active.payload}
+            title="清空当前发送内容"
+          >
+            <Eraser size={16} />
+          </button>
         </div>
         <div className="sender-tabs">
           {presets.map((preset) => (
@@ -170,6 +186,15 @@ export function SenderPane({
           aria-label="发送内容"
         />
         <div className="sender-options">
+          <label>
+            名称
+            <input
+              className="sender-name-input"
+              value={active.name}
+              disabled={running}
+              onChange={(event) => updateActive({ name: event.target.value })}
+            />
+          </label>
           <label>
             模式
             <select

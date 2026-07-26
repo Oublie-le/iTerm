@@ -996,13 +996,18 @@ textarea:disabled {
 }
 
 .sender-options select,
-.sender-options input[type="number"] {
+.sender-options input[type="number"],
+.sender-options .sender-name-input {
   height: 23px;
   min-width: 0;
   background: #fff;
   border: 1px solid #c2c8c8;
   border-radius: 2px;
   font-size: 10px;
+}
+
+.sender-options .sender-name-input {
+  width: 105px;
 }
 
 .sender-options select {

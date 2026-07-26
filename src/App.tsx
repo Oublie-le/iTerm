@@ -1104,8 +1104,10 @@ export default function App() {
             })}
           </div>
 
-          {senderOpen && sessions.length > 0 && (
+          {senderOpen && sessions.length > 0 && activeProfile && (
             <SenderPane
+              key={activeProfile.id}
+              profileId={activeProfile.id}
               connected={activeSession?.state === "connected"}
               onClose={() => setSenderOpen(false)}
               onSend={sendPreset}
