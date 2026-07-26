@@ -15,6 +15,9 @@ pub fn run() {
             serial::write_serial_bytes,
             serial::set_serial_signal,
             serial::send_serial_break,
+            serial::start_serial_log,
+            serial::set_serial_log_paused,
+            serial::stop_serial_log,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run iTerm");
