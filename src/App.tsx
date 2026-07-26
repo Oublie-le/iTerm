@@ -1240,15 +1240,15 @@ export default function App() {
                 RX {formatByteCount(activeSession?.bytesRead ?? 0)} · TX{" "}
                 {formatByteCount(activeSession?.bytesWritten ?? 0)}
               </span>
-              {activeSession?.logState !== "stopped" && (
+              {activeSession && activeSession.logState !== "stopped" && (
                 <span
-                  className={`log-status state-${activeSession?.logState}`}
-                  title={activeSession?.logPath}
+                  className={`log-status state-${activeSession.logState}`}
+                  title={activeSession.logPath}
                 >
                   日志{" "}
-                  {activeSession?.logState === "recording"
+                  {activeSession.logState === "recording"
                     ? "记录中"
-                    : activeSession?.logState === "paused"
+                    : activeSession.logState === "paused"
                       ? "已暂停"
                       : "错误"}
                 </span>
