@@ -92,6 +92,8 @@ export interface RuntimeSession {
   };
   bytesRead: number;
   bytesWritten: number;
+  terminalCols: number;
+  terminalRows: number;
   openedAt: number;
 }
 

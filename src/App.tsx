@@ -229,6 +229,8 @@ export default function App() {
             receiveBaseOffset: 0,
             bytesRead: 0,
             bytesWritten: 0,
+            terminalCols: 80,
+            terminalRows: 24,
             openedAt: Date.now(),
           },
         ]);
@@ -705,6 +707,16 @@ export default function App() {
                   profile={profile}
                   active={session.id === activeSessionId}
                   receiveMode={session.receiveMode}
+                  onResize={(cols, rows) =>
+                    setSessions((current) =>
+                      current.map((item) =>
+                        item.id === session.id &&
+                        (item.terminalCols !== cols || item.terminalRows !== rows)
+                          ? { ...item, terminalCols: cols, terminalRows: rows }
+                          : item,
+                      ),
+                    )
+                  }
                   onClear={() =>
                     setSessions((current) =>
                       current.map((item) =>
@@ -748,7 +760,10 @@ export default function App() {
               <button>
                 {activeSession?.state === "connected" ? "远程模式" : "本地模式"}
               </button>
-              <span>窗口 80×24</span>
+              <span>
+                窗口 {activeSession?.terminalCols ?? 80}×
+                {activeSession?.terminalRows ?? 24}
+              </span>
               <span>行 1</span>
               <span>字符 0</span>
               <span>{activeProfile?.terminal.termType ?? "Plain Text"}</span>

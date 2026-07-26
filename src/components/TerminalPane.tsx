@@ -23,6 +23,7 @@ interface TerminalPaneProps {
   profile: SessionProfile;
   active: boolean;
   receiveMode: ReceiveMode;
+  onResize: (cols: number, rows: number) => void;
   onClear: () => void;
   onInput: (value: string) => void;
 }
@@ -32,6 +33,7 @@ export function TerminalPane({
   profile,
   active,
   receiveMode,
+  onResize,
   onClear,
   onInput,
 }: TerminalPaneProps) {
@@ -41,6 +43,7 @@ export function TerminalPane({
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef(onInput);
+  const resizeRef = useRef(onResize);
   const decoderRef = useRef<TextDecoder | null>(null);
   const lastWrittenNonceRef = useRef<number | null>(null);
   const startsNewLineRef = useRef(true);
@@ -65,6 +68,7 @@ export function TerminalPane({
   );
 
   inputRef.current = onInput;
+  resizeRef.current = onResize;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -129,6 +133,9 @@ export function TerminalPane({
       return true;
     });
     const inputDisposable = terminal.onData((value) => inputRef.current(value));
+    const dimensionsDisposable = terminal.onResize(({ cols, rows }) =>
+      resizeRef.current(cols, rows),
+    );
     const resizeObserver = new ResizeObserver(() => {
       window.requestAnimationFrame(() => {
         try {
@@ -165,6 +172,7 @@ export function TerminalPane({
     return () => {
       resizeObserver.disconnect();
       inputDisposable.dispose();
+      dimensionsDisposable.dispose();
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
