@@ -157,10 +157,7 @@ pub fn open_adb_session(
     ensure_session_available(&registry, &request.session_id)?;
 
     let mut command = Command::new("adb");
-    command.arg("-s").arg(&request.device_id).arg("shell");
-    if !request.shell.trim().is_empty() {
-        command.arg(&request.shell);
-    }
+    command.args(adb_arguments(&request));
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -287,11 +284,26 @@ fn ssh_arguments(request: &OpenSshRequest) -> Vec<String> {
         arguments.push("-o".into());
         arguments.push("IdentitiesOnly=yes".into());
     }
-    if !request.strict_host_key_checking {
-        arguments.push("-o".into());
+    arguments.push("-o".into());
+    if request.strict_host_key_checking {
+        arguments.push("StrictHostKeyChecking=yes".into());
+    } else {
         arguments.push("StrictHostKeyChecking=no".into());
         arguments.push("-o".into());
         arguments.push("UserKnownHostsFile=/dev/null".into());
+    }
+    arguments
+}
+
+fn adb_arguments(request: &OpenAdbRequest) -> Vec<String> {
+    let mut arguments = vec![
+        "-s".into(),
+        request.device_id.clone(),
+        "shell".into(),
+        "-tt".into(),
+    ];
+    if !request.shell.trim().is_empty() {
+        arguments.push(request.shell.clone());
     }
     arguments
 }
@@ -580,6 +592,7 @@ mod tests {
         assert_eq!(ssh_target(&value.username, &value.host), "root@example.com");
         assert!(ssh_arguments(&value).contains(&"BatchMode=yes".to_string()));
         assert!(ssh_arguments(&value).contains(&"ServerAliveInterval=30".to_string()));
+        assert!(ssh_arguments(&value).contains(&"StrictHostKeyChecking=yes".to_string()));
     }
 
     #[test]
@@ -614,5 +627,18 @@ mod tests {
         assert_eq!(devices[0].model.as_deref(), Some("Pixel 8"));
         assert_eq!(devices[1].state, "unauthorized");
         assert_eq!(devices[2].state, "offline");
+    }
+
+    #[test]
+    fn forces_a_pty_for_interactive_adb_shells() {
+        let request = OpenAdbRequest {
+            session_id: "session".into(),
+            device_id: "emulator-5554".into(),
+            shell: String::new(),
+        };
+        assert_eq!(
+            adb_arguments(&request),
+            ["-s", "emulator-5554", "shell", "-tt"]
+        );
     }
 }
