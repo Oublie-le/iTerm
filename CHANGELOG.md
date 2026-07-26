@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## 0.3.0 - Unreleased
+
+### Added
+
+- Serial、SSH、ADB 三类会话统一配置、保存和工作区恢复；
+- OpenSSH Agent/默认密钥和指定私钥连接，支持主机密钥校验及保活；
+- ADB 设备发现、授权状态和设备元数据展示；
+- 交互式 SSH 与 ADB Shell 终端、发送、断开和进程错误提示。
+
 ## 0.2.0 - 2026-07-26
 
 ### Added

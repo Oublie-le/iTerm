@@ -4,8 +4,9 @@
 [![Release](https://github.com/Oublie-le/iTerm/actions/workflows/release.yml/badge.svg)](https://github.com/Oublie-le/iTerm/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/Oublie-le/iTerm?display_name=tag)](https://github.com/Oublie-le/iTerm/releases/latest)
 
-iTerm 是一个使用 Tauri 2、Rust、React 和 xterm.js 构建的跨平台桌面串口终端。
-它采用本地优先的数据策略，并以 clean-room 方式复现 WindTerm 串口工作区的核心信息架构和操作体验。
+iTerm 是一个使用 Tauri 2、Rust、React 和 xterm.js 构建的跨平台桌面终端，支持串口、
+SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方式复现 WindTerm
+工作区的核心信息架构和操作体验。
 
 > 项目处于 `0.x` 早期阶段。当前发行包未进行 Apple 公证或 Windows 商业代码签名，
 > 首次运行时可能显示系统安全提示。
@@ -13,6 +14,9 @@ iTerm 是一个使用 Tauri 2、Rust、React 和 xterm.js 构建的跨平台桌�
 ## 功能
 
 - Windows、macOS 和 Linux 串口枚举；
+- OpenSSH Agent/默认密钥和指定私钥连接；
+- ADB 设备发现、授权状态识别和交互式 Shell；
+- Serial、SSH、ADB 三类会话统一保存、切换和恢复；
 - 多会话配置、会话树和多标签终端；
 - 波特率、数据位、校验位、停止位和流控；
 - DTR、RTS 与 Serial Break；
@@ -47,9 +51,9 @@ iTerm 是一个使用 Tauri 2、Rust、React 和 xterm.js 构建的跨平台桌�
 ## 快速开始
 
 1. 启动 iTerm；
-2. 点击“新建串口会话”；
-3. 选择串口设备；
-4. 设置波特率、数据位、校验位、停止位和流控；
+2. 点击“新建会话”；
+3. 选择串口、SSH 或 ADB 协议；
+4. 填写对应设备或主机参数；
 5. 点击“保存并连接”；
 6. 直接在终端输入，或使用底部发送窗格发送文本/Hex。
 
@@ -57,6 +61,20 @@ iTerm 是一个使用 Tauri 2、Rust、React 和 xterm.js 构建的跨平台桌�
 字节分块发送文件；传输期间普通键盘和发送器输入会自动锁定。
 
 默认线路参数为 `9600 / 8 / None / 1 / None`。
+
+### SSH
+
+SSH 首版调用系统 OpenSSH 客户端，支持 SSH Agent、`~/.ssh/config`、默认密钥和指定私钥。
+选择“SSH”，填写主机、端口和用户名后连接。启用严格主机密钥校验时，目标必须已存在于
+`known_hosts`；也可在会话设置中明确关闭严格校验。
+
+当前版本不在应用内保存 SSH 密码，也不提供密码认证。系统必须能直接执行 `ssh` 命令。
+
+### ADB Shell
+
+安装 [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools)，
+连接设备并完成 USB 调试授权，然后在 ADB 会话页面刷新设备、选择设备 ID 并连接。
+网络 ADB 设备可直接填写 `IP:端口`。
 
 ### Linux 串口权限
 
@@ -76,6 +94,8 @@ sudo usermod -aG dialout "$USER"
 - pnpm 11；
 - Rust stable；
 - 对应平台的 [Tauri 2 系统依赖](https://v2.tauri.app/start/prerequisites/)。
+- 可选：OpenSSH 客户端（SSH 会话）；
+- 可选：Android SDK Platform Tools（ADB 会话）。
 
 安装依赖：
 
@@ -119,10 +139,10 @@ src-tauri/target/release/bundle/
 ├── docs/                    # SRS、PRD、架构与实施计划
 ├── src/
 │   ├── components/          # 工作区、终端、会话和发送器 UI
-│   └── lib/                 # 前端串口 API、类型与测试
+│   └── lib/                 # 前端会话 API、类型与测试
 └── src-tauri/
     ├── capabilities/        # Tauri 权限边界
-    └── src/                 # Rust 串口会话 Actor 与 IPC 命令
+    └── src/                 # Rust 串口/SSH/ADB 会话与 IPC 命令
 ```
 
 ## 架构
@@ -131,14 +151,18 @@ src-tauri/target/release/bundle/
 flowchart LR
     UI["React 工作区"] --> IPC["Tauri Commands / Channel"]
     IPC --> Core["Rust Session Registry"]
-    Core --> Actor["每串口一个 Actor"]
-    Actor --> Device["系统串口设备"]
-    Actor --> IPC
+    Core --> Serial["串口 Actor"]
+    Core --> Process["SSH / ADB 进程会话"]
+    Serial --> Device["系统串口设备"]
+    Process --> Tools["OpenSSH / ADB"]
+    Serial --> IPC
+    Process --> IPC
     IPC --> Terminal["xterm.js 终端"]
 ```
 
-每个活动串口由独立 Rust 工作线程持有。UI 通过命令执行连接、发送和控制线操作，
-接收数据则通过 Tauri Channel 按序推送。端口注册表阻止同一进程内重复占用设备。
+每个活动串口由独立 Rust 工作线程持有；SSH 和 ADB 会话由受控子进程工作线程持有。
+UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序推送。命令参数不经过
+本地 shell 拼接。
 
 更详细的设计参见：
 
@@ -162,6 +186,8 @@ flowchart LR
 
 当前 MVP 尚未实现：
 
+- SSH 密码认证和远程 PTY 尺寸同步；
+- SSH/ADB 会话日志；
 - 日志大小限制和日志轮转；
 - 横向/纵向分屏；
 - 会话触发器；
@@ -173,8 +199,9 @@ flowchart LR
 
 ## 数据与隐私
 
-iTerm 默认不连接云服务，不上传会话配置或串口内容，也不包含遥测。
-会话配置保存在本机 WebView 存储中。串口内容仅在用户明确启用日志功能后才应写入磁盘。
+iTerm 不连接项目方云服务，不上传会话配置或终端内容，也不包含遥测。只有用户主动连接
+SSH 主机时才访问该主机；ADB 通过本机 `adb` 客户端通信。会话配置保存在本机 WebView
+存储中，终端内容仅在用户明确启用日志功能后才应写入磁盘。
 
 ## 项目声明
 

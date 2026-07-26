@@ -2,7 +2,7 @@
 
 文档状态：Draft
 架构版本：v1
-更新时间：2026-07-26
+更新时间：2026-07-27
 
 ## 1. 架构决策摘要
 
@@ -13,6 +13,8 @@
 - **前端**：React + TypeScript + Vite；
 - **终端渲染**：xterm.js；
 - **串口抽象**：`serialport-rs`，外包一层自有 `SerialDriver` trait；
+- **SSH**：系统 OpenSSH 客户端，参数化启动，不经过本地 shell；
+- **ADB**：Android Platform Tools `adb` 客户端和长生命周期 Shell 子进程；
 - **持久化**：SQLite + 版本化迁移；
 - **样式**：CSS Variables/Design Tokens + 独立组件库；
 - **测试**：Rust 单测/集成测试、Vitest、Playwright 截图测试、硬件矩阵。
@@ -73,7 +75,8 @@ flowchart LR
 
     subgraph Core["Rust Application Core"]
         Manager["Session Manager"]
-        Actor["Session Actor per port"]
+        Actor["Serial Actor per port"]
+        Process["SSH / ADB Process Session"]
         Discovery["Port Discovery"]
         Codec["Codec Pipeline"]
         Logger["Logging Service"]
@@ -95,6 +98,7 @@ flowchart LR
     Dialog --> Cmd
     Cmd --> Manager
     Manager --> Actor
+    Manager --> Process
     Discovery --> Driver
     Actor --> Driver
     Actor --> Codec
@@ -103,6 +107,7 @@ flowchart LR
     Actor --> Transfer
     Codec --> Trigger
     Actor --> Channel
+    Process --> Channel
     Manager --> Event
     Channel --> Term
     Event --> Store
@@ -131,6 +136,8 @@ flowchart LR
 
 - `SessionManager`：会话注册表、端口独占、生命周期和命令路由；
 - `SessionActor`：一个活动串口一个 Actor，独占串口句柄；
+- `ProcessRegistry`：SSH/ADB 子进程会话、标准输入输出和生命周期；
+- `RemoteDiscoveryService`：解析 ADB 设备、授权和离线状态；
 - `PortDiscoveryService`：枚举、稳定设备键、热插拔 diff；
 - `SenderScheduler`：单次、循环、文件发送和背压；
 - `LoggingService`：原始/文本日志、模板、滚动；
@@ -163,6 +170,7 @@ trait SerialConnection: Send {
 ### 4.4 基础设施层
 
 - `serialport-rs` 适配器；
+- 系统 `ssh` 与 `adb` 命令适配器；
 - Windows/macOS/Linux 平台能力探测；
 - SQLite Repository；
 - 原子配置/日志文件写入；

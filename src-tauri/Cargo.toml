@@ -1,7 +1,7 @@
 [package]
 name = "iterm"
 version = "0.2.0"
-description = "A cross-platform, local-first desktop serial terminal"
+description = "A cross-platform, local-first desktop serial, SSH, and ADB terminal"
 authors = ["iTerm contributors"]
 edition = "2021"
 repository = "https://github.com/Oublie-le/iTerm"

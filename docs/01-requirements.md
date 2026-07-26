@@ -70,6 +70,20 @@
 | FR-PORT-011 | P0 | 同一端口在本应用内只能被一个活动会话独占；冲突时指向占用它的会话。 |
 | FR-PORT-012 | P1 | 支持按 VID/PID/USB 序列号识别设备，路径变化后仍可匹配原设备。 |
 
+### 3.2A SSH 与 ADB
+
+| ID | 优先级 | 需求 |
+| --- | --- | --- |
+| FR-SSH-001 | P0 | 支持主机、端口、用户名、SSH Agent/默认密钥和指定私钥配置。 |
+| FR-SSH-002 | P0 | 支持 known_hosts 严格校验开关和连接保活。 |
+| FR-SSH-003 | P0 | SSH 会话支持交互式终端输入输出、主动断开和异常退出提示。 |
+| FR-SSH-004 | P1 | 支持不持久化凭据的密码与键盘交互认证。 |
+| FR-SSH-005 | P1 | 终端尺寸改变时同步远程 PTY 行列数。 |
+| FR-ADB-001 | P0 | 使用 `adb devices -l` 发现 USB、模拟器和网络设备。 |
+| FR-ADB-002 | P0 | 展示设备 ID、授权/离线状态、型号、产品名和 transport ID。 |
+| FR-ADB-003 | P0 | 支持选择指定设备并打开交互式 ADB Shell。 |
+| FR-ADB-004 | P0 | 未安装 adb、未授权、离线或进程退出时提供明确错误提示。 |
+
 ### 3.3 会话与连接状态
 
 | ID | 优先级 | 需求 |
@@ -159,7 +173,7 @@
 
 | 实体 | 关键字段 |
 | --- | --- |
-| SessionProfile | id、name、groupId、serialConfig、terminalConfig、loggingConfig |
+| SessionProfile | id、name、groupId、protocol、serialConfig、sshConfig、adbConfig、terminalConfig、loggingConfig |
 | SessionGroup | id、parentId、name、sortOrder |
 | WorkspaceLayout | window、docks、tabs、splits、activeSession |
 | SenderPreset | id、sessionId、mode、payload、lineEnding、interval |

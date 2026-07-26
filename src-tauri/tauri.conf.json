@@ -39,7 +39,7 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Desktop serial terminal",
-    "longDescription": "A fast, local-first serial terminal for embedded development and device debugging."
+    "shortDescription": "Desktop serial, SSH, and ADB terminal",
+    "longDescription": "A fast, local-first serial, SSH, and ADB terminal for development and device debugging."
   }
 }
