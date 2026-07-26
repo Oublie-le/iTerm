@@ -49,6 +49,7 @@ import {
   writeSerialTextMany,
 } from "./lib/serial";
 import { appendReceiveChunk } from "./lib/receive";
+import { sendFileInChunks } from "./lib/fileTransfer";
 import {
   createRuntimeSession,
   createSessionProfile,
@@ -559,7 +560,7 @@ export default function App() {
     profile: SessionProfile,
     value: string,
   ) => {
-    if (runtime.state !== "connected") return;
+    if (runtime.state !== "connected" || runtime.transferActive) return;
     try {
       const targets =
         runtime.syncChannel === "off"
@@ -605,6 +606,9 @@ export default function App() {
     if (activeSession.state !== "connected") {
       throw new Error("串口未连接。");
     }
+    if (activeSession.transferActive) {
+      throw new Error("文件发送期间不能发送普通数据。");
+    }
     const count =
       preset.mode === "hex"
         ? await writeSerialBytes(activeSession.id, parseHex(preset.payload))
@@ -622,6 +626,53 @@ export default function App() {
       ),
     );
     return count;
+  };
+
+  const sendFile = async (
+    file: File,
+    onProgress: (sentBytes: number, totalBytes: number) => void,
+    signal: AbortSignal,
+  ): Promise<number> => {
+    if (!activeSession || activeSession.state !== "connected") {
+      throw new Error("串口未连接。");
+    }
+    const sessionId = activeSession.id;
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === sessionId
+          ? { ...session, transferActive: true }
+          : session,
+      ),
+    );
+    try {
+      return await sendFileInChunks(
+        file,
+        async (bytes) => {
+          const count = await writeSerialBytes(sessionId, bytes);
+          setSessions((current) =>
+            current.map((session) =>
+              session.id === sessionId
+                ? {
+                    ...session,
+                    bytesWritten: session.bytesWritten + count,
+                  }
+                : session,
+            ),
+          );
+          return count;
+        },
+        onProgress,
+        signal,
+      );
+    } finally {
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: false }
+            : session,
+        ),
+      );
+    }
   };
 
   const toggleSignal = async (signal: "dtr" | "rts") => {
@@ -1140,6 +1191,7 @@ export default function App() {
               connected={activeSession?.state === "connected"}
               onClose={() => setSenderOpen(false)}
               onSend={sendPreset}
+              onSendFile={sendFile}
             />
           )}
 

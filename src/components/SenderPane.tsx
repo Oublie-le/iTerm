@@ -1,6 +1,7 @@
 import {
   CirclePlus,
   Eraser,
+  FileUp,
   Play,
   Square,
   Trash2,
@@ -15,6 +16,11 @@ interface SenderPaneProps {
   connected: boolean;
   onClose: () => void;
   onSend: (preset: SenderPreset) => Promise<number>;
+  onSendFile: (
+    file: File,
+    onProgress: (sentBytes: number, totalBytes: number) => void,
+    signal: AbortSignal,
+  ) => Promise<number>;
 }
 
 export function SenderPane({
@@ -22,6 +28,7 @@ export function SenderPane({
   connected,
   onClose,
   onSend,
+  onSendFile,
 }: SenderPaneProps) {
   const [presets, setPresets] = useState<SenderPreset[]>(() =>
     loadSenderPresets(profileId),
@@ -32,6 +39,13 @@ export function SenderPane({
   const [lastError, setLastError] = useState("");
   const timerRef = useRef<number | null>(null);
   const cancelledRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileAbortRef = useRef<AbortController | null>(null);
+  const [fileTransfer, setFileTransfer] = useState<{
+    name: string;
+    sentBytes: number;
+    totalBytes: number;
+  } | null>(null);
 
   const active =
     presets.find((preset) => preset.id === activeId) ?? presets[0];
@@ -49,6 +63,8 @@ export function SenderPane({
     setRunning(false);
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
+    fileAbortRef.current?.abort();
+    fileAbortRef.current = null;
   };
 
   useEffect(() => {
@@ -110,6 +126,34 @@ export function SenderPane({
     setActiveId(next[Math.max(0, index - 1)].id);
   };
 
+  const sendFile = async (file: File) => {
+    setLastError("");
+    const controller = new AbortController();
+    fileAbortRef.current = controller;
+    setRunning(true);
+    setFileTransfer({
+      name: file.name,
+      sentBytes: 0,
+      totalBytes: file.size,
+    });
+    try {
+      const count = await onSendFile(
+        file,
+        (sentBytes, totalBytes) =>
+          setFileTransfer({ name: file.name, sentBytes, totalBytes }),
+        controller.signal,
+      );
+      setSentBytes((value) => value + count);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setLastError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      fileAbortRef.current = null;
+      setRunning(false);
+    }
+  };
+
   return (
     <section className="sender-pane" aria-label="发送窗格">
       <header className="sender-toolbar">
@@ -152,6 +196,24 @@ export function SenderPane({
           >
             <Eraser size={16} />
           </button>
+          <button
+            className="icon-button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!connected || running}
+            title="发送原始文件"
+          >
+            <FileUp size={16} />
+          </button>
+          <input
+            ref={fileInputRef}
+            className="hidden-file-input"
+            type="file"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void sendFile(file);
+              event.target.value = "";
+            }}
+          />
         </div>
         <div className="sender-tabs">
           {presets.map((preset) => (
@@ -259,6 +321,23 @@ export function SenderPane({
             已发送 {sentBytes.toLocaleString()} B
             {lastError && <strong>{lastError}</strong>}
           </div>
+          {fileTransfer && (
+            <div className="file-transfer-progress">
+              <span title={fileTransfer.name}>{fileTransfer.name}</span>
+              <progress
+                value={fileTransfer.sentBytes}
+                max={Math.max(1, fileTransfer.totalBytes)}
+              />
+              <strong>
+                {Math.round(
+                  (fileTransfer.sentBytes /
+                    Math.max(1, fileTransfer.totalBytes)) *
+                    100,
+                )}
+                %
+              </strong>
+            </div>
+          )}
         </div>
       </div>
     </section>

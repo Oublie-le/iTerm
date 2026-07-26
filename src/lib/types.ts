@@ -103,6 +103,7 @@ export interface RuntimeSession {
   logPath?: string;
   reconnectAttempts: number;
   nextReconnectAt?: number;
+  transferActive: boolean;
   lastChunk?: {
     nonce: number;
     sequence: number;
@@ -274,6 +275,7 @@ export function createRuntimeSession(
     syncChannel: "off",
     logState: "stopped",
     reconnectAttempts: 0,
+    transferActive: false,
     bytesRead: 0,
     bytesWritten: 0,
     terminalCols: 80,
