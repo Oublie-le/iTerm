@@ -49,6 +49,8 @@ import {
 } from "./lib/serial";
 import {
   closeProcessSession,
+  listAdbDevices,
+  openAdbSession,
   openSshSession,
   writeProcessBytes,
   writeProcessText,
@@ -64,6 +66,7 @@ import {
   requiresCloseConfirmation,
   sessionTargetLabel,
   type RuntimeSession,
+  type AdbDeviceDescriptor,
   type SenderPreset,
   type SerialEvent,
   type SerialPortDescriptor,
@@ -119,7 +122,7 @@ async function openConfiguredSession(
     return openSshSession(sessionId, profile, onEvent);
   }
   if (profile.protocol === "adb") {
-    throw new Error("ADB Shell 后端尚未启用。");
+    return openAdbSession(sessionId, profile, onEvent);
   }
   return openSerialSession(sessionId, profile, onEvent);
 }
@@ -165,6 +168,7 @@ export default function App() {
   const [initialWorkspace] = useState(loadWorkspaceSnapshot);
   const [profiles, setProfiles] = useState<SessionProfile[]>(loadProfiles);
   const [ports, setPorts] = useState<SerialPortDescriptor[]>([]);
+  const [adbDevices, setAdbDevices] = useState<AdbDeviceDescriptor[]>([]);
   const [sessions, setSessions] = useState<RuntimeSession[]>(() =>
     initialWorkspace.openProfileIds.flatMap((profileId) => {
       const profile = profiles.find((item) => item.id === profileId);
@@ -199,6 +203,7 @@ export default function App() {
     useState<SessionProfile | null>(null);
   const [sidebarFilter, setSidebarFilter] = useState("");
   const [portError, setPortError] = useState("");
+  const [adbError, setAdbError] = useState("");
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
@@ -231,11 +236,35 @@ export default function App() {
     }
   }, []);
 
+  const refreshAdbDevices = useCallback(async (silent = false) => {
+    if (!silent) setAdbError("");
+    try {
+      setAdbDevices(await listAdbDevices());
+      setAdbError("");
+    } catch (error) {
+      setAdbDevices([]);
+      if (!silent) {
+        setAdbError(
+          error instanceof Error ? error.message : "无法读取 ADB 设备。",
+        );
+      }
+    }
+  }, []);
+
   useEffect(() => {
     void refreshPorts();
     const timer = window.setInterval(() => void refreshPorts(true), 1_000);
     return () => window.clearInterval(timer);
   }, [refreshPorts]);
+
+  useEffect(() => {
+    void refreshAdbDevices(true);
+    const timer = window.setInterval(
+      () => void refreshAdbDevices(true),
+      3_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [refreshAdbDevices]);
 
   useEffect(() => {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
@@ -935,6 +964,7 @@ export default function App() {
           <SessionSidebar
             profiles={profiles}
             ports={ports}
+            adbDevices={adbDevices}
             sessions={sessions}
             filter={sidebarFilter}
             onFilterChange={setSidebarFilter}
@@ -946,7 +976,10 @@ export default function App() {
             }}
             onDuplicate={duplicateProfile}
             onDelete={(profile) => void deleteProfile(profile)}
-            onRefresh={() => void refreshPorts()}
+            onRefresh={() => {
+              void refreshPorts();
+              void refreshAdbDevices();
+            }}
           />
         )}
 
@@ -1215,6 +1248,19 @@ export default function App() {
             </div>
           )}
 
+          {adbError && (
+            <div className="notice-bar error">
+              <Info size={18} />
+              <div>
+                <strong>读取 ADB 设备失败</strong>
+                <span>{adbError}</span>
+              </div>
+              <button onClick={() => setAdbError("")}>
+                <X size={17} />
+              </button>
+            </div>
+          )}
+
           {activeSession?.notice && (
             <div className={`notice-bar ${activeSession.notice.tone}`}>
               <Info size={18} />
@@ -1268,7 +1314,10 @@ export default function App() {
                   </button>
                   <button
                     className="secondary-button"
-                    onClick={() => void refreshPorts()}
+                    onClick={() => {
+                      void refreshPorts();
+                      void refreshAdbDevices();
+                    }}
                   >
                     <RefreshCw size={16} />
                     刷新设备
@@ -1276,9 +1325,8 @@ export default function App() {
                 </div>
                 <div className="available-port-summary">
                   <Cable size={15} />
-                  {ports.length
-                    ? `已发现 ${ports.length} 个串口设备`
-                    : "暂未发现串口设备"}
+                  已发现 {ports.length} 个串口设备、{adbDevices.length} 个
+                  ADB 设备
                 </div>
               </div>
             )}
@@ -1389,11 +1437,13 @@ export default function App() {
         open={sessionDialogOpen}
         profile={editingProfile}
         ports={ports}
+        adbDevices={adbDevices}
         onCancel={() => {
           setSessionDialogOpen(false);
           setEditingProfile(null);
         }}
         onRefreshPorts={() => void refreshPorts()}
+        onRefreshAdbDevices={() => void refreshAdbDevices()}
         onSave={saveProfile}
       />
       {focusMode && (

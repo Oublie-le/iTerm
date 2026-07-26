@@ -1,5 +1,5 @@
 use crate::serial::{ConnectionState, SerialEvent};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     io::{Read, Write},
@@ -51,6 +51,29 @@ pub struct OpenSshRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OpenAdbRequest {
+    session_id: String,
+    device_id: String,
+    shell: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdbDeviceDescriptor {
+    id: String,
+    state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    product: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transport_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WriteProcessRequest {
     session_id: String,
     bytes: Vec<u8>,
@@ -98,6 +121,66 @@ pub fn open_ssh_session(
         child,
         on_event,
     )
+}
+
+#[tauri::command]
+pub fn list_adb_devices() -> Result<Vec<AdbDeviceDescriptor>, String> {
+    let output = Command::new("adb")
+        .args(["devices", "-l"])
+        .output()
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                "找不到 adb 命令，请安装 Android SDK Platform Tools。".to_string()
+            } else {
+                format!("无法执行 adb devices：{error}")
+            }
+        })?;
+    if !output.status.success() {
+        return Err(format!(
+            "adb devices 执行失败：{}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(parse_adb_devices(&String::from_utf8_lossy(&output.stdout)))
+}
+
+#[tauri::command]
+pub fn open_adb_session(
+    request: OpenAdbRequest,
+    on_event: Channel<SerialEvent>,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<(), String> {
+    validate_argument("ADB 设备 ID", &request.device_id)?;
+    if request.device_id.starts_with('-') {
+        return Err("ADB 设备 ID 不能以连字符开头。".into());
+    }
+    ensure_session_available(&registry, &request.session_id)?;
+
+    let mut command = Command::new("adb");
+    command.arg("-s").arg(&request.device_id).arg("shell");
+    if !request.shell.trim().is_empty() {
+        command.arg(&request.shell);
+    }
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    hide_console_window(&mut command);
+
+    let label = format!("ADB {}", request.device_id);
+    let _ = on_event.send(SerialEvent::State {
+        session_id: request.session_id.clone(),
+        state: ConnectionState::Opening,
+        message: Some(format!("正在打开 {label} Shell…")),
+    });
+    let child = command.spawn().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            "找不到 adb 命令，请安装 Android SDK Platform Tools。".to_string()
+        } else {
+            format!("无法启动 adb：{error}")
+        }
+    })?;
+    start_process_session(&registry, request.session_id, label, child, on_event)
 }
 
 #[tauri::command]
@@ -211,6 +294,45 @@ fn ssh_arguments(request: &OpenSshRequest) -> Vec<String> {
         arguments.push("UserKnownHostsFile=/dev/null".into());
     }
     arguments
+}
+
+fn parse_adb_devices(output: &str) -> Vec<AdbDeviceDescriptor> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty()
+                || trimmed.starts_with("List of devices")
+                || trimmed.starts_with('*')
+            {
+                return None;
+            }
+            let mut fields = trimmed.split_whitespace();
+            let id = fields.next()?.to_string();
+            let state = fields.next().unwrap_or("unknown").to_string();
+            let mut descriptor = AdbDeviceDescriptor {
+                id,
+                state,
+                product: None,
+                model: None,
+                device: None,
+                transport_id: None,
+            };
+            for field in fields {
+                let Some((key, value)) = field.split_once(':') else {
+                    continue;
+                };
+                match key {
+                    "product" => descriptor.product = Some(value.into()),
+                    "model" => descriptor.model = Some(value.replace('_', " ")),
+                    "device" => descriptor.device = Some(value.into()),
+                    "transport_id" => descriptor.transport_id = Some(value.into()),
+                    _ => {}
+                }
+            }
+            Some(descriptor)
+        })
+        .collect()
 }
 
 fn ensure_session_available(
@@ -478,5 +600,19 @@ mod tests {
         assert!(validate_ssh_request(&value).is_err());
         value.host = "bad host".into();
         assert!(validate_ssh_request(&value).is_err());
+    }
+
+    #[test]
+    fn parses_adb_device_states_and_metadata() {
+        let output = "List of devices attached\n\
+                      emulator-5554 device product:sdk_gphone model:Pixel_8 device:emu transport_id:1\n\
+                      ABC123 unauthorized usb:1-2\n\
+                      192.168.1.2:5555 offline\n";
+        let devices = parse_adb_devices(output);
+        assert_eq!(devices.len(), 3);
+        assert_eq!(devices[0].id, "emulator-5554");
+        assert_eq!(devices[0].model.as_deref(), Some("Pixel 8"));
+        assert_eq!(devices[1].state, "unauthorized");
+        assert_eq!(devices[2].state, "offline");
     }
 }

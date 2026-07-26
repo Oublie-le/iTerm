@@ -13,6 +13,7 @@ import {
   Usb,
 } from "lucide-react";
 import type {
+  AdbDeviceDescriptor,
   RuntimeSession,
   SerialPortDescriptor,
   SessionProfile,
@@ -22,6 +23,7 @@ import { sessionTargetLabel } from "../lib/types";
 interface SessionSidebarProps {
   profiles: SessionProfile[];
   ports: SerialPortDescriptor[];
+  adbDevices: AdbDeviceDescriptor[];
   sessions: RuntimeSession[];
   filter: string;
   onFilterChange: (value: string) => void;
@@ -36,6 +38,7 @@ interface SessionSidebarProps {
 export function SessionSidebar({
   profiles,
   ports,
+  adbDevices,
   sessions,
   filter,
   onFilterChange,
@@ -168,10 +171,30 @@ export function SessionSidebar({
             </button>
           ))}
         </div>
+
+        <div className="tree-group port-group">
+          <div className="tree-group-label">
+            <ChevronDown size={15} />
+            <Smartphone size={16} />
+            <span>ADB 设备</span>
+            <span className="tree-count">{adbDevices.length}</span>
+          </div>
+          {adbDevices.map((device) => (
+            <div key={device.id} className="tree-port">
+              <Smartphone size={14} />
+              <span>
+                <strong>{device.model || device.product || device.id}</strong>
+                <small>
+                  {device.id} · {device.state}
+                </small>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <footer className="sidebar-footer">
-        <span>{ports.length} 个设备</span>
+        <span>{ports.length + adbDevices.length} 个设备</span>
         <button onClick={onNew}>
           <CirclePlus size={15} />
           新建会话

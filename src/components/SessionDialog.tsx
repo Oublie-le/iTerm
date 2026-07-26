@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type {
+  AdbDeviceDescriptor,
   FlowControl,
   Parity,
   SerialPortDescriptor,
@@ -34,8 +35,10 @@ interface SessionDialogProps {
   open: boolean;
   profile: SessionProfile | null;
   ports: SerialPortDescriptor[];
+  adbDevices: AdbDeviceDescriptor[];
   onCancel: () => void;
   onRefreshPorts: () => void;
+  onRefreshAdbDevices: () => void;
   onSave: (profile: SessionProfile, connect: boolean) => void;
 }
 
@@ -57,8 +60,10 @@ export function SessionDialog({
   open,
   profile,
   ports,
+  adbDevices,
   onCancel,
   onRefreshPorts,
+  onRefreshAdbDevices,
   onSave,
 }: SessionDialogProps) {
   const [draft, setDraft] = useState<SessionProfile | null>(profile);
@@ -644,21 +649,61 @@ export function SessionDialog({
 
             {page === "adb" && (
               <>
-                <div className="page-heading">
-                  <h3>ADB Shell</h3>
-                  <p>填写 adb devices 显示的设备 ID，后续可从设备列表直接选择。</p>
+                <div className="page-heading heading-with-action">
+                  <div>
+                    <h3>ADB Shell</h3>
+                    <p>选择 USB、模拟器或网络连接的 Android 设备。</p>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    onClick={onRefreshAdbDevices}
+                  >
+                    <RefreshCw size={15} />
+                    刷新设备
+                  </button>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
                     <span>设备 ID</span>
                     <input
+                      list="adb-device-ids"
                       value={draft.adb.deviceId}
                       onChange={(event) =>
                         updateAdb({ deviceId: event.target.value })
                       }
                       placeholder="emulator-5554 或 192.168.1.20:5555"
                     />
+                    <datalist id="adb-device-ids">
+                      {adbDevices.map((device) => (
+                        <option key={device.id} value={device.id}>
+                          {device.model || device.product || device.id} ·{" "}
+                          {device.state}
+                        </option>
+                      ))}
+                    </datalist>
                   </label>
+                  {draft.adb.deviceId &&
+                    (() => {
+                      const device = adbDevices.find(
+                        (item) => item.id === draft.adb.deviceId,
+                      );
+                      return device ? (
+                        <div className="device-summary">
+                          <Smartphone size={17} />
+                          <div>
+                            <strong>{device.model || device.id}</strong>
+                            <span>
+                              {device.id} ·{" "}
+                              {device.state === "device"
+                                ? "已授权"
+                                : device.state === "unauthorized"
+                                  ? "等待设备授权"
+                                  : device.state}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                   <label className="field-row">
                     <span>Shell 命令</span>
                     <input

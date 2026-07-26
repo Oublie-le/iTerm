@@ -1,12 +1,35 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { appendLineEnding, isTauriRuntime } from "./serial";
 import type {
+  AdbDeviceDescriptor,
   LineEnding,
   SerialEvent,
   SessionProfile,
 } from "./types";
 
 const mockTimers = new Map<string, number[]>();
+
+export async function listAdbDevices(): Promise<AdbDeviceDescriptor[]> {
+  if (isTauriRuntime()) {
+    return invoke<AdbDeviceDescriptor[]>("list_adb_devices");
+  }
+  return [
+    {
+      id: "emulator-5554",
+      state: "device",
+      product: "sdk_gphone64_arm64",
+      model: "Pixel 8 API 35",
+      device: "emu64a",
+      transportId: "1",
+    },
+    {
+      id: "R58M1234ABC",
+      state: "unauthorized",
+      model: "Android Device",
+      transportId: "2",
+    },
+  ];
+}
 
 export async function openSshSession(
   sessionId: string,
@@ -58,6 +81,55 @@ export async function openSshSession(
           ),
         }),
       300,
+    ),
+  ];
+  mockTimers.set(sessionId, timers);
+}
+
+export async function openAdbSession(
+  sessionId: string,
+  profile: SessionProfile,
+  onEvent: (event: SerialEvent) => void,
+): Promise<void> {
+  if (isTauriRuntime()) {
+    const channel = new Channel<SerialEvent>();
+    channel.onmessage = onEvent;
+    await invoke("open_adb_session", {
+      request: {
+        sessionId,
+        deviceId: profile.adb.deviceId,
+        shell: profile.adb.shell,
+      },
+      onEvent: channel,
+    });
+    return;
+  }
+
+  const timers = [
+    window.setTimeout(
+      () =>
+        onEvent({
+          type: "state",
+          sessionId,
+          state: "connected",
+          message: "Mock ADB Shell connected",
+        }),
+      120,
+    ),
+    window.setTimeout(
+      () =>
+        onEvent({
+          type: "data",
+          sessionId,
+          sequence: 1,
+          receivedAtMs: Date.now(),
+          bytes: Array.from(
+            new TextEncoder().encode(
+              `Android Debug Bridge shell\r\n${profile.adb.deviceId}:/ $ `,
+            ),
+          ),
+        }),
+      260,
     ),
   ];
   mockTimers.set(sessionId, timers);

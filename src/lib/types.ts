@@ -63,6 +63,15 @@ export interface AdbConfig {
   shell: string;
 }
 
+export interface AdbDeviceDescriptor {
+  id: string;
+  state: "device" | "offline" | "unauthorized" | "no_permissions" | "unknown";
+  product?: string;
+  model?: string;
+  device?: string;
+  transportId?: string;
+}
+
 export interface TerminalConfig {
   encoding: string;
   termType: string;
