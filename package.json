@@ -1,6 +1,6 @@
 {
   "name": "iterm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A cross-platform, local-first serial, SSH, and ADB terminal built with Tauri, Rust, React, and xterm.js.",
   "license": "UNLICENSED",
   "repository": {

@@ -180,7 +180,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 - `Dependabot`：每周检查 npm、Cargo 和 GitHub Actions 依赖更新。
 
 发布新版本前需同步修改 `package.json`、`src-tauri/Cargo.toml` 和
-`src-tauri/tauri.conf.json` 中的版本号，然后创建对应标签，例如 `v0.2.0`。
+`src-tauri/tauri.conf.json` 中的版本号，然后创建对应标签，例如 `v0.3.0`。
 
 ## 当前限制与路线图
 
