@@ -251,3 +251,27 @@ export function createSenderPreset(index = 1): SenderPreset {
     intervalMs: 1000,
   };
 }
+
+export function createRuntimeSession(
+  profile: SessionProfile,
+  state: ConnectionState = "disconnected",
+): RuntimeSession {
+  return {
+    id: crypto.randomUUID(),
+    profileId: profile.id,
+    title: profile.name,
+    state,
+    sequence: 0,
+    receiveMode: "text",
+    receiveChunks: [],
+    receiveBaseOffset: 0,
+    syncChannel: "off",
+    logState: "stopped",
+    reconnectAttempts: 0,
+    bytesRead: 0,
+    bytesWritten: 0,
+    terminalCols: 80,
+    terminalRows: 24,
+    openedAt: Date.now(),
+  };
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createSessionProfile,
+  createRuntimeSession,
   duplicateSessionProfile,
   normalizeSessionProfile,
   reconnectDelayMs,
@@ -41,5 +42,17 @@ describe("reconnectDelayMs", () => {
     expect(reconnectDelayMs(4)).toBe(8_000);
     expect(reconnectDelayMs(8)).toBe(30_000);
     expect(reconnectDelayMs(100)).toBe(30_000);
+  });
+});
+
+describe("createRuntimeSession", () => {
+  it("restores a profile without opening its serial device", () => {
+    const profile = createSessionProfile();
+    const runtime = createRuntimeSession(profile);
+
+    expect(runtime.profileId).toBe(profile.id);
+    expect(runtime.state).toBe("disconnected");
+    expect(runtime.bytesRead).toBe(0);
+    expect(runtime.logState).toBe("stopped");
   });
 });

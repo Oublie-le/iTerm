@@ -47,6 +47,7 @@ import {
 } from "./lib/serial";
 import { appendReceiveChunk } from "./lib/receive";
 import {
+  createRuntimeSession,
   createSessionProfile,
   duplicateSessionProfile,
   normalizeSessionProfile,
@@ -58,6 +59,10 @@ import {
   type SessionProfile,
   type SyncChannel,
 } from "./lib/types";
+import {
+  loadWorkspaceSnapshot,
+  saveWorkspaceSnapshot,
+} from "./lib/workspace";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -89,12 +94,37 @@ function stateLabel(state: RuntimeSession["state"]): string {
 }
 
 export default function App() {
+  const [initialWorkspace] = useState(loadWorkspaceSnapshot);
   const [profiles, setProfiles] = useState<SessionProfile[]>(loadProfiles);
   const [ports, setPorts] = useState<SerialPortDescriptor[]>([]);
-  const [sessions, setSessions] = useState<RuntimeSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [senderOpen, setSenderOpen] = useState(true);
+  const [sessions, setSessions] = useState<RuntimeSession[]>(() =>
+    initialWorkspace.openProfileIds.flatMap((profileId) => {
+      const profile = profiles.find((item) => item.id === profileId);
+      if (!profile) return [];
+      return [
+        {
+          ...createRuntimeSession(profile),
+          notice: {
+            tone: "info" as const,
+            title: "会话已从上次工作区恢复，点击连接以打开串口。",
+          },
+        },
+      ];
+    }),
+  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(
+    () =>
+      sessions.find(
+        (session) =>
+          session.profileId === initialWorkspace.activeProfileId,
+      )?.id ??
+      sessions[0]?.id ??
+      null,
+  );
+  const [sidebarOpen, setSidebarOpen] = useState(
+    initialWorkspace.sidebarOpen,
+  );
+  const [senderOpen, setSenderOpen] = useState(initialWorkspace.senderOpen);
   const [focusMode, setFocusMode] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] =
@@ -142,6 +172,17 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
   }, [profiles]);
+
+  useEffect(() => {
+    saveWorkspaceSnapshot({
+      sidebarOpen,
+      senderOpen,
+      openProfileIds: sessions.map((session) => session.profileId),
+      activeProfileId:
+        sessions.find((session) => session.id === activeSessionId)?.profileId ??
+        null,
+    });
+  }, [activeSessionId, senderOpen, sessions, sidebarOpen]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -346,22 +387,8 @@ export default function App() {
         setSessions((current) => [
           ...current,
           {
+            ...createRuntimeSession(profile, "opening"),
             id: sessionId,
-            profileId: profile.id,
-            title: profile.name,
-            state: "opening",
-            sequence: 0,
-            receiveMode: "text",
-            receiveChunks: [],
-            receiveBaseOffset: 0,
-            syncChannel: "off",
-            logState: "stopped",
-            reconnectAttempts: 0,
-            bytesRead: 0,
-            bytesWritten: 0,
-            terminalCols: 80,
-            terminalRows: 24,
-            openedAt: Date.now(),
           },
         ]);
       } else {
