@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { appendReceiveChunk, formatHexDump } from "./receive";
+import {
+  appendReceiveChunk,
+  formatHexDump,
+  formatReceiveTimestamp,
+  timestampReceivedText,
+} from "./receive";
 import type { ReceiveChunk } from "./types";
 
 const chunk = (sequence: number, bytes: number[]): ReceiveChunk => ({
@@ -48,5 +53,31 @@ describe("formatHexDump", () => {
 
     expect(result.text).toContain("00000008  43 44  |CD|");
     expect(result.omittedBytes).toBe(8);
+  });
+
+  it("optionally prefixes rows with their receive time", () => {
+    const receivedAtMs = new Date(2026, 6, 26, 9, 8, 7, 6).getTime();
+    const result = formatHexDump(
+      [{ ...chunk(1, [0x41]), receivedAtMs }],
+      1,
+      16,
+      64,
+      true,
+    );
+
+    expect(result.text.startsWith("[09:08:07.006] 00000000")).toBe(true);
+  });
+});
+
+describe("timestampReceivedText", () => {
+  it("timestamps each new line while preserving chunk continuations", () => {
+    const receivedAtMs = new Date(2026, 6, 26, 9, 8, 7, 6).getTime();
+    const first = timestampReceivedText("hello", receivedAtMs, true);
+    const second = timestampReceivedText(" world\nnext", receivedAtMs, first.startsNewLine);
+
+    expect(first.text).toContain(`${formatReceiveTimestamp(receivedAtMs)}\u001b[0m hello`);
+    expect(second.text).toBe(
+      ` world\n\u001b[38;5;244m${formatReceiveTimestamp(receivedAtMs)}\u001b[0m next`,
+    );
   });
 });

@@ -4,7 +4,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { formatHexDump } from "../lib/receive";
+import { formatHexDump, timestampReceivedText } from "../lib/receive";
 import type {
   ReceiveMode,
   RuntimeSession,
@@ -32,9 +32,21 @@ export function TerminalPane({
   const inputRef = useRef(onInput);
   const decoderRef = useRef<TextDecoder | null>(null);
   const lastWrittenNonceRef = useRef<number | null>(null);
+  const startsNewLineRef = useRef(true);
   const hexDump = useMemo(
-    () => formatHexDump(session.receiveChunks, session.bytesRead),
-    [session.bytesRead, session.receiveChunks],
+    () =>
+      formatHexDump(
+        session.receiveChunks,
+        session.bytesRead,
+        16,
+        undefined,
+        profile.terminal.timestamp,
+      ),
+    [
+      profile.terminal.timestamp,
+      session.bytesRead,
+      session.receiveChunks,
+    ],
   );
 
   inputRef.current = onInput;
@@ -107,9 +119,16 @@ export function TerminalPane({
       fatal: false,
     });
     for (const chunk of session.receiveChunks) {
-      const text = decoderRef.current.decode(new Uint8Array(chunk.bytes), {
+      const decoded = decoderRef.current.decode(new Uint8Array(chunk.bytes), {
         stream: true,
       });
+      const timestamped = timestampReceivedText(
+        decoded,
+        chunk.receivedAtMs,
+        startsNewLineRef.current,
+      );
+      startsNewLineRef.current = timestamped.startsNewLine;
+      const text = profile.terminal.timestamp ? timestamped.text : decoded;
       if (text) terminal.write(text);
       lastWrittenNonceRef.current = chunk.nonce;
     }
@@ -123,6 +142,7 @@ export function TerminalPane({
       fitRef.current = null;
       decoderRef.current = null;
       lastWrittenNonceRef.current = null;
+      startsNewLineRef.current = true;
     };
     // Receive history is intentionally replayed only when the terminal itself
     // is recreated by one of the terminal configuration dependencies below.
@@ -133,15 +153,23 @@ export function TerminalPane({
     profile.terminal.fontSize,
     profile.terminal.lineHeight,
     profile.terminal.scrollback,
+    profile.terminal.timestamp,
   ]);
 
   useEffect(() => {
     if (!session.lastChunk || !terminalRef.current || !decoderRef.current) return;
     if (session.lastChunk.nonce === lastWrittenNonceRef.current) return;
-    const text = decoderRef.current.decode(
+    const decoded = decoderRef.current.decode(
       new Uint8Array(session.lastChunk.bytes),
       { stream: true },
     );
+    const timestamped = timestampReceivedText(
+      decoded,
+      session.lastChunk.receivedAtMs,
+      startsNewLineRef.current,
+    );
+    startsNewLineRef.current = timestamped.startsNewLine;
+    const text = profile.terminal.timestamp ? timestamped.text : decoded;
     if (text) terminalRef.current.write(text);
     lastWrittenNonceRef.current = session.lastChunk.nonce;
   }, [session.lastChunk]);
