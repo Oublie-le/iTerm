@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { appendLineEnding, formatByteCount, parseHex } from "./serial";
+import {
+  appendLineEnding,
+  areSerialPortListsEqual,
+  formatByteCount,
+  parseHex,
+} from "./serial";
 
 describe("parseHex", () => {
   it("parses separators and 0x prefixes", () => {
@@ -31,5 +36,35 @@ describe("formatByteCount", () => {
   it("formats byte units", () => {
     expect(formatByteCount(42)).toBe("42 B");
     expect(formatByteCount(2048)).toBe("2.0 KiB");
+  });
+});
+
+describe("areSerialPortListsEqual", () => {
+  const first = {
+    path: "/dev/cu.usbserial-1",
+    displayName: "USB Serial",
+    portType: "usb" as const,
+    vid: 0x10c4,
+    pid: 0xea60,
+    serialNumber: "ABC",
+  };
+
+  it("ignores enumeration order", () => {
+    const second = {
+      path: "/dev/cu.usbserial-2",
+      displayName: "USB Serial 2",
+      portType: "usb" as const,
+    };
+    expect(areSerialPortListsEqual([first, second], [second, first])).toBe(true);
+  });
+
+  it("detects hotplug and metadata changes", () => {
+    expect(areSerialPortListsEqual([first], [])).toBe(false);
+    expect(
+      areSerialPortListsEqual(
+        [first],
+        [{ ...first, serialNumber: "CHANGED" }],
+      ),
+    ).toBe(false);
   });
 });

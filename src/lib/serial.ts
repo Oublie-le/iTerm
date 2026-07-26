@@ -55,6 +55,25 @@ export function formatByteCount(value: number): string {
   return `${(value / 1024 / 1024).toFixed(1)} MiB`;
 }
 
+export function areSerialPortListsEqual(
+  current: SerialPortDescriptor[],
+  next: SerialPortDescriptor[],
+): boolean {
+  if (current.length !== next.length) return false;
+  const byPath = (ports: SerialPortDescriptor[]) =>
+    [...ports].sort((left, right) => left.path.localeCompare(right.path));
+  const left = byPath(current);
+  const right = byPath(next);
+  return left.every(
+    (port, index) =>
+      port.path === right[index].path &&
+      port.displayName === right[index].displayName &&
+      port.vid === right[index].vid &&
+      port.pid === right[index].pid &&
+      port.serialNumber === right[index].serialNumber,
+  );
+}
+
 export async function listSerialPorts(): Promise<SerialPortDescriptor[]> {
   if (isTauriRuntime()) {
     return invoke<SerialPortDescriptor[]>("list_serial_ports");

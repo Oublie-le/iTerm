@@ -21,12 +21,13 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SenderPane } from "./components/SenderPane";
 import { SessionDialog } from "./components/SessionDialog";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { TerminalPane } from "./components/TerminalPane";
 import {
+  areSerialPortListsEqual,
   closeSerialSession,
   formatByteCount,
   listSerialPorts,
@@ -88,6 +89,7 @@ export default function App() {
   const [portError, setPortError] = useState("");
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
+  const refreshInFlightRef = useRef(false);
 
   const activeSession = sessions.find(
     (session) => session.id === activeSessionId,
@@ -96,19 +98,31 @@ export default function App() {
     (profile) => profile.id === activeSession?.profileId,
   );
 
-  const refreshPorts = useCallback(async () => {
-    setPortError("");
+  const refreshPorts = useCallback(async (silent = false) => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    if (!silent) setPortError("");
     try {
-      setPorts(await listSerialPorts());
-    } catch (error) {
-      setPortError(
-        error instanceof Error ? error.message : "无法读取本机串口设备。",
+      const next = await listSerialPorts();
+      setPorts((current) =>
+        areSerialPortListsEqual(current, next) ? current : next,
       );
+      setPortError("");
+    } catch (error) {
+      if (!silent) {
+        setPortError(
+          error instanceof Error ? error.message : "无法读取本机串口设备。",
+        );
+      }
+    } finally {
+      refreshInFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     void refreshPorts();
+    const timer = window.setInterval(() => void refreshPorts(true), 1_000);
+    return () => window.clearInterval(timer);
   }, [refreshPorts]);
 
   useEffect(() => {
