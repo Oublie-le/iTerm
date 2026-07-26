@@ -246,7 +246,12 @@ export function SessionDialog({
                         const port = ports.find(
                           (item) => item.path === event.target.value,
                         );
-                        updateSerial({ portPath: event.target.value });
+                        updateSerial({
+                          portPath: event.target.value,
+                          deviceVid: port?.vid,
+                          devicePid: port?.pid,
+                          deviceSerialNumber: port?.serialNumber,
+                        });
                         if (
                           port &&
                           (!draft.name || draft.name === "新串口会话")

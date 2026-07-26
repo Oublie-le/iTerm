@@ -4,6 +4,7 @@ import type {
   LogMode,
   SerialEvent,
   SerialPortDescriptor,
+  SerialConfig,
   SessionProfile,
 } from "./types";
 
@@ -73,6 +74,33 @@ export function areSerialPortListsEqual(
       port.pid === right[index].pid &&
       port.serialNumber === right[index].serialNumber,
   );
+}
+
+export function findMatchingSerialPort(
+  config: SerialConfig,
+  ports: SerialPortDescriptor[],
+): SerialPortDescriptor | undefined {
+  const exact = ports.find((port) => port.path === config.portPath);
+  if (exact) return exact;
+
+  if (
+    config.deviceVid === undefined ||
+    config.devicePid === undefined
+  ) {
+    return undefined;
+  }
+
+  const sameProduct = ports.filter(
+    (port) =>
+      port.vid === config.deviceVid &&
+      port.pid === config.devicePid,
+  );
+  if (config.deviceSerialNumber) {
+    return sameProduct.find(
+      (port) => port.serialNumber === config.deviceSerialNumber,
+    );
+  }
+  return sameProduct.length === 1 ? sameProduct[0] : undefined;
 }
 
 export async function listSerialPorts(): Promise<SerialPortDescriptor[]> {

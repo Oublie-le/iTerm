@@ -35,6 +35,7 @@ import {
   clearSerialBuffers,
   closeSerialSession,
   formatByteCount,
+  findMatchingSerialPort,
   listSerialPorts,
   openSerialSession,
   parseHex,
@@ -174,6 +175,21 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
   }, [profiles]);
+
+  useEffect(() => {
+    if (ports.length === 0) return;
+    setProfiles((current) =>
+      current.map((profile) => {
+        const match = findMatchingSerialPort(profile.serial, ports);
+        if (!match || match.path === profile.serial.portPath) return profile;
+        return {
+          ...profile,
+          serial: { ...profile.serial, portPath: match.path },
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    );
+  }, [ports]);
 
   useEffect(() => {
     saveWorkspaceSnapshot({

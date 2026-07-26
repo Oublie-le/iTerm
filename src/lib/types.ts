@@ -30,6 +30,9 @@ export interface SerialPortDescriptor {
 
 export interface SerialConfig {
   portPath: string;
+  deviceVid?: number;
+  devicePid?: number;
+  deviceSerialNumber?: string;
   baudRate: number;
   dataBits: DataBits;
   parity: Parity;
@@ -200,6 +203,9 @@ export function createSessionProfile(
     serial: {
       ...DEFAULT_SERIAL_CONFIG,
       portPath: port?.path ?? "",
+      deviceVid: port?.vid,
+      devicePid: port?.pid,
+      deviceSerialNumber: port?.serialNumber,
     },
     terminal: { ...DEFAULT_TERMINAL_CONFIG },
     logging: { ...DEFAULT_LOGGING_CONFIG },

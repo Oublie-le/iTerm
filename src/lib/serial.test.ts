@@ -3,6 +3,7 @@ import {
   appendLineEnding,
   areSerialPortListsEqual,
   formatByteCount,
+  findMatchingSerialPort,
   parseHex,
 } from "./serial";
 
@@ -66,5 +67,51 @@ describe("areSerialPortListsEqual", () => {
         [{ ...first, serialNumber: "CHANGED" }],
       ),
     ).toBe(false);
+  });
+});
+
+describe("findMatchingSerialPort", () => {
+  const config = {
+    portPath: "/dev/cu.old",
+    deviceVid: 0x10c4,
+    devicePid: 0xea60,
+    deviceSerialNumber: "ABC",
+    baudRate: 115_200,
+    dataBits: 8 as const,
+    parity: "none" as const,
+    stopBits: "1" as const,
+    flowControl: "none" as const,
+    readTimeoutMs: 20,
+    dtrOnOpen: true,
+    rtsOnOpen: true,
+    autoReconnect: true,
+  };
+  const replacement = {
+    path: "/dev/cu.new",
+    displayName: "USB Serial",
+    portType: "usb" as const,
+    vid: 0x10c4,
+    pid: 0xea60,
+    serialNumber: "ABC",
+  };
+
+  it("follows a USB serial number when the path changes", () => {
+    expect(findMatchingSerialPort(config, [replacement])?.path).toBe(
+      "/dev/cu.new",
+    );
+  });
+
+  it("does not guess between identical devices without a serial number", () => {
+    const withoutSerial = { ...config, deviceSerialNumber: undefined };
+    expect(
+      findMatchingSerialPort(withoutSerial, [
+        { ...replacement, serialNumber: undefined },
+        {
+          ...replacement,
+          path: "/dev/cu.other",
+          serialNumber: undefined,
+        },
+      ]),
+    ).toBeUndefined();
   });
 });
