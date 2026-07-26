@@ -240,6 +240,15 @@ export async function sendSerialBreak(
   }
 }
 
+export async function clearSerialBuffers(
+  sessionId: string,
+  target: "input" | "output" | "all" = "all",
+): Promise<void> {
+  if (isTauriRuntime()) {
+    await invoke("clear_serial_buffers", { sessionId, target });
+  }
+}
+
 export async function startSerialLog(
   sessionId: string,
   sessionName: string,

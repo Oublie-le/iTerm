@@ -35,6 +35,7 @@ enum SessionCommand {
     SetDtr(bool, Sender<Result<(), String>>),
     SetRts(bool, Sender<Result<(), String>>),
     Break(u64, Sender<Result<(), String>>),
+    Clear(ClearBuffer, Sender<Result<(), String>>),
     StartLog(LogStartSpec, Sender<Result<String, String>>),
     SetLogPaused(bool, Sender<Result<(), String>>),
     StopLog(Sender<Result<(), String>>),
@@ -420,6 +421,22 @@ pub fn send_serial_break(
 }
 
 #[tauri::command]
+pub fn clear_serial_buffers(
+    session_id: String,
+    target: String,
+    registry: State<'_, SerialRegistry>,
+) -> Result<(), String> {
+    let buffer = parse_clear_buffer(&target)?;
+    let (reply_tx, reply_rx) = mpsc::channel();
+    send_command(
+        &registry,
+        &session_id,
+        SessionCommand::Clear(buffer, reply_tx),
+    )?;
+    receive_reply(reply_rx, "清空串口缓冲")
+}
+
+#[tauri::command]
 pub fn start_serial_log(
     request: StartLogRequest,
     app: AppHandle,
@@ -646,6 +663,13 @@ fn handle_command(
                     port.clear_break()
                         .map_err(|error| format!("清除 Break 失败：{error}"))
                 });
+            let _ = reply.send(result);
+            false
+        }
+        SessionCommand::Clear(buffer, reply) => {
+            let result = port
+                .clear(buffer)
+                .map_err(|error| format!("清空串口缓冲失败：{error}"));
             let _ = reply.send(result);
             false
         }
@@ -909,6 +933,15 @@ fn parse_flow_control(value: &str) -> Result<FlowControl, String> {
     }
 }
 
+fn parse_clear_buffer(value: &str) -> Result<ClearBuffer, String> {
+    match value {
+        "input" => Ok(ClearBuffer::Input),
+        "output" => Ok(ClearBuffer::Output),
+        "all" => Ok(ClearBuffer::All),
+        _ => Err(format!("未知的串口缓冲区：{value}")),
+    }
+}
+
 fn unix_time_ms() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -929,6 +962,7 @@ mod tests {
             parse_flow_control("hardware"),
             Ok(FlowControl::Hardware)
         ));
+        assert!(matches!(parse_clear_buffer("all"), Ok(ClearBuffer::All)));
     }
 
     #[test]

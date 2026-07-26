@@ -4,6 +4,7 @@ import {
   ChevronDown,
   CirclePlus,
   CircleStop,
+  Eraser,
   FileClock,
   Info,
   Link2,
@@ -31,6 +32,7 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import { TerminalPane } from "./components/TerminalPane";
 import {
   areSerialPortListsEqual,
+  clearSerialBuffers,
   closeSerialSession,
   formatByteCount,
   listSerialPorts,
@@ -971,6 +973,17 @@ export default function App() {
                 title="发送 Break"
               >
                 <CircleStop size={18} />
+              </button>
+              <button
+                className="icon-button"
+                disabled={activeSession?.state !== "connected"}
+                onClick={() =>
+                  activeSession &&
+                  void clearSerialBuffers(activeSession.id, "all")
+                }
+                title="清空串口输入/输出缓冲"
+              >
+                <Eraser size={17} />
               </button>
               <button
                 className="icon-button"
