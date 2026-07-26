@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   LineEnding,
+  LogMode,
   SerialEvent,
   SerialPortDescriptor,
   SessionProfile,
@@ -236,5 +237,35 @@ export async function sendSerialBreak(
 ): Promise<void> {
   if (isTauriRuntime()) {
     await invoke("send_serial_break", { sessionId, durationMs });
+  }
+}
+
+export async function startSerialLog(
+  sessionId: string,
+  sessionName: string,
+  mode: LogMode,
+  encoding: string,
+  append: boolean,
+): Promise<string> {
+  if (isTauriRuntime()) {
+    return invoke<string>("start_serial_log", {
+      request: { sessionId, sessionName, mode, encoding, append },
+    });
+  }
+  return `/mock/logs/${sessionName.replaceAll("/", "_")}.log`;
+}
+
+export async function setSerialLogPaused(
+  sessionId: string,
+  paused: boolean,
+): Promise<void> {
+  if (isTauriRuntime()) {
+    await invoke("set_serial_log_paused", { sessionId, paused });
+  }
+}
+
+export async function stopSerialLog(sessionId: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invoke("stop_serial_log", { sessionId });
   }
 }

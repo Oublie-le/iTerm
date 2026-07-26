@@ -14,6 +14,8 @@ export type LineEnding = "none" | "lf" | "cr" | "crlf";
 export type SendMode = "text" | "hex";
 export type ReceiveMode = "text" | "hex";
 export type SyncChannel = "off" | "A" | "B" | "C" | "D";
+export type LogMode = "raw" | "text";
+export type LogState = "stopped" | "recording" | "paused" | "error";
 
 export interface SerialPortDescriptor {
   path: string;
@@ -49,6 +51,12 @@ export interface TerminalConfig {
   timestamp: boolean;
 }
 
+export interface LoggingConfig {
+  mode: LogMode;
+  append: boolean;
+  autoStart: boolean;
+}
+
 export interface SessionProfile {
   id: string;
   name: string;
@@ -57,6 +65,7 @@ export interface SessionProfile {
   color: string;
   serial: SerialConfig;
   terminal: TerminalConfig;
+  logging: LoggingConfig;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,6 +95,8 @@ export interface RuntimeSession {
   receiveChunks: ReceiveChunk[];
   receiveBaseOffset: number;
   syncChannel: SyncChannel;
+  logState: LogState;
+  logPath?: string;
   lastChunk?: {
     nonce: number;
     sequence: number;
@@ -131,6 +142,13 @@ export type SerialEvent =
       code: string;
       message: string;
       recoverable: boolean;
+    }
+  | {
+      type: "log";
+      sessionId: string;
+      state: LogState;
+      path?: string;
+      message?: string;
     };
 
 const now = () => new Date().toISOString();
@@ -158,6 +176,12 @@ export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   timestamp: false,
 };
 
+export const DEFAULT_LOGGING_CONFIG: LoggingConfig = {
+  mode: "raw",
+  append: false,
+  autoStart: false,
+};
+
 export function createSessionProfile(
   port?: SerialPortDescriptor,
 ): SessionProfile {
@@ -174,6 +198,7 @@ export function createSessionProfile(
       portPath: port?.path ?? "",
     },
     terminal: { ...DEFAULT_TERMINAL_CONFIG },
+    logging: { ...DEFAULT_LOGGING_CONFIG },
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -189,8 +214,20 @@ export function duplicateSessionProfile(
     name: `${profile.name} 副本`,
     serial: { ...profile.serial },
     terminal: { ...profile.terminal },
+    logging: { ...profile.logging },
     createdAt: timestamp,
     updatedAt: timestamp,
+  };
+}
+
+export function normalizeSessionProfile(
+  profile: SessionProfile,
+): SessionProfile {
+  return {
+    ...profile,
+    serial: { ...DEFAULT_SERIAL_CONFIG, ...profile.serial },
+    terminal: { ...DEFAULT_TERMINAL_CONFIG, ...profile.terminal },
+    logging: { ...DEFAULT_LOGGING_CONFIG, ...profile.logging },
   };
 }
 

@@ -4,6 +4,7 @@ import {
   ChevronDown,
   CirclePlus,
   CircleStop,
+  FileClock,
   Info,
   Link2,
   Menu,
@@ -11,6 +12,8 @@ import {
   PanelBottom,
   PanelLeftClose,
   PanelLeftOpen,
+  Pause,
+  Play,
   PlugZap,
   RefreshCw,
   RotateCw,
@@ -35,6 +38,9 @@ import {
   parseHex,
   sendSerialBreak,
   setSerialSignal,
+  setSerialLogPaused,
+  startSerialLog,
+  stopSerialLog,
   writeSerialBytes,
   writeSerialText,
   writeSerialTextMany,
@@ -43,6 +49,7 @@ import { appendReceiveChunk } from "./lib/receive";
 import {
   createSessionProfile,
   duplicateSessionProfile,
+  normalizeSessionProfile,
   type RuntimeSession,
   type SenderPreset,
   type SerialEvent,
@@ -59,7 +66,9 @@ function loadProfiles(): SessionProfile[] {
     const value =
       localStorage.getItem(PROFILE_STORAGE_KEY) ??
       localStorage.getItem(LEGACY_PROFILE_STORAGE_KEY);
-    return value ? (JSON.parse(value) as SessionProfile[]) : [];
+    return value
+      ? (JSON.parse(value) as SessionProfile[]).map(normalizeSessionProfile)
+      : [];
   } catch {
     return [];
   }
@@ -159,6 +168,12 @@ export default function App() {
             return {
               ...session,
               state: event.state,
+              logState:
+                event.state === "disconnected" ||
+                event.state === "deviceLost" ||
+                event.state === "error"
+                  ? "stopped"
+                  : session.logState,
               notice:
                 event.state === "connected"
                   ? undefined
@@ -203,10 +218,63 @@ export default function App() {
                 detail: event.code,
               },
             };
+          case "log":
+            return {
+              ...session,
+              logState: event.state,
+              logPath: event.path ?? session.logPath,
+              notice:
+                event.state === "error"
+                  ? {
+                      tone: "error" as const,
+                      title: "日志写入失败",
+                      detail: event.message,
+                    }
+                  : session.notice,
+            };
         }
       }),
     );
   }, []);
+
+  const startLogging = useCallback(
+    async (sessionId: string, profile: SessionProfile) => {
+      try {
+        const path = await startSerialLog(
+          sessionId,
+          profile.name,
+          profile.logging.mode,
+          profile.terminal.encoding,
+          profile.logging.append,
+        );
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? { ...session, logState: "recording", logPath: path }
+              : session,
+          ),
+        );
+      } catch (error) {
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  logState: "error",
+                  notice: {
+                    tone: "error",
+                    title: "无法开始日志",
+                    detail:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                }
+              : session,
+          ),
+        );
+      }
+    },
+    [],
+  );
 
   const connectProfile = useCallback(
     async (profile: SessionProfile, existingId?: string) => {
@@ -236,6 +304,9 @@ export default function App() {
           );
           try {
             await openSerialSession(alreadyOpen.id, profile, applyEvent);
+            if (profile.logging.autoStart) {
+              await startLogging(alreadyOpen.id, profile);
+            }
           } catch (error) {
             applyEvent({
               type: "error",
@@ -264,6 +335,7 @@ export default function App() {
             receiveChunks: [],
             receiveBaseOffset: 0,
             syncChannel: "off",
+            logState: "stopped",
             bytesRead: 0,
             bytesWritten: 0,
             terminalCols: 80,
@@ -286,6 +358,9 @@ export default function App() {
 
       try {
         await openSerialSession(sessionId, profile, applyEvent);
+        if (profile.logging.autoStart) {
+          await startLogging(sessionId, profile);
+        }
       } catch (error) {
         applyEvent({
           type: "error",
@@ -296,7 +371,7 @@ export default function App() {
         });
       }
     },
-    [applyEvent, sessions],
+    [applyEvent, sessions, startLogging],
   );
 
   const disconnectSession = async (session: RuntimeSession) => {
@@ -313,6 +388,7 @@ export default function App() {
             ? {
                 ...item,
                 state: "disconnected",
+                logState: "stopped",
                 notice: {
                   tone: "info",
                   title: "会话已断开，点击重连可再次打开串口。",
@@ -462,6 +538,65 @@ export default function App() {
     await setSerialSignal(activeSession.id, signal, next);
     if (signal === "dtr") setDtr(next);
     else setRts(next);
+  };
+
+  const toggleLogPaused = async () => {
+    if (!activeSession) return;
+    const paused = activeSession.logState === "recording";
+    try {
+      await setSerialLogPaused(activeSession.id, paused);
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === activeSession.id
+            ? { ...session, logState: paused ? "paused" : "recording" }
+            : session,
+        ),
+      );
+    } catch (error) {
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === activeSession.id
+            ? {
+                ...session,
+                notice: {
+                  tone: "error",
+                  title: "无法更改日志状态",
+                  detail: error instanceof Error ? error.message : String(error),
+                },
+              }
+            : session,
+        ),
+      );
+    }
+  };
+
+  const stopLogging = async () => {
+    if (!activeSession) return;
+    try {
+      await stopSerialLog(activeSession.id);
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === activeSession.id
+            ? { ...session, logState: "stopped" }
+            : session,
+        ),
+      );
+    } catch (error) {
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === activeSession.id
+            ? {
+                ...session,
+                notice: {
+                  tone: "error",
+                  title: "无法停止日志",
+                  detail: error instanceof Error ? error.message : String(error),
+                },
+              }
+            : session,
+        ),
+      );
+    }
   };
 
   const cycleSyncChannel = () => {
@@ -666,6 +801,54 @@ export default function App() {
             </div>
 
             <div className="toolbar-group toolbar-right">
+              {activeSession?.logState === "recording" ||
+              activeSession?.logState === "paused" ? (
+                <>
+                  <button
+                    className={`signal-button ${
+                      activeSession.logState === "recording" ? "is-active" : ""
+                    }`}
+                    onClick={() => void toggleLogPaused()}
+                    title={
+                      activeSession.logState === "recording"
+                        ? "暂停日志"
+                        : "继续日志"
+                    }
+                  >
+                    {activeSession.logState === "recording" ? (
+                      <Pause size={14} />
+                    ) : (
+                      <Play size={14} />
+                    )}
+                    LOG
+                  </button>
+                  <button
+                    className="icon-button"
+                    onClick={() => void stopLogging()}
+                    title="停止日志"
+                  >
+                    <CircleStop size={16} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="signal-button"
+                  disabled={
+                    !activeSession ||
+                    !activeProfile ||
+                    activeSession.state !== "connected"
+                  }
+                  onClick={() =>
+                    activeSession &&
+                    activeProfile &&
+                    void startLogging(activeSession.id, activeProfile)
+                  }
+                  title="开始会话日志"
+                >
+                  <FileClock size={14} />
+                  LOG
+                </button>
+              )}
               <button
                 className={`signal-button ${
                   activeSession?.receiveMode === "hex" ? "is-active" : ""
@@ -879,6 +1062,19 @@ export default function App() {
                 RX {formatByteCount(activeSession?.bytesRead ?? 0)} · TX{" "}
                 {formatByteCount(activeSession?.bytesWritten ?? 0)}
               </span>
+              {activeSession?.logState !== "stopped" && (
+                <span
+                  className={`log-status state-${activeSession?.logState}`}
+                  title={activeSession?.logPath}
+                >
+                  日志{" "}
+                  {activeSession?.logState === "recording"
+                    ? "记录中"
+                    : activeSession?.logState === "paused"
+                      ? "已暂停"
+                      : "错误"}
+                </span>
+              )}
               <button
                 className={senderOpen ? "is-active" : ""}
                 onClick={() => setSenderOpen((value) => !value)}

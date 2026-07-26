@@ -83,6 +83,13 @@ export function SessionDialog({
         : current,
     );
 
+  const updateLogging = (patch: Partial<SessionProfile["logging"]>) =>
+    setDraft((current) =>
+      current
+        ? { ...current, logging: { ...current.logging, ...patch } }
+        : current,
+    );
+
   const submit = (connect: boolean) => {
     if (!draft.name.trim()) {
       setPage("session");
@@ -517,15 +524,53 @@ export function SessionDialog({
               <>
                 <div className="page-heading">
                   <h3>日志</h3>
-                  <p>首个纵向切片暂提供运行时日志，完整日志策略将在 M4 接入。</p>
+                  <p>将当前会话的接收数据保存到本机应用日志目录。</p>
                 </div>
-                <div className="coming-soon-card">
-                  <FileClock size={24} />
-                  <div>
-                    <strong>会话日志将在下一里程碑启用</strong>
-                    <span>
-                      已预留原始字节、可打印文本、覆盖/追加、文件模板和滚动接口。
-                    </span>
+                <div className="form-grid">
+                  <label className="field-row">
+                    <span>日志模式</span>
+                    <select
+                      value={draft.logging.mode}
+                      onChange={(event) =>
+                        updateLogging({
+                          mode: event.target.value as "raw" | "text",
+                        })
+                      }
+                    >
+                      <option value="raw">原始字节（无损）</option>
+                      <option value="text">可读文本（带行时间戳）</option>
+                    </select>
+                  </label>
+                  <div className="field-row">
+                    <span>写入方式</span>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={draft.logging.append}
+                        onChange={(event) =>
+                          updateLogging({ append: event.target.checked })
+                        }
+                      />
+                      文件已存在时追加内容
+                    </label>
+                  </div>
+                  <div className="field-row">
+                    <span>自动记录</span>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={draft.logging.autoStart}
+                        onChange={(event) =>
+                          updateLogging({ autoStart: event.target.checked })
+                        }
+                      />
+                      串口连接成功后自动开始
+                    </label>
+                  </div>
+                  <div className="settings-note">
+                    <FileClock size={17} />
+                    日志按“会话名_日期_时间.log”命名。原始模式逐字节保存，
+                    文本模式按当前会话字符集增量解码。
                   </div>
                 </div>
               </>

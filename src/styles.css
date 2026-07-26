@@ -609,6 +609,18 @@ textarea:disabled {
   color: var(--green-dark);
 }
 
+.log-status {
+  color: #c27d0b;
+}
+
+.log-status.state-recording {
+  color: var(--green-dark);
+}
+
+.log-status.state-error {
+  color: #b73a3a;
+}
+
 .notice-bar {
   display: flex;
   min-height: 31px;

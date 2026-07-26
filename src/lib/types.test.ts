@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createSessionProfile,
   duplicateSessionProfile,
+  normalizeSessionProfile,
 } from "./types";
 
 describe("duplicateSessionProfile", () => {
@@ -17,5 +18,18 @@ describe("duplicateSessionProfile", () => {
     expect(duplicate.serial).not.toBe(source.serial);
     expect(duplicate.terminal).not.toBe(source.terminal);
     expect(duplicate.serial.baudRate).toBe(115_200);
+  });
+});
+
+describe("normalizeSessionProfile", () => {
+  it("migrates profiles created before logging settings existed", () => {
+    const source = createSessionProfile();
+    const legacy = { ...source, logging: undefined } as unknown as typeof source;
+
+    expect(normalizeSessionProfile(legacy).logging).toEqual({
+      mode: "raw",
+      append: false,
+      autoStart: false,
+    });
   });
 });
