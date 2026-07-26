@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="iTerm">
+  <title>iTerm</title>
+  <rect width="512" height="512" rx="108" fill="#20231f"/>
+  <path d="M148 116v76c0 56 34 91 84 91h42c51 0 90 36 90 91v22"
+        fill="none" stroke="#4bcc78" stroke-width="42" stroke-linecap="round"/>
+  <path d="M116 104v58M180 104v58M332 350v58M396 350v58"
+        fill="none" stroke="#dff5e5" stroke-width="26" stroke-linecap="round"/>
+  <rect x="101" y="151" width="94" height="54" rx="18"
+        fill="#4bcc78" stroke="#dff5e5" stroke-width="10"/>
+  <rect x="317" y="307" width="94" height="54" rx="18"
+        fill="#4bcc78" stroke="#dff5e5" stroke-width="10"/>
+  <circle cx="256" cy="283" r="18" fill="#f2a93b"/>
+</svg>

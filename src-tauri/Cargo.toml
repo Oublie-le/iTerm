@@ -1,0 +1,20 @@
+[package]
+name = "iterm"
+version = "0.1.0"
+description = "A cross-platform, local-first desktop serial terminal"
+authors = ["iTerm contributors"]
+edition = "2021"
+repository = "https://github.com/Oublie-le/iTerm"
+
+[lib]
+name = "iterm_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+encoding_rs = "0.8"
+serde = { version = "1", features = ["derive"] }
+serialport = "4.9"
+tauri = { version = "2", features = [] }
