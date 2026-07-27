@@ -10,6 +10,12 @@ on:
         description: "Release tag, for example v0.1.0"
         required: true
         type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: "Existing release tag to rebuild"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -25,31 +31,55 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     outputs:
-      release_id: ${{ steps.release.outputs.release_id }}
+      release_id: ${{ steps.release.outputs.result }}
 
     steps:
       - name: Create or locate release
         id: release
-        shell: bash
+        uses: actions/github-script@v7
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-        run: |
-          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.id' 2>/dev/null || true)"
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        with:
+          result-encoding: string
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            let release;
 
-          if [[ -z "${release_id}" ]]; then
-            gh release create "${RELEASE_TAG}" \
-              --verify-tag \
-              --title "iTerm ${RELEASE_TAG}" \
-              --notes "iTerm 跨平台串口终端预览版。
+            try {
+              const response = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              release = response.data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
 
-          此版本由 GitHub Actions 自动构建，尚未进行 Apple 公证或 Windows 商业代码签名。
-          安装说明和已知限制请参阅仓库 README。" \
-              --generate-notes
-            release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.id')"
-          fi
+              const response = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: `iTerm ${tag}`,
+                body: [
+                  "iTerm 跨平台串口终端预览版。",
+                  "",
+                  "此版本由 GitHub Actions 自动构建，尚未进行 Apple 公证或 Windows 商业代码签名。",
+                  "安装说明和已知限制请参阅仓库 README。",
+                ].join("\n"),
+                generate_release_notes: true,
+                draft: false,
+                prerelease: false,
+              });
+              release = response.data;
+            }
 
-          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
+            if (!release?.id) {
+              core.setFailed(`GitHub Release ${tag} 没有返回有效 ID`);
+              return;
+            }
+
+            core.info(`Using GitHub Release ${tag} (${release.id})`);
+            return String(release.id);
 
   verify:
     name: Verify release source on Windows
@@ -60,7 +90,7 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -85,7 +115,7 @@ jobs:
       - name: Check version consistency
         run: pnpm version:check
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
       - name: Check Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
@@ -132,7 +162,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -174,7 +204,7 @@ jobs:
       - name: Check version consistency
         run: pnpm version:check
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
       - name: Build and publish
         uses: tauri-apps/tauri-action@v1
@@ -183,6 +213,8 @@ jobs:
         with:
           tauriScript: pnpm tauri
           releaseId: ${{ needs.prepare_release.outputs.release_id }}
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: iTerm ${{ inputs.tag || github.ref_name }}
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
@@ -198,7 +230,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -218,10 +250,47 @@ jobs:
       - name: Generate CycloneDX SBOM
         run: pnpm sbom:generate --output "iTerm-${RELEASE_TAG}.cdx.json"
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
       - name: Upload SBOM to release
-        run: gh release upload "$RELEASE_TAG" "iTerm-${RELEASE_TAG}.cdx.json" --clobber
+        run: gh release upload "$RELEASE_TAG" "iTerm-${RELEASE_TAG}.cdx.json" --repo "$GITHUB_REPOSITORY" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+  verify_assets:
+    name: Confirm release assets
+    needs: sbom
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify expected assets
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: process.env.RELEASE_TAG,
+            });
+            const names = release.assets.map((asset) => asset.name);
+            core.info(`Release assets: ${names.join(", ")}`);
+
+            const expected = [
+              { label: "Windows NSIS installer", test: (name) => name.endsWith("-setup.exe") },
+              { label: "Apple Silicon DMG", test: (name) => name.endsWith("_aarch64.dmg") },
+              { label: "Intel DMG", test: (name) => name.endsWith("_x64.dmg") },
+              { label: "Debian package", test: (name) => name.endsWith("_amd64.deb") },
+              { label: "Linux AppImage", test: (name) => name.endsWith("_amd64.AppImage") },
+              { label: "CycloneDX SBOM", test: (name) => name.endsWith(".cdx.json") },
+            ];
+            const missing = expected
+              .filter(({ test }) => !names.some(test))
+              .map(({ label }) => label);
+
+            if (missing.length > 0) {
+              core.setFailed(`Missing release assets: ${missing.join(", ")}`);
+            }
