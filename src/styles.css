@@ -1480,6 +1480,86 @@ textarea:disabled {
   flex: 0 0 auto;
 }
 
+.trigger-list {
+  display: grid;
+  gap: 12px;
+}
+
+.trigger-card {
+  overflow: hidden;
+  background: #f3f5f4;
+  border: 1px solid #cbd1cf;
+  border-radius: 4px;
+}
+
+.trigger-card > header {
+  display: grid;
+  min-height: 39px;
+  align-items: center;
+  padding: 5px 7px 5px 11px;
+  background: #e9edeb;
+  border-bottom: 1px solid #d1d6d4;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.trigger-card > header label,
+.trigger-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #5c6461;
+  font-size: 10px;
+}
+
+.trigger-card input,
+.trigger-card select {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  background: #fff;
+  border: 1px solid #bdc5c2;
+  border-radius: 2px;
+  font-size: 10px;
+}
+
+.trigger-card input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  padding: 0;
+  accent-color: var(--green);
+}
+
+.trigger-grid {
+  display: grid;
+  padding: 10px;
+  gap: 9px;
+  grid-template-columns: 120px minmax(180px, 1fr) 120px;
+}
+
+.trigger-grid > label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  color: #69716e;
+  font-size: 9px;
+}
+
+.trigger-grid .trigger-pattern {
+  grid-column: span 2;
+}
+
+.trigger-grid .trigger-check {
+  align-self: end;
+  min-height: 28px;
+  flex-direction: row;
+}
+
+.trigger-grid small {
+  color: #7b827f;
+}
+
 .coming-soon-card {
   display: flex;
   align-items: flex-start;
@@ -1789,10 +1869,28 @@ textarea:disabled {
 .app-shell[data-theme="dark"] .settings-note,
 .app-shell[data-theme="dark"] .coming-soon-card,
 .app-shell[data-theme="dark"] .device-summary,
-.app-shell[data-theme="dark"] .protocol-field {
+.app-shell[data-theme="dark"] .protocol-field,
+.app-shell[data-theme="dark"] .trigger-card {
   background: #303835;
   border-color: #4e5c56;
   color: #b8c3be;
+}
+
+.app-shell[data-theme="dark"] .trigger-card > header {
+  background: #353d39;
+  border-color: #4d5652;
+}
+
+.app-shell[data-theme="dark"] .trigger-card input,
+.app-shell[data-theme="dark"] .trigger-card select {
+  background: #202523;
+  border-color: #535b58;
+  color: #e3e8e4;
+}
+
+.app-shell[data-theme="dark"] .trigger-grid > label,
+.app-shell[data-theme="dark"] .trigger-card > header label {
+  color: #aab3af;
 }
 
 .app-shell[data-theme="dark"] .settings-note strong,

@@ -55,6 +55,13 @@ describe("normalizeSessionProfile", () => {
     expect(migrated.ssh.port).toBe(22);
     expect(migrated.adb.deviceId).toBe("");
   });
+
+  it("migrates profiles created before triggers existed", () => {
+    const source = createSessionProfile();
+    const legacy = { ...source, triggers: undefined } as unknown as typeof source;
+
+    expect(normalizeSessionProfile(legacy).triggers).toEqual([]);
+  });
 });
 
 describe("multi-protocol profiles", () => {

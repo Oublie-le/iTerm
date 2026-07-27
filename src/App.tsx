@@ -99,6 +99,7 @@ import {
   isEditableShortcutTarget,
   resolveShortcut,
 } from "./lib/shortcuts";
+import { SessionTriggerEvaluator } from "./lib/triggers";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -237,6 +238,14 @@ export default function App() {
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
+  const triggerEvaluatorsRef = useRef(
+    new Map<
+      string,
+      { encoding: string; evaluator: SessionTriggerEvaluator }
+    >(),
+  );
+  const processedTriggerChunksRef = useRef(new Map<string, number>());
+  const startingTriggerLogsRef = useRef(new Set<string>());
 
   const activeSession = sessions.find(
     (session) => session.id === activeSessionId,
@@ -593,6 +602,124 @@ export default function App() {
     },
     [applyEvent, sessions, startLogging],
   );
+
+  useEffect(() => {
+    const liveSessionIds = new Set(sessions.map((session) => session.id));
+    for (const sessionId of triggerEvaluatorsRef.current.keys()) {
+      if (!liveSessionIds.has(sessionId)) {
+        triggerEvaluatorsRef.current.delete(sessionId);
+        processedTriggerChunksRef.current.delete(sessionId);
+        startingTriggerLogsRef.current.delete(sessionId);
+      }
+    }
+
+    for (const session of sessions) {
+      if (session.state !== "connected") {
+        triggerEvaluatorsRef.current.delete(session.id);
+        continue;
+      }
+      const chunk = session.lastChunk;
+      if (
+        !chunk ||
+        processedTriggerChunksRef.current.get(session.id) === chunk.nonce
+      ) {
+        continue;
+      }
+      processedTriggerChunksRef.current.set(session.id, chunk.nonce);
+      const profile = profiles.find((item) => item.id === session.profileId);
+      if (!profile?.triggers.some((trigger) => trigger.enabled)) continue;
+
+      let evaluatorEntry = triggerEvaluatorsRef.current.get(session.id);
+      if (
+        !evaluatorEntry ||
+        evaluatorEntry.encoding !== profile.terminal.encoding
+      ) {
+        evaluatorEntry = {
+          encoding: profile.terminal.encoding,
+          evaluator: new SessionTriggerEvaluator(profile.terminal.encoding),
+        };
+        triggerEvaluatorsRef.current.set(session.id, evaluatorEntry);
+      }
+      const matches = evaluatorEntry.evaluator.feed(
+        new Uint8Array(chunk.bytes),
+        profile.triggers,
+        chunk.receivedAtMs,
+      );
+
+      for (const match of matches) {
+        if (match.rule.action === "notification") {
+          setSessions((current) =>
+            current.map((item) =>
+              item.id === session.id
+                ? {
+                    ...item,
+                    notice: {
+                      tone: "info",
+                      title: match.rule.payload,
+                      detail: `触发器：${match.rule.name} · 匹配：${match.matchedText}`,
+                    },
+                  }
+                : item,
+            ),
+          );
+          continue;
+        }
+
+        if (match.rule.action === "sendText") {
+          void writeConfiguredText(
+            session.id,
+            profile,
+            match.rule.payload,
+            "none",
+          )
+            .then((byteCount) =>
+              setSessions((current) =>
+                current.map((item) =>
+                  item.id === session.id
+                    ? {
+                        ...item,
+                        bytesWritten: item.bytesWritten + byteCount,
+                      }
+                    : item,
+                ),
+              ),
+            )
+            .catch((error) =>
+              setSessions((current) =>
+                current.map((item) =>
+                  item.id === session.id
+                    ? {
+                        ...item,
+                        notice: {
+                          tone: "error",
+                          title: `触发器“${match.rule.name}”发送失败`,
+                          detail:
+                            error instanceof Error
+                              ? error.message
+                              : String(error),
+                        },
+                      }
+                    : item,
+                ),
+              ),
+            );
+          continue;
+        }
+
+        if (
+          match.rule.action === "startLog" &&
+          session.logState !== "recording" &&
+          session.logState !== "paused" &&
+          !startingTriggerLogsRef.current.has(session.id)
+        ) {
+          startingTriggerLogsRef.current.add(session.id);
+          void startLogging(session.id, profile).finally(() =>
+            startingTriggerLogsRef.current.delete(session.id),
+          );
+        }
+      }
+    }
+  }, [profiles, sessions, startLogging]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {

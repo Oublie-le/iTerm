@@ -20,6 +20,8 @@ export type HexColumns = 8 | 16 | 24 | 32;
 export type HexGroupSize = 1 | 2 | 4 | 8;
 export type SessionProtocol = "serial" | "ssh" | "adb";
 export type SshAuthMode = "agent" | "privateKey" | "password";
+export type TriggerMatcher = "text" | "regex";
+export type TriggerAction = "sendText" | "startLog" | "notification";
 
 export interface SerialPortDescriptor {
   path: string;
@@ -101,6 +103,19 @@ export interface LoggingConfig {
   rotateCount: number;
 }
 
+export interface TriggerRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  matcher: TriggerMatcher;
+  pattern: string;
+  caseSensitive: boolean;
+  action: TriggerAction;
+  payload: string;
+  cooldownMs: number;
+  maxTriggers: number;
+}
+
 export interface SessionProfile {
   id: string;
   name: string;
@@ -113,6 +128,7 @@ export interface SessionProfile {
   adb: AdbConfig;
   terminal: TerminalConfig;
   logging: LoggingConfig;
+  triggers: TriggerRule[];
   createdAt: string;
   updatedAt: string;
 }
@@ -285,6 +301,7 @@ export function createSessionProfile(
     adb: { ...DEFAULT_ADB_CONFIG },
     terminal: { ...DEFAULT_TERMINAL_CONFIG },
     logging: { ...DEFAULT_LOGGING_CONFIG },
+    triggers: [],
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -303,6 +320,7 @@ export function duplicateSessionProfile(
     adb: { ...profile.adb },
     terminal: { ...profile.terminal },
     logging: { ...profile.logging },
+    triggers: profile.triggers.map((trigger) => ({ ...trigger })),
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -319,6 +337,9 @@ export function normalizeSessionProfile(
     adb: { ...DEFAULT_ADB_CONFIG, ...profile.adb },
     terminal: { ...DEFAULT_TERMINAL_CONFIG, ...profile.terminal },
     logging: { ...DEFAULT_LOGGING_CONFIG, ...profile.logging },
+    triggers: Array.isArray(profile.triggers)
+      ? profile.triggers.map((trigger) => ({ ...trigger }))
+      : [],
   };
 }
 

@@ -4,12 +4,15 @@ import {
   Info,
   Monitor,
   Network,
+  Plus,
   RefreshCw,
   Settings2,
   SlidersHorizontal,
   Smartphone,
   TerminalSquare,
+  Trash2,
   X,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type {
@@ -21,7 +24,12 @@ import type {
   SessionProtocol,
   SessionProfile,
   StopBits,
+  TriggerRule,
 } from "../lib/types";
+import {
+  createTriggerRule,
+  validateTriggerRule,
+} from "../lib/triggers";
 
 type DialogPage =
   | "session"
@@ -30,7 +38,8 @@ type DialogPage =
   | "adb"
   | "terminal"
   | "window"
-  | "logging";
+  | "logging"
+  | "triggers";
 
 interface SessionDialogProps {
   open: boolean;
@@ -57,6 +66,7 @@ const pages: Array<{
   { id: "terminal", label: "终端", icon: TerminalSquare },
   { id: "window", label: "窗口", icon: Monitor },
   { id: "logging", label: "日志", icon: FileClock },
+  { id: "triggers", label: "触发器", icon: Zap },
 ];
 
 export function SessionDialog({
@@ -121,6 +131,18 @@ export function SessionDialog({
     setDraft((current) =>
       current
         ? { ...current, logging: { ...current.logging, ...patch } }
+        : current,
+    );
+
+  const updateTrigger = (id: string, patch: Partial<TriggerRule>) =>
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            triggers: current.triggers.map((trigger) =>
+              trigger.id === id ? { ...trigger, ...patch } : trigger,
+            ),
+          }
         : current,
     );
 
@@ -202,6 +224,14 @@ export function SessionDialog({
       setError(adbTool.installHint);
       return;
     }
+    for (const trigger of draft.triggers.filter((item) => item.enabled)) {
+      const triggerError = validateTriggerRule(trigger);
+      if (triggerError) {
+        setPage("triggers");
+        setError(triggerError);
+        return;
+      }
+    }
     onSave(
       { ...draft, updatedAt: new Date().toISOString() },
       connect,
@@ -236,7 +266,8 @@ export function SessionDialog({
       item.id === draft.protocol ||
       item.id === "terminal" ||
       item.id === "window" ||
-      item.id === "logging",
+      item.id === "logging" ||
+      item.id === "triggers",
   );
 
   return (
@@ -1057,6 +1088,201 @@ export function SessionDialog({
                     .1、.2 等备份。
                   </div>
                 </div>
+              </>
+            )}
+
+            {page === "triggers" && (
+              <>
+                <div className="page-heading heading-with-action">
+                  <div>
+                    <h3>触发器</h3>
+                    <p>接收内容匹配后自动执行动作，并通过冷却和次数限制防止循环。</p>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              triggers: [
+                                ...current.triggers,
+                                createTriggerRule(current.triggers.length + 1),
+                              ],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    <Plus size={14} />
+                    添加触发器
+                  </button>
+                </div>
+                {draft.triggers.length === 0 ? (
+                  <div className="coming-soon-card">
+                    <Zap size={18} />
+                    <div>
+                      <strong>尚未配置触发器</strong>
+                      <p>添加规则后，可在串口、SSH 或 ADB 输出中自动匹配并执行动作。</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="trigger-list">
+                    {draft.triggers.map((trigger) => (
+                      <section className="trigger-card" key={trigger.id}>
+                        <header>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={trigger.enabled}
+                              onChange={(event) =>
+                                updateTrigger(trigger.id, {
+                                  enabled: event.target.checked,
+                                })
+                              }
+                            />
+                            启用
+                          </label>
+                          <input
+                            aria-label="触发器名称"
+                            value={trigger.name}
+                            onChange={(event) =>
+                              updateTrigger(trigger.id, {
+                                name: event.target.value,
+                              })
+                            }
+                          />
+                          <button
+                            className="icon-button"
+                            type="button"
+                            title={`删除 ${trigger.name}`}
+                            onClick={() =>
+                              setDraft((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      triggers: current.triggers.filter(
+                                        (item) => item.id !== trigger.id,
+                                      ),
+                                    }
+                                  : current,
+                              )
+                            }
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </header>
+                        <div className="trigger-grid">
+                          <label>
+                            <span>匹配方式</span>
+                            <select
+                              value={trigger.matcher}
+                              onChange={(event) =>
+                                updateTrigger(trigger.id, {
+                                  matcher: event.target
+                                    .value as TriggerRule["matcher"],
+                                })
+                              }
+                            >
+                              <option value="text">文本</option>
+                              <option value="regex">正则表达式</option>
+                            </select>
+                          </label>
+                          <label className="trigger-pattern">
+                            <span>匹配内容</span>
+                            <input
+                              value={trigger.pattern}
+                              placeholder={
+                                trigger.matcher === "regex"
+                                  ? "例如：error\\s+\\d+"
+                                  : "例如：READY>"
+                              }
+                              onChange={(event) =>
+                                updateTrigger(trigger.id, {
+                                  pattern: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="trigger-check">
+                            <input
+                              type="checkbox"
+                              checked={trigger.caseSensitive}
+                              onChange={(event) =>
+                                updateTrigger(trigger.id, {
+                                  caseSensitive: event.target.checked,
+                                })
+                              }
+                            />
+                            区分大小写
+                          </label>
+                          <label>
+                            <span>动作</span>
+                            <select
+                              value={trigger.action}
+                              onChange={(event) =>
+                                updateTrigger(trigger.id, {
+                                  action: event.target
+                                    .value as TriggerRule["action"],
+                                })
+                              }
+                            >
+                              <option value="notification">显示通知</option>
+                              <option value="sendText">发送文本</option>
+                              <option value="startLog">开始日志</option>
+                            </select>
+                          </label>
+                          {trigger.action !== "startLog" && (
+                            <label className="trigger-pattern">
+                              <span>
+                                {trigger.action === "sendText"
+                                  ? "发送内容"
+                                  : "通知内容"}
+                              </span>
+                              <input
+                                value={trigger.payload}
+                                onChange={(event) =>
+                                  updateTrigger(trigger.id, {
+                                    payload: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          )}
+                          <label>
+                            <span>冷却时间</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={trigger.cooldownMs}
+                              onChange={(event) =>
+                                updateTrigger(trigger.id, {
+                                  cooldownMs: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <small>毫秒</small>
+                          </label>
+                          <label>
+                            <span>最大次数</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={trigger.maxTriggers}
+                              onChange={(event) =>
+                                updateTrigger(trigger.id, {
+                                  maxTriggers: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <small>0 表示不限</small>
+                          </label>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </main>
