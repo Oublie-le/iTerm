@@ -177,7 +177,10 @@ import {
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
 const MAX_RECONNECT_ATTEMPTS = 8;
-const RECEIVE_BATCH_INTERVAL_MS = 32;
+const RECEIVE_INTERACTIVE_BATCH_INTERVAL_MS = 16;
+const RECEIVE_BURST_BATCH_INTERVAL_MS = 64;
+const RECEIVE_BURST_THRESHOLD_BYTES = 8 * 1024;
+const RECEIVE_BURST_HOLD_MS = 750;
 
 type DataSerialEvent = Extract<SerialEvent, { type: "data" }>;
 
@@ -375,6 +378,7 @@ export default function App() {
   const refreshInFlightRef = useRef(false);
   const pendingDataEventsRef = useRef<DataSerialEvent[]>([]);
   const receiveFlushTimerRef = useRef<number | null>(null);
+  const receiveBurstUntilRef = useRef(0);
   const receiveNonceRef = useRef(0);
   const adbRefreshInFlightRef = useRef(false);
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -726,6 +730,13 @@ export default function App() {
     const pending = pendingDataEventsRef.current;
     if (pending.length === 0) return;
     pendingDataEventsRef.current = [];
+    const pendingBytes = pending.reduce(
+      (total, event) => total + event.bytes.length,
+      0,
+    );
+    if (pendingBytes >= RECEIVE_BURST_THRESHOLD_BYTES) {
+      receiveBurstUntilRef.current = Date.now() + RECEIVE_BURST_HOLD_MS;
+    }
 
     const eventsBySession = new Map<string, DataSerialEvent[]>();
     for (const event of pending) {
@@ -805,6 +816,7 @@ export default function App() {
         window.clearTimeout(receiveFlushTimerRef.current);
       }
       pendingDataEventsRef.current = [];
+      receiveBurstUntilRef.current = 0;
     },
     [],
   );
@@ -813,9 +825,13 @@ export default function App() {
     if (event.type === "data") {
       pendingDataEventsRef.current.push(event);
       if (receiveFlushTimerRef.current === null) {
+        const interval =
+          Date.now() < receiveBurstUntilRef.current
+            ? RECEIVE_BURST_BATCH_INTERVAL_MS
+            : RECEIVE_INTERACTIVE_BATCH_INTERVAL_MS;
         receiveFlushTimerRef.current = window.setTimeout(
           flushPendingDataEvents,
-          RECEIVE_BATCH_INTERVAL_MS,
+          interval,
         );
       }
       return;
@@ -3387,6 +3403,7 @@ export default function App() {
                   onFontSizeChange={(fontSize) =>
                     changeProfileFontSize(profile.id, fontSize)
                   }
+                  onOpenSender={() => setSenderOpen(true)}
                 />
               );
             })}
