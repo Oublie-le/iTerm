@@ -79,7 +79,7 @@
 | FR-SSH-003 | P0 | SSH 会话支持交互式终端输入输出、主动断开和异常退出提示。 |
 | FR-SSH-004 | P1 | 支持不持久化凭据的密码与键盘交互认证。 |
 | FR-SSH-005 | P1 | 终端尺寸改变时同步远程 PTY 行列数。 |
-| FR-SSH-006 | P0 | 自动发现本机 OpenSSH 配置中的明确 Host 别名，并显示用户、端口、IdentityFile 和 ProxyJump 元数据。 |
+| FR-SSH-006 | P0 | 自动发现本机 OpenSSH 主配置及递归 Include 文件中的明确 Host 别名，并显示用户、端口、IdentityFile 和 ProxyJump 元数据。 |
 | FR-SSH-007 | P0 | 可通过配置别名一键保存并连接，实际认证与代理规则继续由系统 OpenSSH 解析，应用不得读取私钥内容。 |
 | FR-ADB-001 | P0 | 使用 `adb devices -l` 发现 USB、模拟器和网络设备。 |
 | FR-ADB-002 | P0 | 展示设备 ID、授权/离线状态、型号、产品名和 transport ID。 |

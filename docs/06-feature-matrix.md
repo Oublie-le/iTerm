@@ -2,7 +2,7 @@
 
 文档状态：持续更新  
 更新时间：2026-07-27  
-对应版本：v0.6.0
+对应版本：v0.7.0
 
 ## 1. 状态定义
 
@@ -25,19 +25,19 @@
 | 串口枚举、打开、收发和关闭 | 🟡 | Rust 参数/状态/数据路径测试；三平台编译 | FT232、CP210x、CH340/341 实机回环 |
 | DTR、RTS、Break、清缓冲 | 🟡 | Rust 命令和状态测试 | 带控制线回环及逻辑分析仪抽检 |
 | 热插拔、稳定 USB 身份、自动重连 | 🟡 | 设备列表 diff 和匹配单测 | Windows/macOS/Linux 拔插与睡眠唤醒 |
-| SSH Agent、配置自动发现、密钥、密码交互和 PTY | 🟡 | 配置解析/参数构造单测；配置填入 E2E；跨平台 PTY 回环 | OpenSSH 服务端和 known_hosts 策略冒烟 |
+| SSH Agent、配置自动发现、密钥、密码交互和 PTY | 🟡 | 主配置/递归 Include/通配符解析与参数构造单测；配置填入 E2E；跨平台 PTY 回环 | OpenSSH 服务端和 known_hosts 策略冒烟 |
 | ADB 发现、授权状态和交互 Shell | 🟡 | 设备输出解析单测；跨平台 PTY 回环 | USB 与网络 ADB 真机验证 |
-| ANSI、串口语义色、Unicode 11、WebGL、搜索和复位 | ✅ | 终端/色彩单测；百万行无渲染性能基线；E2E | WebGL/Canvas GUI FPS 与输入延迟基线 |
+| ANSI、自定义 16 色调色板、串口语义色、Unicode 11、WebGL、搜索和复位 | ✅ | 终端/色彩/配置迁移单测；百万行无渲染性能基线；E2E/Golden | WebGL/Canvas GUI FPS 与输入延迟基线 |
 | 命令历史/快捷联想、字号缩放和右键菜单 | ✅ | 持久化/快捷键单测；Chromium E2E；GUI 检查 | 三平台原生剪贴板人工复核 |
 | Text/Hex 接收、文本/Hex 发送 | ✅ | 编解码、Hex 和接收缓冲单测；E2E | 全字节硬件回环 |
 | 多发送器、循环发送、同步输入和触发器 | ✅ | 调度、通道和触发器单测 | 1 小时 10 ms 循环发送稳定性 |
 | 原始/文本日志、暂停和轮转 | ✅ | Rust 日志测试；前端状态测试 | 磁盘满、目录删除和长时间写入故障注入 |
 | 原始文件发送 | ✅ | 分块、取消和状态单测 | 大文件真实链路吞吐测试 |
-| XModem-CRC、YModem、ZModem | 🟡 | CRC、状态机、批量收发和安全文件名单测 | lrzsz、Bootloader 和参考工具互操作 |
+| XModem-CRC、YModem、ZModem | 🟡 | CRC、状态机、批量收发、安全文件名与内置 XModem 双向互操作单测 | lrzsz、Bootloader 和外部参考工具互操作 |
 | SQLite 配置、迁移和浏览器回退 | ✅ | Rust 存储测试；前端持久化测试 | 安装包跨版本升级演练 |
 | 配置/发送器导入导出和诊断脱敏 | ✅ | 版本、重复 ID、脱敏和上限单测 | 原生文件对话框三平台人工复核 |
 | 自动更新、代码签名和公证 | ⛔ | 尚未实现 | 更新端点、Apple/Windows 证书和密钥管理 |
-| Apple 风格主题与 WindTerm 信息架构对照 | 🟡 | 浅色/深色 GUI 检查；核心工作区交互 E2E | 三平台 Golden 截图和差分阈值 |
+| Apple 风格主题与 WindTerm 信息架构对照 | 🟡 | 浅色/深色/色板编辑器 Golden；核心工作区交互 E2E | 原生 WebView 三平台视觉复核及更多状态 Golden |
 
 ## 3. 平台矩阵
 
@@ -58,9 +58,9 @@
 
 截至本文更新时间：
 
-- 前端：26 个 Vitest 文件、113 个测试；
-- 后端：25 个 Rust 测试；
-- 浏览器：4 条 Chromium 工作区 E2E；
+- 前端：27 个 Vitest 文件、120 个测试；
+- 后端：27 个 Rust 测试；
+- 浏览器：7 条 Chromium 工作区与 Golden E2E；
 - 性能：10 万、50 万、100 万行 xterm.js 解析/回滚/搜索/RSS 基线；
 - CI：Linux 质量门禁，以及 Linux、macOS、Windows 桌面编译；
 - Release：macOS Apple Silicon/Intel、Windows x64、Linux x64 安装包。
@@ -72,7 +72,7 @@
 1. 用 FT232、CP210x、CH340/341 分别完成三平台串口回环、控制线和热插拔测试；
 2. 完成 OpenSSH 服务端、USB/网络 ADB 和 X/Y/ZModem 互操作测试；
 3. 完成 30 分钟高吞吐、1 小时高频循环发送和 24 小时稳定性测试；
-4. 冻结 WindTerm 参考版本并建立可复现的视觉 Golden；
+4. 冻结 WindTerm 参考版本，并扩展连接、错误、传输和分屏状态的可复现视觉 Golden；
 5. 演练旧版本安装、升级、配置迁移、卸载和重装；
 6. 由项目所有者确定许可证、产品名称和商标策略；
 7. 配置 Apple 公证、Windows 签名和自动更新所需凭据。

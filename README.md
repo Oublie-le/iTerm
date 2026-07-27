@@ -15,7 +15,7 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 
 - Windows、macOS 和 Linux 串口枚举；
 - OpenSSH Agent/默认密钥和指定私钥连接；
-- 自动发现 `~/.ssh/config` 中的主机别名、密钥与跳板机配置，并支持一键连接；
+- 自动发现 `~/.ssh/config` 及递归 `Include` 文件中的主机别名、密钥与跳板机配置，并支持一键连接；
 - ADB 设备发现、授权状态识别和交互式 Shell；
 - SSH/ADB 使用跨平台本地伪终端保持完整交互行为；
 - Serial、SSH、ADB 三类会话统一保存、切换和恢复；
@@ -25,6 +25,7 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 - 串口输入/输出缓冲清理；
 - ANSI/xterm-256color 终端、Unicode 11 字符宽度、滚动缓冲和 WebGL 加速；
 - 串口保留设备原生 ANSI 色彩，并可为 INFO/WARN/ERROR 等纯文本日志自动着色；
+- 每个会话可跟随应用外观或自定义前景、背景、光标与完整 16 色 ANSI 调色板；
 - UTF-8、GBK、Big5、Shift_JIS 等 WebView 支持的字符编码；
 - Text/Hex 接收双视图、可配置 Hex 列数/分组和行时间戳；
 - 终端搜索、清屏、DEC 软复位、硬复位、Enter/Backspace 键位映射和实时行列显示；
@@ -44,7 +45,7 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 - 应用级新会话默认值、当前会话覆盖和可关闭的活动会话确认；
 - 文本/正则会话触发器，支持通知、自动发送、开始日志、冷却和次数限制；
 - 左右/上下双终端分屏、活动窗格切换和布局恢复；
-- XModem-CRC 文件发送、握手重试、进度与取消；
+- XModem-CRC 文件发送与接收、CRC/块号校验、重试、进度、安全保存与取消；
 - YModem 多文件批量发送和文件名/大小元数据；
 - YModem 批量接收、CRC 校验、标准双 EOT、目录选择和安全文件名；
 - ZModem 批量发送与接收、`rz`/`sz` 检测、进度、取消和安全落盘；
@@ -84,7 +85,8 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 
 ### SSH
 
-SSH 调用系统 OpenSSH 客户端，支持 SSH Agent、`~/.ssh/config`、默认密钥、指定私钥，
+SSH 调用系统 OpenSSH 客户端，支持 SSH Agent、`~/.ssh/config`、递归 `Include`、
+默认密钥、指定私钥，
 以及密码/键盘交互认证。进入 SSH 设置后，iTerm 会列出配置文件中的明确 `Host` 别名，
 并标记 `IdentityFile` 与 `ProxyJump`；可选择填入配置或一键保存并连接。应用只读取配置
 元数据，不读取私钥内容，实际连接仍由 OpenSSH 解析完整配置。
@@ -159,7 +161,8 @@ pnpm bench:terminal
 ```
 
 `pnpm test:e2e` 会自动启动本地开发服务器，并在 Chromium 中验证语言切换、
-SSH 配置发现、模拟串口连接、命令历史、字号持久化、右键菜单和主要工作区菜单。
+SSH 配置发现、模拟串口连接、命令历史、字号持久化、右键菜单和主要工作区菜单，
+并对 Apple 浅色/深色工作区与 ANSI 色板编辑器执行 Golden 截图差分。
 终端性能测试方法和基线结果见
 [终端性能基线](docs/05-terminal-performance.md)。
 
@@ -223,7 +226,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 - `Dependabot`：每周检查 npm、Cargo 和 GitHub Actions 依赖更新。
 
 发布新版本前需同步修改 `package.json`、`src-tauri/Cargo.toml` 和
-`src-tauri/tauri.conf.json` 中的版本号，然后创建对应标签，例如 `v0.6.0`。
+`src-tauri/tauri.conf.json` 中的版本号，然后创建对应标签，例如 `v0.7.0`。
 
 ## 当前限制与路线图
 
@@ -231,7 +234,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 
 - ZModem 当前按可靠链路模式工作，不实现噪声链路错误纠正；
 - FT232、CP210x、CH340/341 三平台硬件矩阵和 24 小时稳定性验证；
-- WindTerm 参考版本冻结、完整视觉 Golden 和差分验收；
+- WindTerm 参考版本冻结，以及更多连接/错误/分屏状态的视觉 Golden；
 - 自动更新、代码签名和 macOS 公证。
 
 详细状态和验证边界见 [功能与跨平台验收矩阵](docs/06-feature-matrix.md)。
