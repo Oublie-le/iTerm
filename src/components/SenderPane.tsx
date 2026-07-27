@@ -4,6 +4,7 @@ import {
   Eraser,
   FileDown,
   FileUp,
+  FolderDown,
   Play,
   Square,
   Trash2,
@@ -40,6 +41,10 @@ interface SenderPaneProps {
     onProgress: (progress: YmodemReceiveProgress) => void,
     signal: AbortSignal,
   ) => Promise<{ fileCount: number; totalBytes: number } | null>;
+  onReceiveZmodem: (
+    onProgress: (progress: YmodemReceiveProgress) => void,
+    signal: AbortSignal,
+  ) => Promise<{ fileCount: number; totalBytes: number } | null>;
 }
 
 export function SenderPane({
@@ -49,6 +54,7 @@ export function SenderPane({
   onSend,
   onSendFiles,
   onReceiveYmodem,
+  onReceiveZmodem,
 }: SenderPaneProps) {
   const [presets, setPresets] = useState<SenderPreset[]>(() =>
     loadSenderPresets(profileId),
@@ -255,6 +261,44 @@ export function SenderPane({
     }
   };
 
+  const receiveZmodem = async () => {
+    setLastError("");
+    setTemplateNotice("");
+    const controller = new AbortController();
+    fileAbortRef.current = controller;
+    setRunning(true);
+    setFileTransfer({
+      name: "等待远端运行 sz…",
+      sentBytes: 0,
+      totalBytes: 1,
+    });
+    try {
+      const result = await onReceiveZmodem(
+        ({ fileName, receivedBytes, fileSize }) =>
+          setFileTransfer({
+            name: fileName,
+            sentBytes: receivedBytes,
+            totalBytes: fileSize,
+          }),
+        controller.signal,
+      );
+      if (result) {
+        setTemplateNotice(
+          `ZModem 已接收 ${result.fileCount} 个文件，共 ${result.totalBytes.toLocaleString()} B`,
+        );
+      } else {
+        setFileTransfer(null);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setLastError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      fileAbortRef.current = null;
+      setRunning(false);
+    }
+  };
+
   return (
     <section className="sender-pane" aria-label="发送窗格">
       <header className="sender-toolbar">
@@ -324,7 +368,9 @@ export function SenderPane({
                 ? "发送原始文件"
                 : fileProtocol === "xmodemCrc"
                   ? "使用 XModem-CRC 发送文件"
-                  : "使用 YModem 批量发送文件"
+                  : fileProtocol === "ymodem"
+                    ? "使用 YModem 批量发送文件"
+                    : "等待远端 rz 后使用 ZModem 批量发送文件"
             }
           >
             <FileUp size={16} />
@@ -338,6 +384,15 @@ export function SenderPane({
           >
             <FileDown size={16} />
           </button>
+          <button
+            className="icon-button"
+            onClick={() => void receiveZmodem()}
+            disabled={!connected || running}
+            title="接收 ZModem 批量文件（等待远端 sz）"
+            aria-label="接收 ZModem 批量文件"
+          >
+            <FolderDown size={16} />
+          </button>
           <select
             className="file-protocol-select"
             value={fileProtocol}
@@ -350,12 +405,15 @@ export function SenderPane({
             <option value="raw">Raw</option>
             <option value="xmodemCrc">XModem-CRC</option>
             <option value="ymodem">YModem Batch</option>
+            <option value="zmodem">ZModem</option>
           </select>
           <input
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            multiple={fileProtocol === "ymodem"}
+            multiple={
+              fileProtocol === "ymodem" || fileProtocol === "zmodem"
+            }
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
               if (files.length > 0) void sendFiles(files);

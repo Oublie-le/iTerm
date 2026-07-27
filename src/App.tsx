@@ -120,6 +120,12 @@ import {
   saveReceivedBinaryFiles,
   selectBinaryOutputDirectory,
 } from "./lib/binaryFiles";
+import {
+  ZmodemSentryBridge,
+  receiveZmodemFiles,
+  sendZmodemFiles,
+  type ZmodemProgress,
+} from "./lib/zmodem";
 import { openJsonDocument, saveJsonDocument } from "./lib/jsonFiles";
 import {
   mergeImportedProfiles,
@@ -301,6 +307,9 @@ export default function App() {
   const processedTriggerChunksRef = useRef(new Map<string, number>());
   const startingTriggerLogsRef = useRef(new Set<string>());
   const transferByteQueuesRef = useRef(new Map<string, AsyncByteQueue>());
+  const zmodemBridgesRef = useRef(
+    new Map<string, ZmodemSentryBridge>(),
+  );
   const captureDiagnostic = useCallback(
     (
       area: string,
@@ -542,6 +551,8 @@ export default function App() {
               transferByteQueuesRef.current
                 .get(event.sessionId)
                 ?.close(new Error("会话已断开，文件传输停止。"));
+              zmodemBridgesRef.current.get(event.sessionId)?.abort();
+              zmodemBridgesRef.current.delete(event.sessionId);
             }
             return {
               ...session,
@@ -573,6 +584,33 @@ export default function App() {
                     : session.notice,
             };
           case "data": {
+            const zmodemBridge = zmodemBridgesRef.current.get(event.sessionId);
+            if (zmodemBridge) {
+              const terminalBytes = zmodemBridge.consume(event.bytes);
+              if (terminalBytes.length === 0) {
+                return {
+                  ...session,
+                  sequence: event.sequence,
+                  bytesRead: session.bytesRead + event.bytes.length,
+                };
+              }
+              const chunk = {
+                nonce: performance.now(),
+                sequence: event.sequence,
+                receivedAtMs: event.receivedAtMs,
+                bytes: Array.from(terminalBytes),
+              };
+              return {
+                ...session,
+                sequence: event.sequence,
+                receiveChunks: appendReceiveChunk(
+                  session.receiveChunks,
+                  chunk,
+                ),
+                lastChunk: chunk,
+                bytesRead: session.bytesRead + event.bytes.length,
+              };
+            }
             const transferQueue = transferByteQueuesRef.current.get(
               event.sessionId,
             );
@@ -1309,6 +1347,79 @@ export default function App() {
     }
     const sessionId = activeSession.id;
     const profile = activeProfile;
+    if (protocol === "zmodem") {
+      const bridge = new ZmodemSentryBridge(async (bytes) => {
+        const count = await writeConfiguredBytes(sessionId, profile, bytes);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  bytesWritten: session.bytesWritten + count,
+                }
+              : session,
+          ),
+        );
+        return count;
+      });
+      zmodemBridgesRef.current.set(sessionId, bridge);
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: true }
+            : session,
+        ),
+      );
+      captureDiagnostic("transfer", "started", {
+        context: {
+          protocol,
+          fileCount: files.length,
+          totalBytes: files.reduce((sum, item) => sum + item.size, 0),
+        },
+      });
+      try {
+        const zsession = await bridge.waitForSession("send", signal);
+        const totalBytes = files.reduce((sum, item) => sum + item.size, 0);
+        const transferred = await bridge.guard(
+          sendZmodemFiles(
+            zsession,
+            files,
+            ({ fileIndex, transferredBytes }) => {
+              const completed = files
+                .slice(0, fileIndex)
+                .reduce((sum, item) => sum + item.size, 0);
+              onProgress(completed + transferredBytes, totalBytes);
+            },
+            signal,
+          ),
+        );
+        await bridge.flush();
+        captureDiagnostic("transfer", "completed", {
+          context: { protocol, fileCount: files.length, transferred },
+        });
+        return transferred;
+      } catch (error) {
+        captureDiagnostic("transfer", "failed", {
+          level: signal.aborted ? "warning" : "error",
+          message: signal.aborted
+            ? "用户取消文件传输"
+            : error instanceof Error
+              ? error.message
+              : String(error),
+          context: { protocol, fileCount: files.length },
+        });
+        throw error;
+      } finally {
+        zmodemBridgesRef.current.delete(sessionId);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? { ...session, transferActive: false }
+              : session,
+          ),
+        );
+      }
+    }
     const byteQueue =
       protocol === "raw" ? undefined : new AsyncByteQueue();
     if (byteQueue) transferByteQueuesRef.current.set(sessionId, byteQueue);
@@ -1468,6 +1579,99 @@ export default function App() {
     } finally {
       transferByteQueuesRef.current.delete(sessionId);
       byteQueue.close();
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: false }
+            : session,
+        ),
+      );
+    }
+  };
+
+  const receiveZmodemBatchFiles = async (
+    onProgress: (progress: YmodemReceiveProgress) => void,
+    signal: AbortSignal,
+  ): Promise<{ fileCount: number; totalBytes: number } | null> => {
+    if (
+      !activeSession ||
+      !activeProfile ||
+      activeSession.state !== "connected" ||
+      activeSession.transferActive
+    ) {
+      throw new Error("会话未连接。");
+    }
+    const outputDirectory = await selectBinaryOutputDirectory();
+    if (outputDirectory === null) return null;
+    const sessionId = activeSession.id;
+    const profile = activeProfile;
+    const bridge = new ZmodemSentryBridge(async (bytes) => {
+      const count = await writeConfiguredBytes(sessionId, profile, bytes);
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                bytesWritten: session.bytesWritten + count,
+              }
+            : session,
+        ),
+      );
+      return count;
+    });
+    zmodemBridgesRef.current.set(sessionId, bridge);
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === sessionId
+          ? { ...session, transferActive: true }
+          : session,
+      ),
+    );
+    captureDiagnostic("transfer", "receive_started", {
+      context: { protocol: "zmodem" },
+    });
+    try {
+      const zsession = await bridge.waitForSession("receive", signal);
+      const files = await bridge.guard(
+        receiveZmodemFiles(
+          zsession,
+          (progress: ZmodemProgress) =>
+            onProgress({
+              fileName: progress.fileName,
+              fileIndex: progress.fileIndex,
+              receivedBytes: progress.transferredBytes,
+              fileSize: progress.fileSize,
+            }),
+          signal,
+        ),
+      );
+      await bridge.flush();
+      await saveReceivedBinaryFiles(outputDirectory, files);
+      const totalBytes = files.reduce(
+        (sum, file) => sum + file.bytes.length,
+        0,
+      );
+      captureDiagnostic("transfer", "receive_completed", {
+        context: {
+          protocol: "zmodem",
+          fileCount: files.length,
+          totalBytes,
+        },
+      });
+      return { fileCount: files.length, totalBytes };
+    } catch (error) {
+      captureDiagnostic("transfer", "receive_failed", {
+        level: signal.aborted ? "warning" : "error",
+        message: signal.aborted
+          ? "用户取消文件接收"
+          : error instanceof Error
+            ? error.message
+            : String(error),
+        context: { protocol: "zmodem" },
+      });
+      throw error;
+    } finally {
+      zmodemBridgesRef.current.delete(sessionId);
       setSessions((current) =>
         current.map((session) =>
           session.id === sessionId
@@ -2243,6 +2447,7 @@ export default function App() {
               onSend={sendPreset}
               onSendFiles={sendFiles}
               onReceiveYmodem={receiveYmodemFiles}
+              onReceiveZmodem={receiveZmodemBatchFiles}
             />
           )}
 
