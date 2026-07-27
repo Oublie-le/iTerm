@@ -2,7 +2,7 @@
 
 文档状态：持续更新  
 更新时间：2026-07-27  
-对应版本：`main`（v0.4.0 之后）
+对应版本：v0.5.0
 
 ## 1. 状态定义
 
@@ -57,9 +57,9 @@
 
 截至本文更新时间：
 
-- 前端：24 个 Vitest 文件、100 个测试；
+- 前端：24 个 Vitest 文件、102 个测试；
 - 后端：23 个 Rust 测试；
-- 浏览器：2 条 Chromium 工作区 E2E；
+- 浏览器：3 条 Chromium 工作区 E2E；
 - 性能：10 万、50 万、100 万行 xterm.js 解析/回滚/搜索/RSS 基线；
 - CI：Linux 质量门禁，以及 Linux、macOS、Windows 桌面编译；
 - Release：macOS Apple Silicon/Intel、Windows x64、Linux x64 安装包。
