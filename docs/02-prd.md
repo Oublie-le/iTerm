@@ -83,8 +83,10 @@ WindTerm 串口工作流中最有价值的部分：会话管理、IDE 式多标�
 - 搜索、时间戳、Hex 视图、百万行回滚目标；
 - 多发送器、循环发送、文件发送；
 - DTR/RTS/Break、设备热插拔；
+- SSH 配置自动发现与一键连接、ADB 设备发现与交互 Shell；
 - 日志配置与滚动；
-- 中英文、浅色/深色主题；
+- 中英文、Apple 风格浅色/深色主题；
+- 命令历史/快捷联想、终端字号缩放和右键操作；
 - 完整错误状态和安装包。
 
 ### 5.3 v1.1（高级对齐）
@@ -198,18 +200,22 @@ WindTerm 串口工作流中最有价值的部分：会话管理、IDE 式多标�
 
 ## 8. 视觉规格
 
-首个高保真主题以本机 WindTerm 2.6.0 为参考：
+工作区信息架构和操作密度参考 WindTerm；视觉主题以 Apple HIG 的清晰层级、系统色、
+半透明材料、适度圆角和平台字体栈为设计方向：
 
 | Token | 参考值 |
 | --- | --- |
-| `surface.workspace` | `#1c1c1c` |
-| `text.primary` | `#bbbbbb` |
-| `border.default` | `#444444` |
-| `surface.selection` | `#333333` |
-| `accent.primary` | `#007acc` |
-| `status.error` | Red |
-| `font.mono` | Roboto Mono → Fira Code → 系统等宽 |
-| `font.size.default` | 12 pt 视觉等效值 |
+| `surface.workspace.light` | `#f5f5f7` |
+| `surface.workspace.dark` | `#161618` |
+| `text.primary.light` | `#1d1d1f` |
+| `text.primary.dark` | `#f5f5f7` |
+| `accent.primary.light` | `#007aff` |
+| `accent.primary.dark` | `#0a84ff` |
+| `material.sidebar` | 半透明背景 + saturation/blur；减少透明度设置下退化为不透明 |
+| `status.error` | `#ff3b30` / `#ff453a` |
+| `font.ui` | 系统 `-apple-system` 优先，跨平台安全回退 |
+| `font.mono` | SFMono / Roboto Mono / Consolas / 系统等宽 |
+| `font.size.default` | 14 px，可在 8–40 范围快捷缩放 |
 
 最终不能直接分发 WindTerm 自带字体或图标文件；应使用允许再分发的上游字体包和独立图标。
 

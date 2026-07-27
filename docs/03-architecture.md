@@ -123,7 +123,7 @@ flowchart LR
 - `WorkspaceShell`：菜单、标签、停靠布局、分屏和状态栏；
 - `SessionTree`：会话分组和上下文菜单；
 - `SessionEditor`：版本化表单、实时校验、平台能力禁用；
-- `TerminalView`：xterm.js 生命周期、主题、尺寸、搜索、IME；
+- `TerminalView`：xterm.js 生命周期、Apple 风格主题、尺寸/字号缩放、搜索、IME、命令联想与上下文菜单；
 - `HexView`：原始字节虚拟列表，不依赖解码后的终端文本；
 - `SenderPane`：发送器编辑、循环状态和统计；
 - `NotificationBar`：可恢复错误和会话状态；
@@ -137,7 +137,7 @@ flowchart LR
 - `SessionManager`：会话注册表、端口独占、生命周期和命令路由；
 - `SessionActor`：一个活动串口一个 Actor，独占串口句柄；
 - `ProcessRegistry`：SSH/ADB 子进程会话、标准输入输出和生命周期；
-- `RemoteDiscoveryService`：解析 ADB 设备、授权和离线状态；
+- `RemoteDiscoveryService`：解析 ADB 设备、授权/离线状态，以及本机 OpenSSH Host 别名元数据；
 - `PortDiscoveryService`：枚举、稳定设备键、热插拔 diff；
 - `SenderScheduler`：单次、循环、文件发送和背压；
 - `LoggingService`：原始/文本日志、模板、滚动；
@@ -283,6 +283,7 @@ stateDiagram-v2
 | 命令 | 输入 | 输出 |
 | --- | --- | --- |
 | `ports_list` | 无 | `PortDescriptor[]` |
+| `list_ssh_config_hosts` | 无 | `SshConfigHost[]` |
 | `profile_list/get/upsert/delete` | profile/group 参数 | 对应实体 |
 | `session_open` | profileId + byte Channel | sessionId |
 | `session_close/reconnect` | sessionId | Ack |
@@ -311,7 +312,8 @@ stateDiagram-v2
 ## 9. 持久化设计
 
 SQLite 仅存配置和轻量历史。当前 schema v1 使用受白名单限制的
-`persistent_items(storage_key, value_json, updated_at_ms)` 表承载版本化 JSON，
+`persistent_items(storage_key, value_json, updated_at_ms)` 表承载版本化 JSON，包括会话、
+偏好、工作区、发送器模板、诊断与命令历史，
 通过 `PRAGMA user_version` 和事务执行迁移；WAL、busy timeout 和有序前端写队列避免
 并发覆盖。原生应用启动时优先恢复数据库，并把旧 Web Storage 中缺失的配置一次性迁入。
 浏览器 Mock 模式继续使用 Web Storage。
