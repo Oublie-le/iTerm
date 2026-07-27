@@ -6,6 +6,8 @@ import {
   CircleStop,
   Eraser,
   FileClock,
+  FileText,
+  FolderOpen,
   Info,
   Link2,
   Menu,
@@ -60,6 +62,7 @@ import {
 } from "./lib/remote";
 import { appendReceiveChunk } from "./lib/receive";
 import { sendFileInChunks } from "./lib/fileTransfer";
+import { openLogDirectory, openLogFile } from "./lib/logging";
 import {
   createRuntimeSession,
   createSessionProfile,
@@ -207,6 +210,7 @@ export default function App() {
   const [sidebarFilter, setSidebarFilter] = useState("");
   const [portError, setPortError] = useState("");
   const [adbError, setAdbError] = useState("");
+  const [utilityError, setUtilityError] = useState("");
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
@@ -911,6 +915,18 @@ export default function App() {
     }
   };
 
+  const openLogs = async (path?: string) => {
+    setUtilityError("");
+    try {
+      if (path) await openLogFile(path);
+      else await openLogDirectory();
+    } catch (error) {
+      setUtilityError(
+        error instanceof Error ? error.message : "无法打开日志位置。",
+      );
+    }
+  };
+
   const cycleSyncChannel = () => {
     if (!activeSession) return;
     const channels: SyncChannel[] = ["off", "A", "B", "C", "D"];
@@ -1168,6 +1184,24 @@ export default function App() {
                 </button>
               )}
               <button
+                className="icon-button"
+                disabled={!activeSession?.logPath}
+                onClick={() =>
+                  activeSession?.logPath &&
+                  void openLogs(activeSession.logPath)
+                }
+                title="打开当前日志文件"
+              >
+                <FileText size={16} />
+              </button>
+              <button
+                className="icon-button"
+                onClick={() => void openLogs()}
+                title="打开日志目录"
+              >
+                <FolderOpen size={16} />
+              </button>
+              <button
                 className={`signal-button ${
                   activeSession?.receiveMode === "hex" ? "is-active" : ""
                 }`}
@@ -1270,6 +1304,19 @@ export default function App() {
                 <span>{adbError}</span>
               </div>
               <button onClick={() => setAdbError("")}>
+                <X size={17} />
+              </button>
+            </div>
+          )}
+
+          {utilityError && (
+            <div className="notice-bar error">
+              <Info size={18} />
+              <div>
+                <strong>无法打开日志位置</strong>
+                <span>{utilityError}</span>
+              </div>
+              <button onClick={() => setUtilityError("")}>
                 <X size={17} />
               </button>
             </div>

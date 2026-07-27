@@ -5,6 +5,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::PathBuf,
+    process::Command,
 };
 use tauri::{AppHandle, Manager};
 
@@ -81,6 +82,32 @@ pub fn build_log_spec(app: &AppHandle, request: &StartLogRequest) -> Result<LogS
         max_bytes,
         rotate_count: request.rotate_count.min(20) as usize,
     })
+}
+
+#[tauri::command]
+pub fn open_log_directory(app: AppHandle) -> Result<(), String> {
+    let directory = app
+        .path()
+        .app_log_dir()
+        .map_err(|error| format!("无法确定日志目录：{error}"))?;
+    fs::create_dir_all(&directory).map_err(|error| format!("无法创建日志目录：{error}"))?;
+    open_with_system(&directory)
+}
+
+#[tauri::command]
+pub fn open_log_file(path: String, app: AppHandle) -> Result<(), String> {
+    let directory = app
+        .path()
+        .app_log_dir()
+        .map_err(|error| format!("无法确定日志目录：{error}"))?;
+    let directory = directory
+        .canonicalize()
+        .map_err(|error| format!("无法读取日志目录：{error}"))?;
+    let path = PathBuf::from(path)
+        .canonicalize()
+        .map_err(|error| format!("无法读取日志文件：{error}"))?;
+    ensure_path_in_directory(&path, &directory)?;
+    open_with_system(&path)
 }
 
 impl SessionLogger {
@@ -256,6 +283,57 @@ const fn default_rotate_count() -> u32 {
     3
 }
 
+fn ensure_path_in_directory(path: &PathBuf, directory: &PathBuf) -> Result<(), String> {
+    if path.starts_with(directory) {
+        Ok(())
+    } else {
+        Err("只能打开 iTerm 日志目录中的文件。".into())
+    }
+}
+
+fn open_with_system(path: &PathBuf) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = Command::new("open");
+        command.arg(path);
+        command
+    };
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = Command::new("explorer");
+        command.arg(path);
+        command
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut command = Command::new("xdg-open");
+        command.arg(path);
+        command
+    };
+
+    hide_console_window(&mut command);
+    let status = command
+        .status()
+        .map_err(|error| format!("无法使用系统打开 {}：{error}", path.display()))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "系统打开器返回失败状态 {}：{status}",
+            path.display()
+        ))
+    }
+}
+
+#[cfg(windows)]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x08000000);
+}
+
+#[cfg(not(windows))]
+fn hide_console_window(_: &mut Command) {}
+
 fn default_log_file_name(session_name: &str) -> String {
     let safe_name = sanitize_file_stem(session_name);
     format!(
@@ -366,6 +444,13 @@ mod tests {
         fs::remove_file(&path).unwrap();
         fs::remove_file(rotated_path(&path, 1)).unwrap();
         fs::remove_file(rotated_path(&path, 2)).unwrap();
+    }
+
+    #[test]
+    fn restricts_opening_files_to_the_log_directory() {
+        let directory = std::env::temp_dir().join("iterm-log-root");
+        assert!(ensure_path_in_directory(&directory.join("session.log"), &directory).is_ok());
+        assert!(ensure_path_in_directory(&std::env::temp_dir(), &directory).is_err());
     }
 
     fn temporary_log_path(label: &str) -> PathBuf {

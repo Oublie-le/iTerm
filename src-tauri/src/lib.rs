@@ -11,6 +11,8 @@ pub fn run() {
         .manage(SerialRegistry::default())
         .manage(ProcessRegistry::default())
         .invoke_handler(tauri::generate_handler![
+            logging::open_log_directory,
+            logging::open_log_file,
             process::open_ssh_session,
             process::list_adb_devices,
             process::open_adb_session,
