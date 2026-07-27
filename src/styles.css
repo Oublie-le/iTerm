@@ -1503,6 +1503,19 @@ textarea:disabled {
   line-height: 1.55;
 }
 
+.diagnostic-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 8px;
+  color: #69716f;
+  font-size: 11px;
+}
+
+.diagnostic-actions > span {
+  margin-right: auto;
+}
+
 .tool-status {
   display: flex;
   align-items: center;

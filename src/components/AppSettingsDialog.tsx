@@ -1,4 +1,4 @@
-import { Settings, X } from "lucide-react";
+import { Download, Settings, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AppPreferences, ThemeMode } from "../lib/preferences";
 import type {
@@ -12,6 +12,9 @@ interface AppSettingsDialogProps {
   preferences: AppPreferences;
   onCancel: () => void;
   onSave: (preferences: AppPreferences) => void;
+  diagnosticCount: number;
+  onExportDiagnostics: () => void;
+  onClearDiagnostics: () => void;
 }
 
 export function AppSettingsDialog({
@@ -19,6 +22,9 @@ export function AppSettingsDialog({
   preferences,
   onCancel,
   onSave,
+  diagnosticCount,
+  onExportDiagnostics,
+  onClearDiagnostics,
 }: AppSettingsDialogProps) {
   const [draft, setDraft] = useState(preferences);
   const [error, setError] = useState("");
@@ -268,6 +274,31 @@ export function AppSettingsDialog({
                   新会话连接后自动开始日志
                 </label>
               </div>
+            </div>
+          </section>
+          <section>
+            <div className="page-heading">
+              <h3>本地诊断</h3>
+              <p>记录连接、日志和文件传输状态，不记录终端收发内容或凭据。</p>
+            </div>
+            <div className="diagnostic-actions">
+              <span>当前保留 {diagnosticCount} / 500 条结构化事件</span>
+              <button
+                className="secondary-button"
+                onClick={onExportDiagnostics}
+                disabled={diagnosticCount === 0}
+              >
+                <Download size={14} />
+                导出诊断
+              </button>
+              <button
+                className="secondary-button"
+                onClick={onClearDiagnostics}
+                disabled={diagnosticCount === 0}
+              >
+                <Trash2 size={14} />
+                清空诊断
+              </button>
             </div>
           </section>
         </main>

@@ -118,6 +118,13 @@ import {
   parseSessionProfiles,
   serializeSessionProfiles,
 } from "./lib/profileTransfer";
+import {
+  clearDiagnosticEvents,
+  loadDiagnosticEvents,
+  recordDiagnostic,
+  serializeDiagnosticEvents,
+  type DiagnosticLevel,
+} from "./lib/diagnostics";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -271,6 +278,9 @@ export default function App() {
     title: string;
     detail?: string;
   } | null>(null);
+  const [diagnosticCount, setDiagnosticCount] = useState(
+    () => loadDiagnosticEvents().length,
+  );
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
@@ -283,6 +293,21 @@ export default function App() {
   const processedTriggerChunksRef = useRef(new Map<string, number>());
   const startingTriggerLogsRef = useRef(new Set<string>());
   const transferByteQueuesRef = useRef(new Map<string, AsyncByteQueue>());
+  const captureDiagnostic = useCallback(
+    (
+      area: string,
+      event: string,
+      options: {
+        level?: DiagnosticLevel;
+        message?: string;
+        context?: Record<string, unknown>;
+      } = {},
+    ) => {
+      recordDiagnostic(area, event, options);
+      setDiagnosticCount(loadDiagnosticEvents().length);
+    },
+    [],
+  );
 
   const activeSession = sessions.find(
     (session) => session.id === activeSessionId,
@@ -291,6 +316,16 @@ export default function App() {
     (profile) => profile.id === activeSession?.profileId,
   );
   const resolvedTheme = resolveTheme(preferences.theme, systemPrefersDark);
+
+  useEffect(() => {
+    captureDiagnostic("app", "started", {
+      context: {
+        profileCount: profiles.length,
+        restoredSessionCount: sessions.length,
+      },
+    });
+    // Startup is recorded once; later profile/session changes are separate events.
+  }, [captureDiagnostic]);
 
   const activateSession = useCallback(
     (sessionId: string) => {
@@ -460,6 +495,32 @@ export default function App() {
   }, [preferences.confirmActiveSessionClose, sessions]);
 
   const applyEvent = useCallback((event: SerialEvent) => {
+    if (event.type === "state") {
+      captureDiagnostic("session", "state_changed", {
+        level:
+          event.state === "error" || event.state === "deviceLost"
+            ? "warning"
+            : "info",
+        message: event.message,
+        context: { sessionId: event.sessionId, state: event.state },
+      });
+    } else if (event.type === "error") {
+      captureDiagnostic("session", "error", {
+        level: "error",
+        message: event.message,
+        context: {
+          sessionId: event.sessionId,
+          code: event.code,
+          recoverable: event.recoverable,
+        },
+      });
+    } else if (event.type === "log" && event.state === "error") {
+      captureDiagnostic("logging", "write_failed", {
+        level: "error",
+        message: event.message,
+        context: { sessionId: event.sessionId },
+      });
+    }
     setSessions((current) =>
       current.map((session) => {
         if (session.id !== event.sessionId) return session;
@@ -565,7 +626,7 @@ export default function App() {
         }
       }),
     );
-  }, []);
+  }, [captureDiagnostic]);
 
   const startLogging = useCallback(
     async (sessionId: string, profile: SessionProfile) => {
@@ -639,6 +700,13 @@ export default function App() {
             ),
           );
           try {
+            captureDiagnostic("session", "open_requested", {
+              context: {
+                sessionId: alreadyOpen.id,
+                profileId: profile.id,
+                protocol: profile.protocol,
+              },
+            });
             await openConfiguredSession(alreadyOpen.id, profile, applyEvent);
             if (profile.logging.autoStart) {
               await startLogging(alreadyOpen.id, profile);
@@ -687,6 +755,9 @@ export default function App() {
       }
 
       try {
+        captureDiagnostic("session", "open_requested", {
+          context: { sessionId, profileId: profile.id, protocol: profile.protocol },
+        });
         await openConfiguredSession(sessionId, profile, applyEvent);
         if (profile.logging.autoStart) {
           await startLogging(sessionId, profile);
@@ -702,7 +773,7 @@ export default function App() {
         });
       }
     },
-    [activateSession, applyEvent, sessions, startLogging],
+    [activateSession, applyEvent, captureDiagnostic, sessions, startLogging],
   );
 
   useEffect(() => {
@@ -962,6 +1033,9 @@ export default function App() {
         serializeSessionProfiles(profiles),
       );
       if (path) {
+        captureDiagnostic("configuration", "profiles_exported", {
+          context: { profileCount: profiles.length },
+        });
         setProfileTransferNotice({
           tone: "info",
           title: `已导出 ${profiles.length} 个会话配置`,
@@ -969,6 +1043,10 @@ export default function App() {
         });
       }
     } catch (error) {
+      captureDiagnostic("configuration", "profiles_export_failed", {
+        level: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
       setProfileTransferNotice({
         tone: "error",
         title: "导出会话配置失败",
@@ -985,6 +1063,12 @@ export default function App() {
       const imported = parseSessionProfiles(document.contents);
       const merged = mergeImportedProfiles(profiles, imported);
       setProfiles(merged.profiles);
+      captureDiagnostic("configuration", "profiles_imported", {
+        context: {
+          importedCount: merged.importedCount,
+          remappedCount: merged.remappedCount,
+        },
+      });
       setProfileTransferNotice({
         tone: "info",
         title: `已导入 ${merged.importedCount} 个会话配置`,
@@ -994,6 +1078,10 @@ export default function App() {
             : document.name,
       });
     } catch (error) {
+      captureDiagnostic("configuration", "profiles_import_failed", {
+        level: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
       setProfileTransferNotice({
         tone: "error",
         title: "导入会话配置失败",
@@ -1215,6 +1303,10 @@ export default function App() {
           : session,
       ),
     );
+    const totalBytes = files.reduce((sum, item) => sum + item.size, 0);
+    captureDiagnostic("transfer", "started", {
+      context: { protocol, fileCount: files.length, totalBytes },
+    });
     try {
       const sendBytes = async (bytes: Uint8Array) => {
         const count = await writeConfiguredBytes(sessionId, profile, bytes);
@@ -1230,30 +1322,46 @@ export default function App() {
         );
         return count;
       };
+      let transferred: number;
       if (protocol === "xmodemCrc" && byteQueue) {
-        return await sendXmodemCrc(
+        transferred = await sendXmodemCrc(
           file,
           sendBytes,
           byteQueue,
           onProgress,
           signal,
         );
-      }
-      if (protocol === "ymodem" && byteQueue) {
-        return await sendYmodemBatch(
+      } else if (protocol === "ymodem" && byteQueue) {
+        transferred = await sendYmodemBatch(
           files,
           sendBytes,
           byteQueue,
           ({ sentBytes, totalBytes }) => onProgress(sentBytes, totalBytes),
           signal,
         );
+      } else {
+        transferred = await sendFileInChunks(
+          file,
+          sendBytes,
+          onProgress,
+          signal,
+        );
       }
-      return await sendFileInChunks(
-            file,
-            sendBytes,
-            onProgress,
-            signal,
-          );
+      captureDiagnostic("transfer", "completed", {
+        context: { protocol, fileCount: files.length, transferred },
+      });
+      return transferred;
+    } catch (error) {
+      captureDiagnostic("transfer", "failed", {
+        level: signal.aborted ? "warning" : "error",
+        message: signal.aborted
+          ? "用户取消文件传输"
+          : error instanceof Error
+            ? error.message
+            : String(error),
+        context: { protocol, fileCount: files.length },
+      });
+      throw error;
     } finally {
       transferByteQueuesRef.current.delete(sessionId);
       byteQueue?.close();
@@ -1352,6 +1460,29 @@ export default function App() {
         error instanceof Error ? error.message : "无法打开日志位置。",
       );
     }
+  };
+
+  const exportDiagnostics = async () => {
+    try {
+      const events = loadDiagnosticEvents();
+      const date = new Date().toISOString().slice(0, 10);
+      await saveJsonDocument(
+        `iTerm-diagnostics-${date}.json`,
+        serializeDiagnosticEvents(events),
+      );
+    } catch (error) {
+      setProfileTransferNotice({
+        tone: "error",
+        title: "导出诊断失败",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const clearDiagnostics = () => {
+    if (!window.confirm("确定清空本机保存的全部诊断事件吗？")) return;
+    clearDiagnosticEvents();
+    setDiagnosticCount(0);
   };
 
   const cycleSyncChannel = () => {
@@ -2079,6 +2210,9 @@ export default function App() {
       <AppSettingsDialog
         open={appSettingsOpen}
         preferences={preferences}
+        diagnosticCount={diagnosticCount}
+        onExportDiagnostics={() => void exportDiagnostics()}
+        onClearDiagnostics={clearDiagnostics}
         onCancel={() => setAppSettingsOpen(false)}
         onSave={(nextPreferences) => {
           setPreferences(nextPreferences);
