@@ -9,7 +9,11 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { loadSenderPresets, saveSenderPresets } from "../lib/senders";
-import { createSenderPreset, type SenderPreset } from "../lib/types";
+import {
+  createSenderPreset,
+  type FileTransferProtocol,
+  type SenderPreset,
+} from "../lib/types";
 
 interface SenderPaneProps {
   profileId: string;
@@ -18,6 +22,7 @@ interface SenderPaneProps {
   onSend: (preset: SenderPreset) => Promise<number>;
   onSendFile: (
     file: File,
+    protocol: FileTransferProtocol,
     onProgress: (sentBytes: number, totalBytes: number) => void,
     signal: AbortSignal,
   ) => Promise<number>;
@@ -46,6 +51,8 @@ export function SenderPane({
     sentBytes: number;
     totalBytes: number;
   } | null>(null);
+  const [fileProtocol, setFileProtocol] =
+    useState<FileTransferProtocol>("raw");
 
   const active =
     presets.find((preset) => preset.id === activeId) ?? presets[0];
@@ -139,6 +146,7 @@ export function SenderPane({
     try {
       const count = await onSendFile(
         file,
+        fileProtocol,
         (sentBytes, totalBytes) =>
           setFileTransfer({ name: file.name, sentBytes, totalBytes }),
         controller.signal,
@@ -200,10 +208,26 @@ export function SenderPane({
             className="icon-button"
             onClick={() => fileInputRef.current?.click()}
             disabled={!connected || running}
-            title="发送原始文件"
+            title={
+              fileProtocol === "raw"
+                ? "发送原始文件"
+                : "使用 XModem-CRC 发送文件"
+            }
           >
             <FileUp size={16} />
           </button>
+          <select
+            className="file-protocol-select"
+            value={fileProtocol}
+            disabled={running}
+            onChange={(event) =>
+              setFileProtocol(event.target.value as FileTransferProtocol)
+            }
+            aria-label="文件传输协议"
+          >
+            <option value="raw">Raw</option>
+            <option value="xmodemCrc">XModem-CRC</option>
+          </select>
           <input
             ref={fileInputRef}
             className="hidden-file-input"

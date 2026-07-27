@@ -955,6 +955,17 @@ textarea:disabled {
   gap: 3px;
 }
 
+.file-protocol-select {
+  height: 24px;
+  max-width: 112px;
+  padding: 0 4px;
+  background: #f6f7f7;
+  border: 1px solid #bdc4c4;
+  border-radius: 2px;
+  color: #4e5553;
+  font-size: 9px;
+}
+
 .toolbar-button {
   height: 24px;
   padding: 0 9px;
@@ -1892,7 +1903,8 @@ textarea:disabled {
 
 .app-shell[data-theme="dark"] .secondary-button,
 .app-shell[data-theme="dark"] .toolbar-button,
-.app-shell[data-theme="dark"] .signal-button {
+.app-shell[data-theme="dark"] .signal-button,
+.app-shell[data-theme="dark"] .file-protocol-select {
   background: #363d3a;
   border-color: #555d5a;
   color: #d0d7d3;

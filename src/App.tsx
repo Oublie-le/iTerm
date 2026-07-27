@@ -81,6 +81,7 @@ import {
   type RuntimeSession,
   type AdbDeviceDescriptor,
   type ExternalToolStatus,
+  type FileTransferProtocol,
   type SenderPreset,
   type SerialEvent,
   type SerialPortDescriptor,
@@ -109,6 +110,7 @@ import {
   type SplitMode,
   type SplitSessionIds,
 } from "./lib/layout";
+import { AsyncByteQueue, sendXmodemCrc } from "./lib/xmodem";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -268,6 +270,7 @@ export default function App() {
   );
   const processedTriggerChunksRef = useRef(new Map<string, number>());
   const startingTriggerLogsRef = useRef(new Set<string>());
+  const transferByteQueuesRef = useRef(new Map<string, AsyncByteQueue>());
 
   const activeSession = sessions.find(
     (session) => session.id === activeSessionId,
@@ -450,6 +453,15 @@ export default function App() {
         if (session.id !== event.sessionId) return session;
         switch (event.type) {
           case "state":
+            if (
+              event.state === "disconnected" ||
+              event.state === "deviceLost" ||
+              event.state === "error"
+            ) {
+              transferByteQueuesRef.current
+                .get(event.sessionId)
+                ?.close(new Error("会话已断开，文件传输停止。"));
+            }
             return {
               ...session,
               state: event.state,
@@ -480,6 +492,9 @@ export default function App() {
                     : session.notice,
             };
           case "data": {
+            transferByteQueuesRef.current
+              .get(event.sessionId)
+              ?.push(event.bytes);
             const chunk = {
               nonce: performance.now(),
               sequence: event.sequence,
@@ -741,6 +756,7 @@ export default function App() {
         }
 
         if (match.rule.action === "sendText") {
+          if (session.transferActive) continue;
           void writeConfiguredText(
             session.id,
             profile,
@@ -1112,17 +1128,23 @@ export default function App() {
 
   const sendFile = async (
     file: File,
+    protocol: FileTransferProtocol,
     onProgress: (sentBytes: number, totalBytes: number) => void,
     signal: AbortSignal,
   ): Promise<number> => {
     if (
       !activeSession ||
       !activeProfile ||
-      activeSession.state !== "connected"
+      activeSession.state !== "connected" ||
+      activeSession.transferActive
     ) {
       throw new Error("会话未连接。");
     }
     const sessionId = activeSession.id;
+    const profile = activeProfile;
+    const byteQueue =
+      protocol === "xmodemCrc" ? new AsyncByteQueue() : undefined;
+    if (byteQueue) transferByteQueuesRef.current.set(sessionId, byteQueue);
     setSessions((current) =>
       current.map((session) =>
         session.id === sessionId
@@ -1131,30 +1153,37 @@ export default function App() {
       ),
     );
     try {
-      return await sendFileInChunks(
-        file,
-        async (bytes) => {
-          const count = await writeConfiguredBytes(
-            sessionId,
-            activeProfile,
-            bytes,
+      const sendBytes = async (bytes: Uint8Array) => {
+        const count = await writeConfiguredBytes(sessionId, profile, bytes);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  bytesWritten: session.bytesWritten + count,
+                }
+              : session,
+          ),
+        );
+        return count;
+      };
+      return protocol === "xmodemCrc" && byteQueue
+        ? await sendXmodemCrc(
+            file,
+            sendBytes,
+            byteQueue,
+            onProgress,
+            signal,
+          )
+        : await sendFileInChunks(
+            file,
+            sendBytes,
+            onProgress,
+            signal,
           );
-          setSessions((current) =>
-            current.map((session) =>
-              session.id === sessionId
-                ? {
-                    ...session,
-                    bytesWritten: session.bytesWritten + count,
-                  }
-                : session,
-            ),
-          );
-          return count;
-        },
-        onProgress,
-        signal,
-      );
     } finally {
+      transferByteQueuesRef.current.delete(sessionId);
+      byteQueue?.close();
       setSessions((current) =>
         current.map((session) =>
           session.id === sessionId
