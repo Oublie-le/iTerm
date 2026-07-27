@@ -1,7 +1,9 @@
 import {
+  ArrowRight,
   Cable,
   FileClock,
   Info,
+  KeyRound,
   Monitor,
   Network,
   Plus,
@@ -23,6 +25,7 @@ import type {
   SerialPortDescriptor,
   SessionProtocol,
   SessionProfile,
+  SshConfigHost,
   StopBits,
   TriggerRule,
 } from "../lib/types";
@@ -51,6 +54,7 @@ interface SessionDialogProps {
   ports: SerialPortDescriptor[];
   adbDevices: AdbDeviceDescriptor[];
   externalTools: ExternalToolStatus[];
+  sshConfigHosts: SshConfigHost[];
   onCancel: () => void;
   onRefreshPorts: () => void;
   onRefreshAdbDevices: () => void;
@@ -79,6 +83,7 @@ export function SessionDialog({
   ports,
   adbDevices,
   externalTools,
+  sshConfigHosts,
   onCancel,
   onRefreshPorts,
   onRefreshAdbDevices,
@@ -119,6 +124,23 @@ export function SessionDialog({
     setDraft((current) =>
       current ? { ...current, ssh: { ...current.ssh, ...patch } } : current,
     );
+
+  const useSshConfigHost = (host: SshConfigHost, connect: boolean) => {
+    const next: SessionProfile = {
+      ...draft,
+      ssh: {
+        ...draft.ssh,
+        host: host.alias,
+        port: host.port ?? 22,
+        username: host.user ?? "",
+        authMode: "agent",
+        privateKeyPath: "",
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    setDraft(next);
+    if (connect) onSave(next, true);
+  };
 
   const updateAdb = (patch: Partial<SessionProfile["adb"]>) =>
     setDraft((current) =>
@@ -656,10 +678,83 @@ export function SessionDialog({
 
             {page === "ssh" && (
               <>
-                <div className="page-heading">
-                  <h3>SSH</h3>
-                  <p>{t("dialog.ssh.subtitle")}</p>
+                <div className="page-heading heading-with-action">
+                  <div>
+                    <h3>SSH</h3>
+                    <p>{t("dialog.ssh.subtitle")}</p>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={onRefreshExternalTools}
+                  >
+                    <RefreshCw size={14} />
+                    {t("dialog.ssh.refreshConfig")}
+                  </button>
                 </div>
+                <section className="ssh-config-browser">
+                  <div className="ssh-config-browser-heading">
+                    <div>
+                      <strong>{t("dialog.ssh.detectedHosts")}</strong>
+                      <span>
+                        {sshConfigHosts.length
+                          ? t("dialog.ssh.detectedCount", {
+                              count: sshConfigHosts.length,
+                            })
+                          : t("dialog.ssh.noDetectedHosts")}
+                      </span>
+                    </div>
+                    <code>~/.ssh/config</code>
+                  </div>
+                  {sshConfigHosts.length > 0 && (
+                    <div className="ssh-config-hosts">
+                      {sshConfigHosts.map((host) => (
+                        <article className="ssh-config-host" key={host.alias}>
+                          <div className="ssh-config-host-icon">
+                            <Network size={16} />
+                          </div>
+                          <div className="ssh-config-host-summary">
+                            <strong>{host.alias}</strong>
+                            <span>
+                              {host.user ? `${host.user}@` : ""}
+                              {host.hostName || host.alias}:{host.port ?? 22}
+                            </span>
+                            <div className="ssh-config-badges">
+                              {host.identityFiles.length > 0 && (
+                                <span title={host.identityFiles.join("\n")}>
+                                  <KeyRound size={11} />
+                                  {t("dialog.ssh.keyConfigured")}
+                                </span>
+                              )}
+                              {host.proxyJump && (
+                                <span>
+                                  {t("dialog.ssh.via")} {host.proxyJump}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="ssh-config-host-actions">
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => useSshConfigHost(host, false)}
+                            >
+                              {t("dialog.ssh.fill")}
+                            </button>
+                            <button
+                              className="primary-button compact-button"
+                              type="button"
+                              onClick={() => useSshConfigHost(host, true)}
+                            >
+                              {t("dialog.ssh.connectNow")}
+                              <ArrowRight size={13} />
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
                 <div className="form-grid">
                   <label className="field-row">
                     <span>{t("dialog.ssh.host")}</span>

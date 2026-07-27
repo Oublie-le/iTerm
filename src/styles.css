@@ -3008,6 +3008,125 @@ progress {
   accent-color: var(--accent);
 }
 
+.ssh-config-browser {
+  margin: -7px 0 18px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--control-background) 82%, transparent);
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+}
+
+.ssh-config-browser-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.ssh-config-browser-heading > div,
+.ssh-config-host-summary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.ssh-config-browser-heading strong {
+  color: var(--label);
+  font-size: 11px;
+}
+
+.ssh-config-browser-heading span,
+.ssh-config-host-summary > span {
+  overflow: hidden;
+  color: var(--secondary-label);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-config-browser-heading code {
+  flex: 0 0 auto;
+  color: var(--tertiary-label);
+  font-size: 9px;
+}
+
+.ssh-config-hosts {
+  display: grid;
+  max-height: 214px;
+  overflow: auto;
+}
+
+.ssh-config-host {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.ssh-config-host:last-child {
+  border-bottom: 0;
+}
+
+.ssh-config-host:hover {
+  background: var(--control-hover);
+}
+
+.ssh-config-host-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  background: var(--accent-soft);
+  border-radius: 8px;
+  color: var(--accent);
+}
+
+.ssh-config-host-summary strong {
+  color: var(--label);
+  font-size: 11px;
+}
+
+.ssh-config-badges,
+.ssh-config-host-actions,
+.ssh-config-badges > span {
+  display: flex;
+  align-items: center;
+}
+
+.ssh-config-badges {
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.ssh-config-badges > span {
+  gap: 3px;
+  padding: 1px 5px;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 8px;
+}
+
+.ssh-config-host-actions {
+  gap: 5px;
+}
+
+.ssh-config-host-actions button {
+  min-height: 25px;
+  padding: 0 8px;
+  font-size: 9px;
+}
+
+.compact-button {
+  gap: 4px;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .app-menubar,
   .session-sidebar,

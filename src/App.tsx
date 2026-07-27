@@ -59,6 +59,7 @@ import {
   closeProcessSession,
   listAdbDevices,
   listExternalTools,
+  listSshConfigHosts,
   openAdbSession,
   openSshSession,
   resizeProcessSession,
@@ -86,6 +87,7 @@ import {
   type SerialEvent,
   type SerialPortDescriptor,
   type SessionProfile,
+  type SshConfigHost,
   type SyncChannel,
 } from "./lib/types";
 import {
@@ -284,6 +286,7 @@ export default function App() {
   const [ports, setPorts] = useState<SerialPortDescriptor[]>([]);
   const [adbDevices, setAdbDevices] = useState<AdbDeviceDescriptor[]>([]);
   const [externalTools, setExternalTools] = useState<ExternalToolStatus[]>([]);
+  const [sshConfigHosts, setSshConfigHosts] = useState<SshConfigHost[]>([]);
   const [sessions, setSessions] = useState<RuntimeSession[]>(() =>
     initialWorkspace.openProfileIds.flatMap((profileId) => {
       const profile = profiles.find((item) => item.id === profileId);
@@ -550,6 +553,11 @@ export default function App() {
 
   const refreshExternalTools = useCallback(async () => {
     setExternalTools(await listExternalTools());
+    try {
+      setSshConfigHosts(await listSshConfigHosts());
+    } catch {
+      setSshConfigHosts([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -3187,6 +3195,7 @@ export default function App() {
         ports={ports}
         adbDevices={adbDevices}
         externalTools={externalTools}
+        sshConfigHosts={sshConfigHosts}
         onCancel={() => {
           setSessionDialogOpen(false);
           setEditingProfile(null);

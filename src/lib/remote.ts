@@ -7,6 +7,7 @@ import type {
   LogMode,
   SerialEvent,
   SessionProfile,
+  SshConfigHost,
 } from "./types";
 
 const mockTimers = new Map<string, number[]>();
@@ -29,6 +30,31 @@ export async function listExternalTools(): Promise<ExternalToolStatus[]> {
       available: true,
       version: "Android Debug Bridge mock",
       installHint: "请安装 Android SDK Platform Tools。",
+    },
+  ];
+}
+
+export async function listSshConfigHosts(): Promise<SshConfigHost[]> {
+  if (isTauriRuntime()) {
+    return invoke<SshConfigHost[]>("list_ssh_config_hosts");
+  }
+  return [
+    {
+      alias: "apple-lab",
+      hostName: "192.168.1.42",
+      user: "developer",
+      port: 22,
+      identityFiles: ["~/.ssh/id_ed25519"],
+      source: "~/.ssh/config",
+    },
+    {
+      alias: "production",
+      hostName: "prod.example.com",
+      user: "deploy",
+      port: 22,
+      identityFiles: ["~/.ssh/production"],
+      proxyJump: "bastion",
+      source: "~/.ssh/config",
     },
   ];
 }

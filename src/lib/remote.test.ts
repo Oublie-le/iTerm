@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   listAdbDevices,
   listExternalTools,
+  listSshConfigHosts,
   openAdbSession,
   openSshSession,
   resizeProcessSession,
@@ -36,6 +37,17 @@ describe("remote session browser mocks", () => {
         expect.objectContaining({ id: "adb", available: true }),
       ]),
     );
+  });
+
+  it("discovers SSH aliases without exposing private key contents", async () => {
+    const hosts = await listSshConfigHosts();
+
+    expect(hosts[0]).toMatchObject({
+      alias: "apple-lab",
+      user: "developer",
+      identityFiles: ["~/.ssh/id_ed25519"],
+    });
+    expect(hosts[0]).not.toHaveProperty("privateKey");
   });
 
   it("reports SSH connection and terminal output", async () => {

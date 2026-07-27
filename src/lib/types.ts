@@ -83,6 +83,16 @@ export interface ExternalToolStatus {
   installHint: string;
 }
 
+export interface SshConfigHost {
+  alias: string;
+  hostName?: string;
+  user?: string;
+  port?: number;
+  identityFiles: string[];
+  proxyJump?: string;
+  source: string;
+}
+
 export interface TerminalConfig {
   encoding: string;
   termType: string;

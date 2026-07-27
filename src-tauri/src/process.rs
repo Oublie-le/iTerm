@@ -6,7 +6,9 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    env, fs,
     io::{Read, Write},
+    path::{Path, PathBuf},
     process::Command,
     sync::{
         mpsc::{self, Receiver, Sender, TryRecvError},
@@ -91,6 +93,22 @@ pub struct ExternalToolStatus {
     install_hint: String,
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SshConfigHost {
+    alias: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    port: Option<u16>,
+    identity_files: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proxy_jump: Option<String>,
+    source: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteProcessRequest {
@@ -167,6 +185,31 @@ pub fn list_external_tools() -> Vec<ExternalToolStatus> {
             "请安装 Android SDK Platform Tools，并将 adb 所在目录加入系统 PATH。",
         ),
     ]
+}
+
+#[tauri::command]
+pub fn list_ssh_config_hosts() -> Result<Vec<SshConfigHost>, String> {
+    let Some(config_path) = ssh_config_path() else {
+        return Ok(Vec::new());
+    };
+    let source = match fs::read_to_string(&config_path) {
+        Ok(source) => source,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(format!(
+                "无法读取 SSH 配置 {}：{error}",
+                config_path.display()
+            ))
+        }
+    };
+    let mut hosts = parse_ssh_config(&source, &config_path);
+    hosts.sort_by(|left, right| {
+        left.alias
+            .to_ascii_lowercase()
+            .cmp(&right.alias.to_ascii_lowercase())
+    });
+    hosts.dedup_by(|left, right| left.alias.eq_ignore_ascii_case(&right.alias));
+    Ok(hosts)
 }
 
 #[tauri::command]
@@ -318,6 +361,116 @@ fn validate_ssh_request(request: &OpenSshRequest) -> Result<(), String> {
         value => return Err(format!("未知的 SSH 认证方式：{value}")),
     }
     Ok(())
+}
+
+fn ssh_config_path() -> Option<PathBuf> {
+    let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE"))?;
+    Some(PathBuf::from(home).join(".ssh").join("config"))
+}
+
+fn parse_ssh_config(source: &str, source_path: &Path) -> Vec<SshConfigHost> {
+    let mut hosts = Vec::new();
+    let mut current_host_indexes = Vec::new();
+    let source_label = source_path.to_string_lossy().into_owned();
+
+    for raw_line in source.lines() {
+        let line = strip_ssh_comment(raw_line).trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((keyword, raw_value)) = split_ssh_directive(line) else {
+            continue;
+        };
+        let keyword = keyword.to_ascii_lowercase();
+        let value = unquote_ssh_value(raw_value.trim());
+
+        if keyword == "host" {
+            current_host_indexes.clear();
+            for alias in value.split_whitespace().filter(|alias| {
+                !alias.starts_with('-')
+                    && !alias.starts_with('!')
+                    && !alias.contains('*')
+                    && !alias.contains('?')
+                    && !alias.chars().any(char::is_control)
+            }) {
+                hosts.push(SshConfigHost {
+                    alias: alias.to_string(),
+                    host_name: None,
+                    user: None,
+                    port: None,
+                    identity_files: Vec::new(),
+                    proxy_jump: None,
+                    source: source_label.clone(),
+                });
+                current_host_indexes.push(hosts.len() - 1);
+            }
+            continue;
+        }
+        if keyword == "match" {
+            current_host_indexes.clear();
+            continue;
+        }
+
+        for index in &current_host_indexes {
+            let host = &mut hosts[*index];
+            match keyword.as_str() {
+                "hostname" if host.host_name.is_none() => {
+                    host.host_name = non_empty_ssh_value(value);
+                }
+                "user" if host.user.is_none() => {
+                    host.user = non_empty_ssh_value(value);
+                }
+                "port" if host.port.is_none() => {
+                    host.port = value.parse::<u16>().ok().filter(|port| *port > 0);
+                }
+                "identityfile" => {
+                    if !value.is_empty() && !host.identity_files.iter().any(|item| item == value) {
+                        host.identity_files.push(value.to_string());
+                    }
+                }
+                "proxyjump" if host.proxy_jump.is_none() => {
+                    host.proxy_jump = non_empty_ssh_value(value);
+                }
+                _ => {}
+            }
+        }
+    }
+    hosts
+}
+
+fn split_ssh_directive(line: &str) -> Option<(&str, &str)> {
+    line.split_once(char::is_whitespace)
+        .or_else(|| line.split_once('='))
+        .map(|(keyword, value)| (keyword.trim_end_matches('='), value.trim_start_matches('=')))
+}
+
+fn strip_ssh_comment(line: &str) -> &str {
+    let mut quote = None;
+    for (index, character) in line.char_indices() {
+        match character {
+            '"' | '\'' if quote == Some(character) => quote = None,
+            '"' | '\'' if quote.is_none() => quote = Some(character),
+            '#' if quote.is_none() => return &line[..index],
+            _ => {}
+        }
+    }
+    line
+}
+
+fn unquote_ssh_value(value: &str) -> &str {
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        if (bytes[0] == b'"' && bytes[value.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[value.len() - 1] == b'\'')
+        {
+            return &value[1..value.len() - 1];
+        }
+    }
+    value
+}
+
+fn non_empty_ssh_value(value: &str) -> Option<String> {
+    (!value.is_empty()).then(|| value.to_string())
 }
 
 fn validate_argument(label: &str, value: &str) -> Result<(), String> {
@@ -834,6 +987,45 @@ mod tests {
         assert!(ssh_arguments(&value).contains(&"BatchMode=yes".to_string()));
         assert!(ssh_arguments(&value).contains(&"ServerAliveInterval=30".to_string()));
         assert!(ssh_arguments(&value).contains(&"StrictHostKeyChecking=yes".to_string()));
+    }
+
+    #[test]
+    fn parses_named_ssh_hosts_without_reading_key_contents() {
+        let config = r#"
+            Host *
+              ServerAliveInterval 20
+
+            Host production prod
+              HostName 10.0.0.12
+              User deploy
+              Port 2222
+              IdentityFile "~/.ssh/prod key"
+              ProxyJump bastion
+
+            Host *.internal !blocked.internal
+              User ignored
+        "#;
+        let hosts = parse_ssh_config(config, Path::new("/home/test/.ssh/config"));
+
+        assert_eq!(hosts.len(), 2);
+        assert_eq!(hosts[0].alias, "production");
+        assert_eq!(hosts[0].host_name.as_deref(), Some("10.0.0.12"));
+        assert_eq!(hosts[0].user.as_deref(), Some("deploy"));
+        assert_eq!(hosts[0].port, Some(2222));
+        assert_eq!(hosts[0].identity_files, vec!["~/.ssh/prod key"]);
+        assert_eq!(hosts[0].proxy_jump.as_deref(), Some("bastion"));
+        assert_eq!(hosts[1].alias, "prod");
+    }
+
+    #[test]
+    fn supports_equals_syntax_and_ignores_inline_comments() {
+        let config = "Host=lab # board\n  HostName=lab.local\n  User root\n";
+        let hosts = parse_ssh_config(config, Path::new("config"));
+
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].alias, "lab");
+        assert_eq!(hosts[0].host_name.as_deref(), Some("lab.local"));
+        assert_eq!(hosts[0].user.as_deref(), Some("root"));
     }
 
     #[test]
