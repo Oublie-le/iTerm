@@ -9,6 +9,7 @@ import {
   FileText,
   FolderOpen,
   Info,
+  Keyboard,
   Link2,
   Menu,
   MessageSquareText,
@@ -93,6 +94,10 @@ import {
   resolveTheme,
   saveAppPreferences,
 } from "./lib/preferences";
+import {
+  isEditableShortcutTarget,
+  resolveShortcut,
+} from "./lib/shortcuts";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -220,6 +225,7 @@ export default function App() {
   const [senderOpen, setSenderOpen] = useState(initialWorkspace.senderOpen);
   const [focusMode, setFocusMode] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [editingProfile, setEditingProfile] =
     useState<SessionProfile | null>(null);
   const [sidebarFilter, setSidebarFilter] = useState("");
@@ -350,24 +356,6 @@ export default function App() {
     window.addEventListener("beforeunload", confirmWindowClose);
     return () => window.removeEventListener("beforeunload", confirmWindowClose);
   }, [sessions]);
-
-  useEffect(() => {
-    const handleShortcut = (event: KeyboardEvent) => {
-      if (
-        event.key.toLocaleLowerCase() === "f" &&
-        event.ctrlKey &&
-        event.shiftKey
-      ) {
-        event.preventDefault();
-        setFocusMode((current) => !current);
-      }
-      if (event.key === "Escape" && focusMode) {
-        setFocusMode(false);
-      }
-    };
-    window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
-  }, [focusMode]);
 
   const applyEvent = useCallback((event: SerialEvent) => {
     setSessions((current) =>
@@ -731,6 +719,94 @@ export default function App() {
     setProfiles((current) => current.filter((item) => item.id !== profile.id));
   };
 
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      const action = resolveShortcut(
+        event,
+        isEditableShortcutTarget(event.target),
+      );
+      if (!action) return;
+      event.preventDefault();
+
+      if (action === "escape") {
+        if (shortcutHelpOpen) {
+          setShortcutHelpOpen(false);
+        } else if (sessionDialogOpen) {
+          setSessionDialogOpen(false);
+          setEditingProfile(null);
+        } else if (focusMode) {
+          setFocusMode(false);
+        }
+        return;
+      }
+      if (action === "newSession") {
+        openNewDialog();
+        return;
+      }
+      if (action === "closeSession" && activeSession) {
+        void closeTab(activeSession.id);
+        return;
+      }
+      if (
+        (action === "nextSession" || action === "previousSession") &&
+        sessions.length > 1
+      ) {
+        const currentIndex = Math.max(
+          0,
+          sessions.findIndex((session) => session.id === activeSessionId),
+        );
+        const offset = action === "nextSession" ? 1 : -1;
+        const nextIndex =
+          (currentIndex + offset + sessions.length) % sessions.length;
+        setActiveSessionId(sessions[nextIndex].id);
+        return;
+      }
+      if (action === "toggleSidebar") {
+        setSidebarOpen((current) => !current);
+        return;
+      }
+      if (action === "toggleSender") {
+        setSenderOpen((current) => !current);
+        return;
+      }
+      if (action === "toggleFocus") {
+        setFocusMode((current) => !current);
+        return;
+      }
+      if (action === "sessionSettings" && activeProfile) {
+        setEditingProfile(activeProfile);
+        setSessionDialogOpen(true);
+        return;
+      }
+      if (
+        action === "toggleConnection" &&
+        activeSession &&
+        activeProfile
+      ) {
+        if (activeSession.state === "connected") {
+          void disconnectSession(activeSession);
+        } else if (
+          activeSession.state !== "opening" &&
+          activeSession.state !== "closing"
+        ) {
+          void connectProfile(activeProfile, activeSession.id);
+        }
+        return;
+      }
+      if (action === "showHelp") setShortcutHelpOpen(true);
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [
+    activeProfile,
+    activeSession,
+    activeSessionId,
+    focusMode,
+    sessionDialogOpen,
+    sessions,
+    shortcutHelpOpen,
+  ]);
+
   const writeTerminalInput = async (
     runtime: RuntimeSession,
     profile: SessionProfile,
@@ -994,7 +1070,13 @@ export default function App() {
         <div className="menu-items">
           {["会话", "编辑", "搜索", "选择", "转到", "查看", "模式", "工具", "窗口", "帮助"].map(
             (item) => (
-              <button key={item}>{item}</button>
+              <button
+                key={item}
+                onClick={() => item === "帮助" && setShortcutHelpOpen(true)}
+                title={item === "帮助" ? "快捷键帮助（Ctrl/⌘+/）" : item}
+              >
+                {item}
+              </button>
             ),
           )}
         </div>
@@ -1018,7 +1100,7 @@ export default function App() {
           </button>
           <button
             className={focusMode ? "is-active" : ""}
-            title="专注模式（Ctrl+Shift+F）"
+            title="专注模式（Ctrl/⌘+Shift+F）"
             onClick={() => setFocusMode((current) => !current)}
           >
             <Zap size={16} />
@@ -1125,7 +1207,11 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <button className="tab-action" onClick={openNewDialog} title="新建会话">
+            <button
+              className="tab-action"
+              onClick={openNewDialog}
+              title="新建会话（Ctrl/⌘+N）"
+            >
               <CirclePlus size={18} />
             </button>
             <button className="tab-action" title="标签列表">
@@ -1135,14 +1221,18 @@ export default function App() {
 
           <div className="session-toolbar">
             <div className="toolbar-group">
-              <button className="icon-button" onClick={openNewDialog} title="新建会话">
+              <button
+                className="icon-button"
+                onClick={openNewDialog}
+                title="新建会话（Ctrl/⌘+N）"
+              >
                 <CirclePlus size={19} />
               </button>
               {activeSession?.state === "connected" ? (
                 <button
                   className="icon-button"
                   onClick={() => void disconnectSession(activeSession)}
-                  title="断开会话"
+                  title="断开会话（Ctrl/⌘+Enter）"
                 >
                   <Unplug size={18} />
                 </button>
@@ -1153,7 +1243,7 @@ export default function App() {
                   onClick={() =>
                     activeProfile && void connectProfile(activeProfile)
                   }
-                  title="连接会话"
+                  title="连接会话（Ctrl/⌘+Enter）"
                 >
                   <PlugZap size={18} />
                 </button>
@@ -1177,7 +1267,7 @@ export default function App() {
                   setEditingProfile(activeProfile);
                   setSessionDialogOpen(true);
                 }}
-                title="会话设置"
+                title="会话设置（Ctrl/⌘+,）"
               >
                 <Settings size={18} />
               </button>
@@ -1597,6 +1687,52 @@ export default function App() {
         onRefreshExternalTools={() => void refreshExternalTools()}
         onSave={saveProfile}
       />
+      {shortcutHelpOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="shortcut-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shortcut-dialog-title"
+          >
+            <header>
+              <div>
+                <Keyboard size={20} />
+                <div>
+                  <h2 id="shortcut-dialog-title">键盘快捷键</h2>
+                  <p>Ctrl 与 ⌘ 会根据当前平台使用。</p>
+                </div>
+              </div>
+              <button
+                className="icon-button"
+                onClick={() => setShortcutHelpOpen(false)}
+                aria-label="关闭快捷键帮助"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <div className="shortcut-list">
+              {[
+                ["新建会话", "Ctrl/⌘ + N"],
+                ["关闭当前标签", "Ctrl/⌘ + W"],
+                ["下一个 / 上一个标签", "Ctrl/⌘ + Tab / Shift + Tab"],
+                ["连接或断开", "Ctrl/⌘ + Enter"],
+                ["会话设置", "Ctrl/⌘ + ,"],
+                ["切换会话侧栏", "Ctrl/⌘ + B"],
+                ["切换发送窗格", "Ctrl/⌘ + J"],
+                ["切换专注模式", "Ctrl/⌘ + Shift + F"],
+                ["打开快捷键帮助", "Ctrl/⌘ + /"],
+                ["关闭对话框 / 退出专注", "Esc"],
+              ].map(([label, keys]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <kbd>{keys}</kbd>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
       {focusMode && (
         <button
           className="focus-exit-button"
