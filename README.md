@@ -200,6 +200,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 - [软件架构](docs/03-architecture.md)
 - [实施与验收计划](docs/04-implementation-plan.md)
 - [功能与跨平台验收矩阵](docs/06-feature-matrix.md)
+- [数据与隐私说明](docs/07-privacy.md)
 
 ## 自动化
 
@@ -228,7 +229,8 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 iTerm 不连接项目方云服务，不上传会话配置或终端内容，也不包含遥测。只有用户主动连接
 SSH 主机时才访问该主机；ADB 通过本机 `adb` 客户端通信。会话配置保存在本机 SQLite
 数据库中；浏览器 Mock 模式回退到 Web Storage。终端内容仅在用户明确启用日志功能后
-才应写入磁盘。
+才应写入磁盘。完整的数据清单、保留策略和删除方式见
+[数据与隐私说明](docs/07-privacy.md)。
 
 ## 项目声明
 
