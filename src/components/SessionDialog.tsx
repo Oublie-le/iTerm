@@ -30,6 +30,10 @@ import {
   createTriggerRule,
   validateTriggerRule,
 } from "../lib/triggers";
+import {
+  useI18n,
+  type TranslationKey,
+} from "../lib/i18n";
 
 type DialogPage =
   | "session"
@@ -56,17 +60,17 @@ interface SessionDialogProps {
 
 const pages: Array<{
   id: DialogPage;
-  label: string;
+  labelKey: TranslationKey;
   icon: typeof Info;
 }> = [
-  { id: "session", label: "会话", icon: Info },
-  { id: "serial", label: "串口", icon: Cable },
-  { id: "ssh", label: "SSH", icon: Network },
-  { id: "adb", label: "ADB", icon: Smartphone },
-  { id: "terminal", label: "终端", icon: TerminalSquare },
-  { id: "window", label: "窗口", icon: Monitor },
-  { id: "logging", label: "日志", icon: FileClock },
-  { id: "triggers", label: "触发器", icon: Zap },
+  { id: "session", labelKey: "dialog.page.session", icon: Info },
+  { id: "serial", labelKey: "dialog.page.serial", icon: Cable },
+  { id: "ssh", labelKey: "dialog.page.ssh", icon: Network },
+  { id: "adb", labelKey: "dialog.page.adb", icon: Smartphone },
+  { id: "terminal", labelKey: "dialog.page.terminal", icon: TerminalSquare },
+  { id: "window", labelKey: "dialog.page.window", icon: Monitor },
+  { id: "logging", labelKey: "dialog.page.logging", icon: FileClock },
+  { id: "triggers", labelKey: "dialog.page.triggers", icon: Zap },
 ];
 
 export function SessionDialog({
@@ -81,6 +85,7 @@ export function SessionDialog({
   onRefreshExternalTools,
   onSave,
 }: SessionDialogProps) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<SessionProfile | null>(profile);
   const [page, setPage] = useState<DialogPage>("session");
   const [error, setError] = useState("");
@@ -149,12 +154,12 @@ export function SessionDialog({
   const submit = (connect: boolean) => {
     if (!draft.name.trim()) {
       setPage("session");
-      setError("请输入会话名称。");
+      setError(t("dialog.validation.name"));
       return;
     }
     if (connect && draft.protocol === "serial" && !draft.serial.portPath) {
       setPage("serial");
-      setError("请选择串口设备。");
+      setError(t("dialog.validation.serialPort"));
       return;
     }
     if (
@@ -164,17 +169,17 @@ export function SessionDialog({
       draft.serial.baudRate < 1
     ) {
       setPage("serial");
-      setError("波特率必须是大于 0 的整数。");
+      setError(t("dialog.validation.baudRate"));
       return;
     }
     if (connect && draft.protocol === "ssh" && !draft.ssh.host.trim()) {
       setPage("ssh");
-      setError("请输入 SSH 主机地址。");
+      setError(t("dialog.validation.sshHost"));
       return;
     }
     if (connect && draft.protocol === "ssh" && sshTool?.available === false) {
       setPage("ssh");
-      setError(sshTool.installHint);
+      setError(t("dialog.ssh.installHint"));
       return;
     }
     if (
@@ -184,7 +189,7 @@ export function SessionDialog({
         draft.ssh.port > 65_535)
     ) {
       setPage("ssh");
-      setError("SSH 端口必须是 1–65535 的整数。");
+      setError(t("dialog.validation.sshPort"));
       return;
     }
     if (
@@ -194,7 +199,7 @@ export function SessionDialog({
       !draft.ssh.privateKeyPath.trim()
     ) {
       setPage("ssh");
-      setError("使用私钥认证时必须填写私钥路径。");
+      setError(t("dialog.validation.privateKey"));
       return;
     }
     if (
@@ -202,7 +207,7 @@ export function SessionDialog({
       draft.logging.maxFileSizeMiB < 0
     ) {
       setPage("logging");
-      setError("日志大小限制必须是大于等于 0 的整数。");
+      setError(t("dialog.validation.logSize"));
       return;
     }
     if (
@@ -211,17 +216,17 @@ export function SessionDialog({
       draft.logging.rotateCount > 20
     ) {
       setPage("logging");
-      setError("日志保留份数必须是 0–20 的整数。");
+      setError(t("dialog.validation.logRotation"));
       return;
     }
     if (connect && draft.protocol === "adb" && !draft.adb.deviceId.trim()) {
       setPage("adb");
-      setError("请输入或选择 ADB 设备 ID。");
+      setError(t("dialog.validation.adbDevice"));
       return;
     }
     if (connect && draft.protocol === "adb" && adbTool?.available === false) {
       setPage("adb");
-      setError(adbTool.installHint);
+      setError(t("dialog.adb.installHint"));
       return;
     }
     for (const trigger of draft.triggers.filter((item) => item.enabled)) {
@@ -243,18 +248,18 @@ export function SessionDialog({
     { label: string; description: string; icon: typeof Cable }
   > = {
     serial: {
-      label: "串口",
-      description: "创建或编辑一个本地串口连接",
+      label: t("dialog.protocol.serial"),
+      description: t("dialog.protocol.serialDescription"),
       icon: Cable,
     },
     ssh: {
-      label: "SSH",
-      description: "通过本机 OpenSSH 客户端连接远程主机",
+      label: t("dialog.protocol.ssh"),
+      description: t("dialog.protocol.sshDescription"),
       icon: Network,
     },
     adb: {
-      label: "ADB",
-      description: "通过 Android Debug Bridge 打开设备 Shell",
+      label: t("dialog.protocol.adb"),
+      description: t("dialog.protocol.adbDescription"),
       icon: Smartphone,
     },
   };
@@ -285,18 +290,22 @@ export function SessionDialog({
             </span>
             <div>
               <h2 id="session-dialog-title">
-                {protocolDetail.label} 会话设置
+                {t("dialog.title", { protocol: protocolDetail.label })}
               </h2>
               <p>{protocolDetail.description}</p>
             </div>
           </div>
-          <button className="icon-button" onClick={onCancel} title="关闭">
+          <button
+            className="icon-button"
+            onClick={onCancel}
+            title={t("dialog.close")}
+          >
             <X size={18} />
           </button>
         </header>
 
         <div className="dialog-content">
-          <nav className="dialog-nav" aria-label="设置分类">
+          <nav className="dialog-nav" aria-label={t("dialog.categories")}>
             {visiblePages.map((item) => {
               const Icon = item.icon;
               return (
@@ -309,7 +318,7 @@ export function SessionDialog({
                   }}
                 >
                   <Icon size={17} />
-                  {item.label}
+                  {t(item.labelKey)}
                 </button>
               );
             })}
@@ -323,8 +332,10 @@ export function SessionDialog({
                         : draft.serial.parity[0].toUpperCase()
                     }/${draft.serial.stopBits}`
                   : draft.protocol === "ssh"
-                    ? `${draft.ssh.host || "主机"}:${draft.ssh.port}`
-                    : draft.adb.deviceId || "ADB 设备"}
+                    ? `${draft.ssh.host || t("dialog.summary.host")}:${
+                        draft.ssh.port
+                      }`
+                    : draft.adb.deviceId || t("dialog.summary.adbDevice")}
               </span>
             </div>
           </nav>
@@ -333,25 +344,25 @@ export function SessionDialog({
             {page === "session" && (
               <>
                 <div className="page-heading">
-                  <h3>会话</h3>
-                  <p>用于在会话树和标签栏中识别设备。</p>
+                  <h3>{t("dialog.session.title")}</h3>
+                  <p>{t("dialog.session.subtitle")}</p>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
-                    <span>协议</span>
+                    <span>{t("dialog.session.protocol")}</span>
                     <select
                       value={draft.protocol}
                       onChange={(event) => {
                         const protocol = event.target.value as SessionProtocol;
                         const names: Record<SessionProtocol, string> = {
-                          serial: "新串口会话",
-                          ssh: "新 SSH 会话",
-                          adb: "新 ADB 会话",
+                          serial: t("dialog.defaultName.serial"),
+                          ssh: t("dialog.defaultName.ssh"),
+                          adb: t("dialog.defaultName.adb"),
                         };
                         const groups: Record<SessionProtocol, string> = {
-                          serial: "串口会话",
-                          ssh: "SSH 会话",
-                          adb: "ADB 会话",
+                          serial: t("dialog.defaultGroup.serial"),
+                          ssh: t("dialog.defaultGroup.ssh"),
+                          adb: t("dialog.defaultGroup.adb"),
                         };
                         const colors: Record<SessionProtocol, string> = {
                           serial: "#17a34a",
@@ -363,7 +374,9 @@ export function SessionDialog({
                             ? {
                                 ...current,
                                 protocol,
-                                name: /^新.*会话$/.test(current.name)
+                                name: /^(新.*会话|New .+ Session)$/.test(
+                                  current.name,
+                                )
                                   ? names[protocol]
                                   : current.name,
                                 group: groups[protocol],
@@ -374,13 +387,15 @@ export function SessionDialog({
                         setPage(protocol);
                       }}
                     >
-                      <option value="serial">串口</option>
+                      <option value="serial">
+                        {t("dialog.protocol.serial")}
+                      </option>
                       <option value="ssh">SSH</option>
                       <option value="adb">ADB Shell</option>
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>会话名称</span>
+                    <span>{t("dialog.session.name")}</span>
                     <input
                       autoFocus
                       value={draft.name}
@@ -388,24 +403,26 @@ export function SessionDialog({
                     />
                   </label>
                   <label className="field-row">
-                    <span>会话组</span>
+                    <span>{t("dialog.session.group")}</span>
                     <input
                       value={draft.group}
                       onChange={(event) => update({ group: event.target.value })}
                     />
                   </label>
                   <label className="field-row field-row-tall">
-                    <span>描述</span>
+                    <span>{t("dialog.session.description")}</span>
                     <textarea
                       value={draft.description}
                       onChange={(event) =>
                         update({ description: event.target.value })
                       }
-                      placeholder="可选，记录开发板、线缆或用途"
+                      placeholder={t(
+                        "dialog.session.descriptionPlaceholder",
+                      )}
                     />
                   </label>
                   <label className="field-row">
-                    <span>标签颜色</span>
+                    <span>{t("dialog.session.color")}</span>
                     <div className="color-field">
                       <input
                         type="color"
@@ -425,17 +442,17 @@ export function SessionDialog({
               <>
                 <div className="page-heading heading-with-action">
                   <div>
-                    <h3>串口</h3>
-                    <p>设置端口和线路参数。</p>
+                    <h3>{t("dialog.page.serial")}</h3>
+                    <p>{t("dialog.serial.subtitle")}</p>
                   </div>
                   <button className="secondary-button" onClick={onRefreshPorts}>
                     <RefreshCw size={15} />
-                    刷新设备
+                    {t("dialog.refreshDevices")}
                   </button>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
-                    <span>串口</span>
+                    <span>{t("dialog.serial.port")}</span>
                     <select
                       value={draft.serial.portPath}
                       onChange={(event) => {
@@ -450,13 +467,16 @@ export function SessionDialog({
                         });
                         if (
                           port &&
-                          (!draft.name || draft.name === "新串口会话")
+                          (!draft.name ||
+                            /^(新串口会话|New Serial Session)$/.test(
+                              draft.name,
+                            ))
                         ) {
                           update({ name: port.displayName });
                         }
                       }}
                     >
-                      <option value="">选择一个串口设备…</option>
+                      <option value="">{t("dialog.serial.select")}</option>
                       {ports.map((port) => (
                         <option key={port.path} value={port.path}>
                           {port.displayName} — {port.path}
@@ -470,7 +490,8 @@ export function SessionDialog({
                       <div>
                         <strong>{selectedPort.displayName}</strong>
                         <span>
-                          {selectedPort.manufacturer || "本地串口"}
+                          {selectedPort.manufacturer ||
+                            t("dialog.serial.local")}
                           {selectedPort.vid !== undefined &&
                             ` · VID ${selectedPort.vid
                               .toString(16)
@@ -486,7 +507,7 @@ export function SessionDialog({
                     </div>
                   )}
                   <label className="field-row">
-                    <span>波特率</span>
+                    <span>{t("dialog.serial.baudRate")}</span>
                     <input
                       type="number"
                       min={1}
@@ -508,7 +529,7 @@ export function SessionDialog({
                     </datalist>
                   </label>
                   <label className="field-row">
-                    <span>数据位</span>
+                    <span>{t("dialog.serial.dataBits")}</span>
                     <select
                       value={draft.serial.dataBits}
                       onChange={(event) =>
@@ -527,7 +548,7 @@ export function SessionDialog({
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>校验位</span>
+                    <span>{t("dialog.serial.parity")}</span>
                     <select
                       value={draft.serial.parity}
                       onChange={(event) =>
@@ -537,12 +558,16 @@ export function SessionDialog({
                       <option value="none">None</option>
                       <option value="odd">Odd</option>
                       <option value="even">Even</option>
-                      <option value="mark">Mark（平台相关）</option>
-                      <option value="space">Space（平台相关）</option>
+                      <option value="mark">
+                        Mark ({t("dialog.serial.platformDependent")})
+                      </option>
+                      <option value="space">
+                        Space ({t("dialog.serial.platformDependent")})
+                      </option>
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>停止位</span>
+                    <span>{t("dialog.serial.stopBits")}</span>
                     <select
                       value={draft.serial.stopBits}
                       onChange={(event) =>
@@ -552,12 +577,14 @@ export function SessionDialog({
                       }
                     >
                       <option value="1">1</option>
-                      <option value="1.5">1.5（平台相关）</option>
+                      <option value="1.5">
+                        1.5 ({t("dialog.serial.platformDependent")})
+                      </option>
                       <option value="2">2</option>
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>流控制</span>
+                    <span>{t("dialog.serial.flowControl")}</span>
                     <select
                       value={draft.serial.flowControl}
                       onChange={(event) =>
@@ -572,7 +599,7 @@ export function SessionDialog({
                     </select>
                   </label>
                   <div className="field-row">
-                    <span>打开时信号</span>
+                    <span>{t("dialog.serial.openSignals")}</span>
                     <div className="inline-checks">
                       <label>
                         <input
@@ -597,7 +624,7 @@ export function SessionDialog({
                     </div>
                   </div>
                   <div className="field-row">
-                    <span>设备恢复</span>
+                    <span>{t("dialog.serial.recovery")}</span>
                     <label className="toggle-row">
                       <input
                         type="checkbox"
@@ -606,7 +633,7 @@ export function SessionDialog({
                           updateSerial({ autoReconnect: event.target.checked })
                         }
                       />
-                      设备重新出现后自动重连（最多 8 次）
+                      {t("dialog.serial.autoReconnect")}
                     </label>
                   </div>
                 </div>
@@ -617,21 +644,21 @@ export function SessionDialog({
               <>
                 <div className="page-heading">
                   <h3>SSH</h3>
-                  <p>使用本机 OpenSSH、SSH Agent、私钥或交互式密码连接。</p>
+                  <p>{t("dialog.ssh.subtitle")}</p>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
-                    <span>主机</span>
+                    <span>{t("dialog.ssh.host")}</span>
                     <input
                       value={draft.ssh.host}
                       onChange={(event) =>
                         updateSsh({ host: event.target.value })
                       }
-                      placeholder="192.168.1.10 或 example.com"
+                      placeholder={t("dialog.ssh.hostPlaceholder")}
                     />
                   </label>
                   <label className="field-row">
-                    <span>端口</span>
+                    <span>{t("dialog.ssh.port")}</span>
                     <input
                       type="number"
                       min={1}
@@ -643,17 +670,17 @@ export function SessionDialog({
                     />
                   </label>
                   <label className="field-row">
-                    <span>用户名</span>
+                    <span>{t("dialog.ssh.username")}</span>
                     <input
                       value={draft.ssh.username}
                       onChange={(event) =>
                         updateSsh({ username: event.target.value })
                       }
-                      placeholder="留空时由 OpenSSH 决定"
+                      placeholder={t("dialog.ssh.usernamePlaceholder")}
                     />
                   </label>
                   <label className="field-row">
-                    <span>认证方式</span>
+                    <span>{t("dialog.ssh.auth")}</span>
                     <select
                       value={draft.ssh.authMode}
                       onChange={(event) =>
@@ -663,14 +690,20 @@ export function SessionDialog({
                         })
                       }
                     >
-                      <option value="agent">SSH Agent / 默认密钥</option>
-                      <option value="privateKey">指定私钥</option>
-                      <option value="password">密码 / 键盘交互</option>
+                      <option value="agent">
+                        {t("dialog.ssh.auth.agent")}
+                      </option>
+                      <option value="privateKey">
+                        {t("dialog.ssh.auth.privateKey")}
+                      </option>
+                      <option value="password">
+                        {t("dialog.ssh.auth.password")}
+                      </option>
                     </select>
                   </label>
                   {draft.ssh.authMode === "privateKey" && (
                     <label className="field-row">
-                      <span>私钥路径</span>
+                      <span>{t("dialog.ssh.privateKeyPath")}</span>
                       <input
                         value={draft.ssh.privateKeyPath}
                         onChange={(event) =>
@@ -681,7 +714,7 @@ export function SessionDialog({
                     </label>
                   )}
                   <div className="field-row">
-                    <span>主机密钥</span>
+                    <span>{t("dialog.ssh.hostKey")}</span>
                     <label className="toggle-row">
                       <input
                         type="checkbox"
@@ -692,11 +725,11 @@ export function SessionDialog({
                           })
                         }
                       />
-                      严格校验 known_hosts（推荐）
+                      {t("dialog.ssh.strictHostKey")}
                     </label>
                   </div>
                   <label className="field-row">
-                    <span>保活间隔</span>
+                    <span>{t("dialog.ssh.keepAlive")}</span>
                     <input
                       type="number"
                       min={0}
@@ -712,8 +745,7 @@ export function SessionDialog({
                 </div>
                 {draft.ssh.authMode === "password" && (
                   <div className="settings-note">
-                    连接后请直接在终端的 OpenSSH 提示中输入密码。iTerm
-                    不读取、记录或保存密码。
+                    {t("dialog.ssh.passwordNote")}
                   </div>
                 )}
                 <div
@@ -725,13 +757,13 @@ export function SessionDialog({
                   <div>
                     <strong>
                       {sshTool?.available === false
-                        ? "未检测到 OpenSSH 客户端"
-                        : "OpenSSH 客户端已就绪"}
+                        ? t("dialog.ssh.missing")
+                        : t("dialog.ssh.ready")}
                     </strong>
                     <span>
                       {sshTool?.available === false
-                        ? sshTool.installHint
-                        : sshTool?.version || "可通过系统 PATH 执行 ssh"}
+                        ? t("dialog.ssh.installHint")
+                        : sshTool?.version || t("dialog.ssh.pathReady")}
                     </span>
                   </div>
                   <button
@@ -740,7 +772,7 @@ export function SessionDialog({
                     onClick={onRefreshExternalTools}
                   >
                     <RefreshCw size={13} />
-                    重新检测
+                    {t("dialog.detectAgain")}
                   </button>
                 </div>
               </>
@@ -751,26 +783,26 @@ export function SessionDialog({
                 <div className="page-heading heading-with-action">
                   <div>
                     <h3>ADB Shell</h3>
-                    <p>选择 USB、模拟器或网络连接的 Android 设备。</p>
+                    <p>{t("dialog.adb.subtitle")}</p>
                   </div>
                   <button
                     className="secondary-button"
                     onClick={onRefreshAdbDevices}
                   >
                     <RefreshCw size={15} />
-                    刷新设备
+                    {t("dialog.refreshDevices")}
                   </button>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
-                    <span>设备 ID</span>
+                    <span>{t("dialog.adb.deviceId")}</span>
                     <input
                       list="adb-device-ids"
                       value={draft.adb.deviceId}
                       onChange={(event) =>
                         updateAdb({ deviceId: event.target.value })
                       }
-                      placeholder="emulator-5554 或 192.168.1.20:5555"
+                      placeholder={t("dialog.adb.devicePlaceholder")}
                     />
                     <datalist id="adb-device-ids">
                       {adbDevices.map((device) => (
@@ -794,9 +826,9 @@ export function SessionDialog({
                             <span>
                               {device.id} ·{" "}
                               {device.state === "device"
-                                ? "已授权"
+                                ? t("dialog.adb.authorized")
                                 : device.state === "unauthorized"
-                                  ? "等待设备授权"
+                                  ? t("dialog.adb.awaitingAuthorization")
                                   : device.state}
                             </span>
                           </div>
@@ -804,13 +836,13 @@ export function SessionDialog({
                       ) : null;
                     })()}
                   <label className="field-row">
-                    <span>Shell 命令</span>
+                    <span>{t("dialog.adb.shell")}</span>
                     <input
                       value={draft.adb.shell}
                       onChange={(event) =>
                         updateAdb({ shell: event.target.value })
                       }
-                      placeholder="留空使用设备默认 Shell"
+                      placeholder={t("dialog.adb.shellPlaceholder")}
                     />
                   </label>
                   <div
@@ -822,13 +854,13 @@ export function SessionDialog({
                     <div>
                       <strong>
                         {adbTool?.available === false
-                          ? "未检测到 Android Platform Tools"
-                          : "Android Platform Tools 已就绪"}
+                          ? t("dialog.adb.missing")
+                          : t("dialog.adb.ready")}
                       </strong>
                       <span>
                         {adbTool?.available === false
-                          ? adbTool.installHint
-                          : adbTool?.version || "可通过系统 PATH 执行 adb"}
+                          ? t("dialog.adb.installHint")
+                          : adbTool?.version || t("dialog.adb.pathReady")}
                       </span>
                     </div>
                     <button
@@ -837,7 +869,7 @@ export function SessionDialog({
                       onClick={onRefreshExternalTools}
                     >
                       <RefreshCw size={13} />
-                      重新检测
+                      {t("dialog.detectAgain")}
                     </button>
                   </div>
                 </div>
