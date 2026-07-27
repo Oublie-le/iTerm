@@ -300,6 +300,7 @@ export default function App() {
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [tabListOpen, setTabListOpen] = useState(false);
   const [editingProfile, setEditingProfile] =
     useState<SessionProfile | null>(null);
   const [sidebarFilter, setSidebarFilter] = useState("");
@@ -320,6 +321,7 @@ export default function App() {
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
+  const tabListRef = useRef<HTMLDivElement>(null);
   const triggerEvaluatorsRef = useRef(
     new Map<
       string,
@@ -380,6 +382,24 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = resolvedLocale;
   }, [resolvedLocale]);
+
+  useEffect(() => {
+    if (!tabListOpen) return;
+    const dismissOnPointerDown = (event: PointerEvent) => {
+      if (!tabListRef.current?.contains(event.target as Node)) {
+        setTabListOpen(false);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTabListOpen(false);
+    };
+    window.addEventListener("pointerdown", dismissOnPointerDown);
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", dismissOnPointerDown);
+      window.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [tabListOpen]);
 
   useEffect(() => {
     const restoredMessages = new Set([
@@ -2166,9 +2186,51 @@ export default function App() {
             >
               <CirclePlus size={18} />
             </button>
-            <button className="tab-action" title={t("shell.tabs.list")}>
-              <Menu size={17} />
-            </button>
+            <div className="tab-list-control" ref={tabListRef}>
+              <button
+                className={`tab-action ${tabListOpen ? "is-active" : ""}`}
+                title={t("shell.tabs.list")}
+                aria-label={t("shell.tabs.list")}
+                aria-haspopup="menu"
+                aria-expanded={tabListOpen}
+                disabled={sessions.length === 0}
+                onClick={() => setTabListOpen((current) => !current)}
+              >
+                <Menu size={17} />
+              </button>
+              {tabListOpen && (
+                <div className="tab-list-menu" role="menu">
+                  {sessions.map((session, index) => (
+                    <button
+                      key={session.id}
+                      className={
+                        session.id === activeSessionId ? "is-active" : ""
+                      }
+                      role="menuitem"
+                      onClick={() => {
+                        activateSession(session.id);
+                        setTabListOpen(false);
+                      }}
+                    >
+                      <span
+                        className={`tab-state state-${session.state}`}
+                        style={{
+                          background:
+                            profileById.get(session.profileId)?.color ??
+                            "#17a34a",
+                        }}
+                      />
+                      <span>
+                        {index + 1}. {session.title}
+                      </span>
+                      {session.id === activeSessionId && (
+                        <small>{t("shell.tabs.current")}</small>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="session-toolbar">

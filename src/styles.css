@@ -478,6 +478,63 @@ textarea:disabled {
   color: var(--green-dark);
 }
 
+.tab-list-control {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.tab-list-control > .tab-action {
+  height: 100%;
+}
+
+.tab-list-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 2px);
+  right: 2px;
+  width: 230px;
+  padding: 4px;
+  background: #f7f8f8;
+  border: 1px solid #aeb5b5;
+  border-radius: 3px;
+  box-shadow: 0 5px 18px rgba(20, 28, 25, 0.2);
+}
+
+.tab-list-menu button {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  background: transparent;
+  border-radius: 2px;
+  color: #3d4341;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.tab-list-menu button:hover,
+.tab-list-menu button:focus-visible,
+.tab-list-menu button.is-active {
+  background: #dce8df;
+}
+
+.tab-list-menu button > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-list-menu small {
+  color: var(--green-dark);
+  font-size: 9px;
+}
+
 .tabs {
   display: flex;
   min-width: 0;
@@ -1860,6 +1917,21 @@ textarea:disabled {
 .app-shell[data-theme="dark"] .tabs > button.is-active {
   background: #272c2a;
   color: #f1f4f2;
+}
+
+.app-shell[data-theme="dark"] .tab-list-menu {
+  background: #292f2d;
+  border-color: #59615e;
+}
+
+.app-shell[data-theme="dark"] .tab-list-menu button {
+  color: #d5dcd8;
+}
+
+.app-shell[data-theme="dark"] .tab-list-menu button:hover,
+.app-shell[data-theme="dark"] .tab-list-menu button:focus-visible,
+.app-shell[data-theme="dark"] .tab-list-menu button.is-active {
+  background: #414846;
 }
 
 .app-shell[data-theme="dark"] .session-dialog {
