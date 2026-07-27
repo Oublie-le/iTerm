@@ -25,7 +25,7 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 - ANSI/xterm-256color 终端、滚动缓冲和 WebGL 加速；
 - UTF-8、GBK、Big5、Shift_JIS 等 WebView 支持的字符编码；
 - Text/Hex 接收双视图、可配置 Hex 列数/分组和行时间戳；
-- 终端搜索、清屏和实时行列显示；
+- 终端搜索、清屏、DEC 软复位、硬复位和实时行列显示；
 - 文本与 Hex 发送；
 - LF、CR、CRLF 行尾；
 - 多个发送器、循环发送和发送间隔；

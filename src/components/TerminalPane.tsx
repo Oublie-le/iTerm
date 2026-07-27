@@ -1,6 +1,8 @@
 import {
   ChevronDown,
   ChevronUp,
+  Power,
+  RotateCcw,
   Search,
   Trash2,
   X,
@@ -13,6 +15,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { formatHexDump, timestampReceivedText } from "../lib/receive";
 import type { ResolvedTheme } from "../lib/preferences";
+import { resetTerminal } from "../lib/terminal";
 import type {
   ReceiveMode,
   RuntimeSession,
@@ -287,6 +290,23 @@ export function TerminalPane({
     setSearchFound(null);
   };
 
+  const softResetTerminal = () => {
+    if (!terminalRef.current) return;
+    resetTerminal(terminalRef.current, "soft");
+    setSearchFound(null);
+  };
+
+  const hardResetTerminal = () => {
+    if (!terminalRef.current) return;
+    resetTerminal(terminalRef.current, "hard");
+    decoderRef.current = new TextDecoder(profile.terminal.encoding, {
+      fatal: false,
+    });
+    startsNewLineRef.current = true;
+    onClear();
+    setSearchFound(null);
+  };
+
   return (
     <section
       className={`terminal-pane ${visible ? "is-visible" : ""} ${
@@ -368,6 +388,22 @@ export function TerminalPane({
           title="清空接收视图"
         >
           <Trash2 size={15} />
+        </button>
+        <button
+          className="terminal-tool-button"
+          onClick={softResetTerminal}
+          title="软复位终端（保留内容）"
+          aria-label="软复位终端"
+        >
+          <RotateCcw size={15} />
+        </button>
+        <button
+          className="terminal-tool-button"
+          onClick={hardResetTerminal}
+          title="硬复位终端（清空内容和状态）"
+          aria-label="硬复位终端"
+        >
+          <Power size={15} />
         </button>
       </div>
       {session.state === "opening" && (
