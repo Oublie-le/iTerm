@@ -45,13 +45,13 @@
 
 ### M1：技术 Spike
 
-- [ ] 初始化 Tauri/React/Rust 最小应用；
+- [x] 初始化 Tauri/React/Rust 最小应用；
 - [ ] 封装 `SerialDriver`，完成端口枚举与回环；
-- [ ] 每会话 Actor + Tauri binary Channel；
-- [ ] xterm.js 中文 IME、ANSI、搜索和 WebGL；
+- [x] 每会话 Actor + Tauri binary Channel；
+- [x] xterm.js 中文 IME、ANSI、搜索、Unicode 11 和 WebGL；
 - [x] 10 万/50 万/100 万行 xterm.js 无渲染解析、回滚、搜索和 RSS 基线；
 - [ ] 10 万/50 万/100 万行 WebGL/Canvas GUI FPS 和输入延迟测试；
-- [ ] Text/Hex 原始字节双视图；
+- [x] Text/Hex 原始字节双视图；
 - [ ] macOS 睡眠/唤醒、Windows 拔插、Linux 权限错误；
 - [ ] 形成 ADR-0001 选型结论与备选切换触发条件。
 
@@ -77,11 +77,11 @@
 - [x] 会话树、新建/编辑/复制/删除；
 - [x] 多标签和标签状态；
 - [x] 会话工具栏、面包屑、通知条；
-- [ ] xterm.js adapter、Fit/Search/Unicode/WebGL addon；
+- [x] xterm.js adapter、Fit/Search/Unicode/WebGL addon；
 - [x] 键盘、IME、复制、粘贴、清屏；
 - [x] 文本/Hex 单次发送；
 - [x] SQLite schema、事务迁移、会话/偏好/工作区/发送器持久化和浏览器回退；
-- [ ] 中英文框架；
+- [x] 中英文框架；
 - [ ] 首轮截图 Golden。
 
 退出条件：用户可在主界面独立完成“新建 → 连接 → 收发 → 断开 → 再打开”。
@@ -131,7 +131,7 @@
 
 ### M6：跨平台硬化
 
-- [ ] Windows/macOS/Linux 功能矩阵；
+- [x] Windows/macOS/Linux 功能矩阵；
 - [ ] FTDI FT232、Silicon Labs CP210x、WCH CH340/341；
 - [ ] 24 小时稳定性和高吞吐；
 - [ ] 视觉差分收敛；
@@ -288,8 +288,8 @@
 
 ## 9. 推荐的下一步
 
-1. 用户确认 PRD 的六个开放问题；
-2. 采集剩余基线截图并建立 parity matrix；
-3. 初始化 Tauri + React + Rust；
-4. 只实现 M1 Spike，不先堆完整页面；
-5. 用 Spike 数据更新 ADR 和工作量，再进入正式实现。
+1. 冻结参考 WindTerm 版本，采集剩余基线截图并建立 parity matrix；
+2. 完成 FT232、CP210x、CH340/341 三平台硬件矩阵；
+3. 完成 SSH、ADB 与 X/Y/ZModem 外部互操作测试；
+4. 运行 24 小时稳定性、高吞吐和 GUI 性能测试；
+5. 配置签名、公证和自动更新凭据后执行发布验收。

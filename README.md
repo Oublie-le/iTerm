@@ -199,6 +199,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 - [产品需求文档](docs/02-prd.md)
 - [软件架构](docs/03-architecture.md)
 - [实施与验收计划](docs/04-implementation-plan.md)
+- [功能与跨平台验收矩阵](docs/06-feature-matrix.md)
 
 ## 自动化
 
@@ -216,10 +217,11 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 当前 MVP 尚未实现：
 
 - ZModem 当前按可靠链路模式工作，不实现噪声链路错误纠正；
-- 完整中英文界面；
+- FT232、CP210x、CH340/341 三平台硬件矩阵和 24 小时稳定性验证；
+- WindTerm 参考版本冻结、完整视觉 Golden 和差分验收；
 - 自动更新、代码签名和 macOS 公证。
 
-这些功能将按照 [实施计划](docs/04-implementation-plan.md) 分阶段完成。
+详细状态和验证边界见 [功能与跨平台验收矩阵](docs/06-feature-matrix.md)。
 
 ## 数据与隐私
 
