@@ -47,6 +47,7 @@ import {
 } from "../lib/commandHistory";
 import { loadSenderPresets } from "../lib/senders";
 import type { SenderPreset } from "../lib/types";
+import { colorizeSerialText } from "../lib/serialColors";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -326,7 +327,11 @@ export function TerminalPane({
       );
       startsNewLineRef.current = timestamped.startsNewLine;
       const text = profile.terminal.timestamp ? timestamped.text : decoded;
-      if (text) terminal.write(text);
+      const displayText =
+        profile.protocol === "serial" && profile.terminal.semanticColors
+          ? colorizeSerialText(text)
+          : text;
+      if (displayText) terminal.write(displayText);
       lastWrittenNonceRef.current = chunk.nonce;
     }
     terminal.focus();
@@ -354,6 +359,7 @@ export function TerminalPane({
     profile.terminal.backspaceKey,
     profile.terminal.enterKey,
     profile.terminal.scrollback,
+    profile.terminal.semanticColors,
     profile.terminal.timestamp,
     profile.id,
     theme,
@@ -380,7 +386,11 @@ export function TerminalPane({
     );
     startsNewLineRef.current = timestamped.startsNewLine;
     const text = profile.terminal.timestamp ? timestamped.text : decoded;
-    if (text) terminalRef.current.write(text);
+    const displayText =
+      profile.protocol === "serial" && profile.terminal.semanticColors
+        ? colorizeSerialText(text)
+        : text;
+    if (displayText) terminalRef.current.write(displayText);
     lastWrittenNonceRef.current = session.lastChunk.nonce;
   }, [session.lastChunk]);
 

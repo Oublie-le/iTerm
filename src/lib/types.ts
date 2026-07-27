@@ -94,6 +94,7 @@ export interface TerminalConfig {
   lineHeight: number;
   cursorStyle: "block" | "bar" | "underline";
   timestamp: boolean;
+  semanticColors: boolean;
   hexColumns: HexColumns;
   hexGroupSize: HexGroupSize;
 }
@@ -261,6 +262,7 @@ export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   lineHeight: 1.12,
   cursorStyle: "block",
   timestamp: false,
+  semanticColors: true,
   hexColumns: 16,
   hexGroupSize: 1,
 };
@@ -373,6 +375,10 @@ export function normalizeSessionProfile(
         backspaceKey === "del" || backspaceKey === "bs"
           ? backspaceKey
           : DEFAULT_TERMINAL_CONFIG.backspaceKey,
+      semanticColors:
+        typeof profile.terminal?.semanticColors === "boolean"
+          ? profile.terminal.semanticColors
+          : DEFAULT_TERMINAL_CONFIG.semanticColors,
     },
     logging: { ...DEFAULT_LOGGING_CONFIG, ...profile.logging },
     triggers: Array.isArray(profile.triggers)

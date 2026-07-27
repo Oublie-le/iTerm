@@ -414,6 +414,9 @@ const zhCN = {
   "dialog.window.scrollback": "回滚行数",
   "dialog.window.timestamp": "行时间戳",
   "dialog.window.timestampDetail": "在终端左侧显示接收时间",
+  "dialog.window.semanticColors": "智能彩色",
+  "dialog.window.semanticColorsDetail":
+    "保留设备 ANSI 颜色，并为常见日志级别自动着色",
   "dialog.window.hexColumns": "Hex 每行字节",
   "dialog.window.hexGroup": "Hex 字节分组",
   "dialog.window.bytes": "{value} 字节",
@@ -904,6 +907,9 @@ const enUS: Record<TranslationKey, string> = {
   "dialog.window.timestamp": "Line timestamps",
   "dialog.window.timestampDetail":
     "Show receive time on the left side of the terminal",
+  "dialog.window.semanticColors": "Semantic colors",
+  "dialog.window.semanticColorsDetail":
+    "Preserve device ANSI colors and colorize common log levels",
   "dialog.window.hexColumns": "Hex bytes per line",
   "dialog.window.hexGroup": "Hex byte grouping",
   "dialog.window.bytes": "{value} bytes",

@@ -71,12 +71,14 @@ describe("normalizeSessionProfile", () => {
         ...source.terminal,
         enterKey: undefined,
         backspaceKey: undefined,
+        semanticColors: undefined,
       },
     } as unknown as typeof source;
 
     expect(normalizeSessionProfile(legacy).terminal).toMatchObject({
       enterKey: "cr",
       backspaceKey: "del",
+      semanticColors: true,
     });
   });
 });

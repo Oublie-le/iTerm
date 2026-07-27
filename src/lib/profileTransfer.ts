@@ -45,6 +45,7 @@ const terminalSchema = z.object({
   lineHeight: z.number().min(0.5).max(4),
   cursorStyle: z.enum(["block", "bar", "underline"]),
   timestamp: z.boolean(),
+  semanticColors: z.boolean().default(true),
   hexColumns: z.union([
     z.literal(8),
     z.literal(16),

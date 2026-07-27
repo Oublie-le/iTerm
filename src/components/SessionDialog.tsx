@@ -1040,6 +1040,23 @@ export function SessionDialog({
                       {t("dialog.window.timestampDetail")}
                     </label>
                   </div>
+                  {draft.protocol === "serial" && (
+                    <div className="field-row">
+                      <span>{t("dialog.window.semanticColors")}</span>
+                      <label className="toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={draft.terminal.semanticColors}
+                          onChange={(event) =>
+                            updateTerminal({
+                              semanticColors: event.target.checked,
+                            })
+                          }
+                        />
+                        {t("dialog.window.semanticColorsDetail")}
+                      </label>
+                    </div>
+                  )}
                   <label className="field-row">
                     <span>{t("dialog.window.hexColumns")}</span>
                     <select
