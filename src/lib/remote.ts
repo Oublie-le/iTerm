@@ -182,6 +182,33 @@ export async function writeProcessBytes(
   return bytes.length;
 }
 
+// Keyboard repeat can dispatch several Tauri IPC calls before the previous
+// write finishes. Serializing writes per PTY preserves the exact key order and
+// prevents remote line editors from repainting interleaved input on one row.
+const processWriteQueues = new Map<string, Promise<void>>();
+
+async function enqueueProcessWrite(
+  sessionId: string,
+  bytes: Uint8Array,
+): Promise<number> {
+  const previous = processWriteQueues.get(sessionId) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  processWriteQueues.set(sessionId, current);
+
+  await previous.catch(() => undefined);
+  try {
+    return await writeProcessBytes(sessionId, bytes);
+  } finally {
+    release();
+    if (processWriteQueues.get(sessionId) === current) {
+      processWriteQueues.delete(sessionId);
+    }
+  }
+}
+
 export async function resizeProcessSession(
   sessionId: string,
   cols: number,
@@ -197,7 +224,7 @@ export async function writeProcessText(
   text: string,
   lineEnding: LineEnding = "none",
 ): Promise<number> {
-  return writeProcessBytes(
+  return enqueueProcessWrite(
     sessionId,
     new TextEncoder().encode(appendLineEnding(text, lineEnding)),
   );
