@@ -163,6 +163,23 @@ export function SessionDialog({
       setError("使用私钥认证时必须填写私钥路径。");
       return;
     }
+    if (
+      !Number.isInteger(draft.logging.maxFileSizeMiB) ||
+      draft.logging.maxFileSizeMiB < 0
+    ) {
+      setPage("logging");
+      setError("日志大小限制必须是大于等于 0 的整数。");
+      return;
+    }
+    if (
+      !Number.isInteger(draft.logging.rotateCount) ||
+      draft.logging.rotateCount < 0 ||
+      draft.logging.rotateCount > 20
+    ) {
+      setPage("logging");
+      setError("日志保留份数必须是 0–20 的整数。");
+      return;
+    }
     if (connect && draft.protocol === "adb" && !draft.adb.deviceId.trim()) {
       setPage("adb");
       setError("请输入或选择 ADB 设备 ID。");
@@ -928,10 +945,42 @@ export function SessionDialog({
                       会话连接成功后自动开始
                     </label>
                   </div>
+                  <label className="field-row">
+                    <span>单文件上限</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={102_400}
+                      value={draft.logging.maxFileSizeMiB}
+                      onChange={(event) =>
+                        updateLogging({
+                          maxFileSizeMiB: Number(event.target.value),
+                        })
+                      }
+                    />
+                    <small>MiB，0 表示不限制</small>
+                  </label>
+                  <label className="field-row">
+                    <span>轮转保留</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={draft.logging.rotateCount}
+                      disabled={draft.logging.maxFileSizeMiB === 0}
+                      onChange={(event) =>
+                        updateLogging({
+                          rotateCount: Number(event.target.value),
+                        })
+                      }
+                    />
+                    <small>最多保留 20 份旧日志</small>
+                  </label>
                   <div className="settings-note">
                     <FileClock size={17} />
                     日志按“会话名_日期_时间.log”命名。原始模式逐字节保存，
-                    文本模式按当前会话字符集增量解码。
+                    文本模式按当前会话字符集增量解码；达到上限后自动轮转为
+                    .1、.2 等备份。
                   </div>
                 </div>
               </>

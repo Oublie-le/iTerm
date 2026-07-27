@@ -66,7 +66,15 @@ describe("remote session browser mocks", () => {
 
   it("supports the remote logging lifecycle", async () => {
     await expect(
-      startProcessLog("ssh-1", "SSH/生产机", "text", "utf-8", false),
+      startProcessLog(
+        "ssh-1",
+        "SSH/生产机",
+        "text",
+        "utf-8",
+        false,
+        10,
+        3,
+      ),
     ).resolves.toBe("/mock/logs/SSH_生产机.log");
     await expect(setProcessLogPaused("ssh-1", true)).resolves.toBeUndefined();
     await expect(stopProcessLog("ssh-1")).resolves.toBeUndefined();

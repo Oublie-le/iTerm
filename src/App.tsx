@@ -435,6 +435,8 @@ export default function App() {
           profile.logging.mode,
           profile.terminal.encoding,
           profile.logging.append,
+          profile.logging.maxFileSizeMiB,
+          profile.logging.rotateCount,
         );
         setSessions((current) =>
           current.map((session) =>

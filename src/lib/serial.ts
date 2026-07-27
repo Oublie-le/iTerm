@@ -283,10 +283,20 @@ export async function startSerialLog(
   mode: LogMode,
   encoding: string,
   append: boolean,
+  maxFileSizeMiB: number,
+  rotateCount: number,
 ): Promise<string> {
   if (isTauriRuntime()) {
     return invoke<string>("start_serial_log", {
-      request: { sessionId, sessionName, mode, encoding, append },
+      request: {
+        sessionId,
+        sessionName,
+        mode,
+        encoding,
+        append,
+        maxFileSizeMiB,
+        rotateCount,
+      },
     });
   }
   return `/mock/logs/${sessionName.replaceAll("/", "_")}.log`;

@@ -36,6 +36,8 @@ describe("normalizeSessionProfile", () => {
       mode: "raw",
       append: false,
       autoStart: false,
+      maxFileSizeMiB: 0,
+      rotateCount: 3,
     });
   });
 

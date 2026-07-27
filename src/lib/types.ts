@@ -89,6 +89,8 @@ export interface LoggingConfig {
   mode: LogMode;
   append: boolean;
   autoStart: boolean;
+  maxFileSizeMiB: number;
+  rotateCount: number;
 }
 
 export interface SessionProfile {
@@ -238,6 +240,8 @@ export const DEFAULT_LOGGING_CONFIG: LoggingConfig = {
   mode: "raw",
   append: false,
   autoStart: false,
+  maxFileSizeMiB: 0,
+  rotateCount: 3,
 };
 
 export function createSessionProfile(
