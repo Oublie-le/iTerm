@@ -136,6 +136,7 @@ pnpm dev
 
 ```bash
 pnpm test
+pnpm test:e2e
 pnpm bench:terminal:smoke
 pnpm build
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -148,7 +149,9 @@ pnpm tauri:build
 pnpm bench:terminal
 ```
 
-测试方法和基线结果见 [终端性能基线](docs/05-terminal-performance.md)。
+`pnpm test:e2e` 会自动启动本地开发服务器，并在 Chromium 中验证语言切换、
+会话设置、模拟串口连接和主要工作区菜单。终端性能测试方法和基线结果见
+[终端性能基线](docs/05-terminal-performance.md)。
 
 生成的安装包位于：
 

@@ -16,6 +16,7 @@
     "bench:terminal:smoke": "node scripts/benchmark-terminal.mjs --lines 10000 --assert",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "version:check": "node scripts/check-version.mjs",
     "tauri": "tauri",
@@ -39,6 +40,7 @@
     "zustand": "5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.0",
     "@tauri-apps/cli": "2.11.4",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.0",

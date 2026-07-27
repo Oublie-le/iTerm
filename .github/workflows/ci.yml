@@ -60,6 +60,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium for browser tests
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Check version consistency
         run: pnpm version:check
 
@@ -71,6 +74,9 @@ jobs:
 
       - name: Test frontend
         run: pnpm test
+
+      - name: Test workspace in browser
+        run: pnpm test:e2e
 
       - name: Smoke test terminal performance
         run: pnpm bench:terminal:smoke

@@ -381,6 +381,7 @@ export function TerminalPane({
       {receiveMode === "hex" && (
         <div
           className="terminal-hex-view"
+          role="region"
           aria-label={t("terminal.hexView")}
         >
           {hexDump.omittedBytes > 0 && (
