@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { appendLineEnding, isTauriRuntime } from "./serial";
 import type {
   AdbDeviceDescriptor,
+  ExternalToolStatus,
   LineEnding,
   LogMode,
   SerialEvent,
@@ -9,6 +10,28 @@ import type {
 } from "./types";
 
 const mockTimers = new Map<string, number[]>();
+
+export async function listExternalTools(): Promise<ExternalToolStatus[]> {
+  if (isTauriRuntime()) {
+    return invoke<ExternalToolStatus[]>("list_external_tools");
+  }
+  return [
+    {
+      id: "ssh",
+      label: "OpenSSH 客户端",
+      available: true,
+      version: "OpenSSH mock",
+      installHint: "请安装系统 OpenSSH Client。",
+    },
+    {
+      id: "adb",
+      label: "Android Platform Tools",
+      available: true,
+      version: "Android Debug Bridge mock",
+      installHint: "请安装 Android SDK Platform Tools。",
+    },
+  ];
+}
 
 export async function listAdbDevices(): Promise<AdbDeviceDescriptor[]> {
   if (isTauriRuntime()) {

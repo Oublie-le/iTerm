@@ -14,6 +14,7 @@ pub fn run() {
             logging::open_log_directory,
             logging::open_log_file,
             process::open_ssh_session,
+            process::list_external_tools,
             process::list_adb_devices,
             process::open_adb_session,
             process::close_process_session,

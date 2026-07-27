@@ -52,6 +52,7 @@ import {
 import {
   closeProcessSession,
   listAdbDevices,
+  listExternalTools,
   openAdbSession,
   openSshSession,
   resizeProcessSession,
@@ -74,6 +75,7 @@ import {
   sessionTargetLabel,
   type RuntimeSession,
   type AdbDeviceDescriptor,
+  type ExternalToolStatus,
   type SenderPreset,
   type SerialEvent,
   type SerialPortDescriptor,
@@ -176,6 +178,7 @@ export default function App() {
   const [profiles, setProfiles] = useState<SessionProfile[]>(loadProfiles);
   const [ports, setPorts] = useState<SerialPortDescriptor[]>([]);
   const [adbDevices, setAdbDevices] = useState<AdbDeviceDescriptor[]>([]);
+  const [externalTools, setExternalTools] = useState<ExternalToolStatus[]>([]);
   const [sessions, setSessions] = useState<RuntimeSession[]>(() =>
     initialWorkspace.openProfileIds.flatMap((profileId) => {
       const profile = profiles.find((item) => item.id === profileId);
@@ -259,6 +262,10 @@ export default function App() {
     }
   }, []);
 
+  const refreshExternalTools = useCallback(async () => {
+    setExternalTools(await listExternalTools());
+  }, []);
+
   useEffect(() => {
     void refreshPorts();
     const timer = window.setInterval(() => void refreshPorts(true), 1_000);
@@ -273,6 +280,10 @@ export default function App() {
     );
     return () => window.clearInterval(timer);
   }, [refreshAdbDevices]);
+
+  useEffect(() => {
+    void refreshExternalTools();
+  }, [refreshExternalTools]);
 
   useEffect(() => {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
@@ -1525,12 +1536,14 @@ export default function App() {
         profile={editingProfile}
         ports={ports}
         adbDevices={adbDevices}
+        externalTools={externalTools}
         onCancel={() => {
           setSessionDialogOpen(false);
           setEditingProfile(null);
         }}
         onRefreshPorts={() => void refreshPorts()}
         onRefreshAdbDevices={() => void refreshAdbDevices()}
+        onRefreshExternalTools={() => void refreshExternalTools()}
         onSave={saveProfile}
       />
       {focusMode && (

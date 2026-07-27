@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   listAdbDevices,
+  listExternalTools,
   openAdbSession,
   openSshSession,
   resizeProcessSession,
@@ -24,6 +25,17 @@ describe("remote session browser mocks", () => {
       "unauthorized",
     ]);
     expect(devices[0].id).toBe("emulator-5554");
+  });
+
+  it("reports external tool availability", async () => {
+    const tools = await listExternalTools();
+
+    expect(tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "ssh", available: true }),
+        expect.objectContaining({ id: "adb", available: true }),
+      ]),
+    );
   });
 
   it("reports SSH connection and terminal output", async () => {

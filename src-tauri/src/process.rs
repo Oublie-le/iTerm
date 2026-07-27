@@ -80,6 +80,17 @@ pub struct AdbDeviceDescriptor {
     transport_id: Option<String>,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalToolStatus {
+    id: String,
+    label: String,
+    available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<String>,
+    install_hint: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteProcessRequest {
@@ -138,6 +149,24 @@ pub fn list_adb_devices() -> Result<Vec<AdbDeviceDescriptor>, String> {
         ));
     }
     Ok(parse_adb_devices(&String::from_utf8_lossy(&output.stdout)))
+}
+
+#[tauri::command]
+pub fn list_external_tools() -> Vec<ExternalToolStatus> {
+    vec![
+        inspect_external_tool(
+            "ssh",
+            "OpenSSH 客户端",
+            &["-V"],
+            "macOS/Linux 请安装系统 OpenSSH Client；Windows 请在“可选功能”中启用 OpenSSH 客户端。",
+        ),
+        inspect_external_tool(
+            "adb",
+            "Android Platform Tools",
+            &["version"],
+            "请安装 Android SDK Platform Tools，并将 adb 所在目录加入系统 PATH。",
+        ),
+    ]
 }
 
 #[tauri::command]
@@ -414,6 +443,39 @@ fn parse_adb_devices(output: &str) -> Vec<AdbDeviceDescriptor> {
             Some(descriptor)
         })
         .collect()
+}
+
+fn inspect_external_tool(
+    executable: &str,
+    label: &str,
+    arguments: &[&str],
+    install_hint: &str,
+) -> ExternalToolStatus {
+    match Command::new(executable).args(arguments).output() {
+        Ok(output) => ExternalToolStatus {
+            id: executable.into(),
+            label: label.into(),
+            available: true,
+            version: first_output_line(&output.stdout)
+                .or_else(|| first_output_line(&output.stderr)),
+            install_hint: install_hint.into(),
+        },
+        Err(_) => ExternalToolStatus {
+            id: executable.into(),
+            label: label.into(),
+            available: false,
+            version: None,
+            install_hint: install_hint.into(),
+        },
+    }
+}
+
+fn first_output_line(output: &[u8]) -> Option<String> {
+    String::from_utf8_lossy(output)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| line.chars().take(240).collect())
 }
 
 fn ensure_session_available(
@@ -831,6 +893,22 @@ mod tests {
         assert_eq!(devices[0].model.as_deref(), Some("Pixel 8"));
         assert_eq!(devices[1].state, "unauthorized");
         assert_eq!(devices[2].state, "offline");
+    }
+
+    #[test]
+    fn extracts_and_limits_external_tool_version_lines() {
+        assert_eq!(
+            first_output_line(b"\nOpenSSH_9.9 test\nsecond line").as_deref(),
+            Some("OpenSSH_9.9 test")
+        );
+        assert_eq!(first_output_line(b" \n\t"), None);
+        assert_eq!(
+            first_output_line(&vec![b'a'; 300])
+                .expect("version line")
+                .chars()
+                .count(),
+            240
+        );
     }
 
     #[test]

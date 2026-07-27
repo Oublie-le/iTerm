@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type {
   AdbDeviceDescriptor,
+  ExternalToolStatus,
   FlowControl,
   Parity,
   SerialPortDescriptor,
@@ -36,9 +37,11 @@ interface SessionDialogProps {
   profile: SessionProfile | null;
   ports: SerialPortDescriptor[];
   adbDevices: AdbDeviceDescriptor[];
+  externalTools: ExternalToolStatus[];
   onCancel: () => void;
   onRefreshPorts: () => void;
   onRefreshAdbDevices: () => void;
+  onRefreshExternalTools: () => void;
   onSave: (profile: SessionProfile, connect: boolean) => void;
 }
 
@@ -61,9 +64,11 @@ export function SessionDialog({
   profile,
   ports,
   adbDevices,
+  externalTools,
   onCancel,
   onRefreshPorts,
   onRefreshAdbDevices,
+  onRefreshExternalTools,
   onSave,
 }: SessionDialogProps) {
   const [draft, setDraft] = useState<SessionProfile | null>(profile);
@@ -80,6 +85,8 @@ export function SessionDialog({
     () => ports.find((port) => port.path === draft?.serial.portPath),
     [draft?.serial.portPath, ports],
   );
+  const sshTool = externalTools.find((tool) => tool.id === "ssh");
+  const adbTool = externalTools.find((tool) => tool.id === "adb");
 
   if (!open || !draft) return null;
 
@@ -143,6 +150,11 @@ export function SessionDialog({
       setError("请输入 SSH 主机地址。");
       return;
     }
+    if (connect && draft.protocol === "ssh" && sshTool?.available === false) {
+      setPage("ssh");
+      setError(sshTool.installHint);
+      return;
+    }
     if (
       draft.protocol === "ssh" &&
       (!Number.isInteger(draft.ssh.port) ||
@@ -183,6 +195,11 @@ export function SessionDialog({
     if (connect && draft.protocol === "adb" && !draft.adb.deviceId.trim()) {
       setPage("adb");
       setError("请输入或选择 ADB 设备 ID。");
+      return;
+    }
+    if (connect && draft.protocol === "adb" && adbTool?.available === false) {
+      setPage("adb");
+      setError(adbTool.installHint);
       return;
     }
     onSave(
@@ -668,6 +685,33 @@ export function SessionDialog({
                     不读取、记录或保存密码。
                   </div>
                 )}
+                <div
+                  className={`settings-note tool-status ${
+                    sshTool?.available === false ? "is-missing" : ""
+                  }`}
+                >
+                  <Network size={17} />
+                  <div>
+                    <strong>
+                      {sshTool?.available === false
+                        ? "未检测到 OpenSSH 客户端"
+                        : "OpenSSH 客户端已就绪"}
+                    </strong>
+                    <span>
+                      {sshTool?.available === false
+                        ? sshTool.installHint
+                        : sshTool?.version || "可通过系统 PATH 执行 ssh"}
+                    </span>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={onRefreshExternalTools}
+                  >
+                    <RefreshCw size={13} />
+                    重新检测
+                  </button>
+                </div>
               </>
             )}
 
@@ -738,9 +782,32 @@ export function SessionDialog({
                       placeholder="留空使用设备默认 Shell"
                     />
                   </label>
-                  <div className="settings-note">
+                  <div
+                    className={`settings-note tool-status ${
+                      adbTool?.available === false ? "is-missing" : ""
+                    }`}
+                  >
                     <Smartphone size={17} />
-                    需要系统已安装 Android Platform Tools，并且 adb 命令可执行。
+                    <div>
+                      <strong>
+                        {adbTool?.available === false
+                          ? "未检测到 Android Platform Tools"
+                          : "Android Platform Tools 已就绪"}
+                      </strong>
+                      <span>
+                        {adbTool?.available === false
+                          ? adbTool.installHint
+                          : adbTool?.version || "可通过系统 PATH 执行 adb"}
+                      </span>
+                    </div>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={onRefreshExternalTools}
+                    >
+                      <RefreshCw size={13} />
+                      重新检测
+                    </button>
                   </div>
                 </div>
               </>

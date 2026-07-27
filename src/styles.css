@@ -1431,6 +1431,37 @@ textarea:disabled {
   line-height: 1.55;
 }
 
+.tool-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.tool-status.is-missing {
+  border-left-color: #c65b4b;
+}
+
+.tool-status > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.tool-status strong {
+  color: #4c5552;
+  font-size: 11px;
+}
+
+.tool-status span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-status .secondary-button {
+  flex: 0 0 auto;
+}
+
 .coming-soon-card {
   display: flex;
   align-items: flex-start;

@@ -95,7 +95,7 @@
 - [x] SSH 密码/键盘交互认证（仅终端内输入，不持久化凭据）；
 - [x] SSH/ADB PTY 尺寸同步；
 - [x] SSH/ADB 会话日志；
-- [ ] OpenSSH 与 Platform Tools 安装引导。
+- [x] OpenSSH 与 Platform Tools 可用性检测和安装引导。
 
 退出条件：已安装外部工具时，可从保存的会话完成 SSH 或 ADB Shell 连接、交互和断开。
 

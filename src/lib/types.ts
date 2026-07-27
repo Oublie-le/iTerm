@@ -72,6 +72,14 @@ export interface AdbDeviceDescriptor {
   transportId?: string;
 }
 
+export interface ExternalToolStatus {
+  id: "ssh" | "adb";
+  label: string;
+  available: boolean;
+  version?: string;
+  installHint: string;
+}
+
 export interface TerminalConfig {
   encoding: string;
   termType: string;
