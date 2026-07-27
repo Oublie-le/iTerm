@@ -6,8 +6,12 @@ use std::{
     io::{BufWriter, Write},
     path::PathBuf,
     process::Command,
+    time::{Duration, Instant},
 };
 use tauri::{AppHandle, Manager};
+
+const LOG_FLUSH_INTERVAL: Duration = Duration::from_millis(250);
+const LOG_FLUSH_THRESHOLD_BYTES: u64 = 64 * 1024;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +25,8 @@ pub struct StartLogRequest {
     pub max_file_size_mib: u64,
     #[serde(default = "default_rotate_count")]
     pub rotate_count: u32,
+    #[serde(default)]
+    pub path: Option<String>,
 }
 
 pub struct LogStartSpec {
@@ -48,6 +54,8 @@ pub struct SessionLogger {
     bytes_written: u64,
     max_bytes: Option<u64>,
     rotate_count: usize,
+    pending_flush_bytes: u64,
+    last_flush_at: Instant,
 }
 
 pub fn build_log_spec(app: &AppHandle, request: &StartLogRequest) -> Result<LogStartSpec, String> {
@@ -74,8 +82,27 @@ pub fn build_log_spec(app: &AppHandle, request: &StartLogRequest) -> Result<LogS
                 .ok_or_else(|| "日志文件大小限制过大。".to_string())?,
         )
     };
+    let path = match request
+        .path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+    {
+        Some(path) => {
+            let path = PathBuf::from(path);
+            if !path.is_absolute() {
+                return Err("日志保存路径必须是绝对路径。".into());
+            }
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|error| format!("无法创建日志目录 {}：{error}", parent.display()))?;
+            }
+            path
+        }
+        None => directory.join(default_log_file_name(&request.session_name)),
+    };
     Ok(LogStartSpec {
-        path: directory.join(default_log_file_name(&request.session_name)),
+        path,
         mode,
         encoding,
         append: request.append,
@@ -85,28 +112,45 @@ pub fn build_log_spec(app: &AppHandle, request: &StartLogRequest) -> Result<LogS
 }
 
 #[tauri::command]
-pub fn open_log_directory(app: AppHandle) -> Result<(), String> {
-    let directory = app
-        .path()
-        .app_log_dir()
-        .map_err(|error| format!("无法确定日志目录：{error}"))?;
-    fs::create_dir_all(&directory).map_err(|error| format!("无法创建日志目录：{error}"))?;
+pub fn open_log_directory(path: Option<String>, app: AppHandle) -> Result<(), String> {
+    let directory = match path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+    {
+        Some(path) => {
+            let path = PathBuf::from(path);
+            let directory = if path.is_dir() {
+                path
+            } else {
+                path.parent()
+                    .ok_or_else(|| "无法确定日志文件所在目录。".to_string())?
+                    .to_path_buf()
+            };
+            directory
+                .canonicalize()
+                .map_err(|error| format!("无法读取日志目录：{error}"))?
+        }
+        None => {
+            let directory = app
+                .path()
+                .app_log_dir()
+                .map_err(|error| format!("无法确定日志目录：{error}"))?;
+            fs::create_dir_all(&directory).map_err(|error| format!("无法创建日志目录：{error}"))?;
+            directory
+        }
+    };
     open_with_system(&directory)
 }
 
 #[tauri::command]
-pub fn open_log_file(path: String, app: AppHandle) -> Result<(), String> {
-    let directory = app
-        .path()
-        .app_log_dir()
-        .map_err(|error| format!("无法确定日志目录：{error}"))?;
-    let directory = directory
-        .canonicalize()
-        .map_err(|error| format!("无法读取日志目录：{error}"))?;
+pub fn open_log_file(path: String) -> Result<(), String> {
     let path = PathBuf::from(path)
         .canonicalize()
         .map_err(|error| format!("无法读取日志文件：{error}"))?;
-    ensure_path_in_directory(&path, &directory)?;
+    if !path.is_file() {
+        return Err("所选日志路径不是文件。".into());
+    }
     open_with_system(&path)
 }
 
@@ -137,6 +181,8 @@ impl SessionLogger {
             bytes_written,
             max_bytes: spec.max_bytes,
             rotate_count: spec.rotate_count,
+            pending_flush_bytes: 0,
+            last_flush_at: Instant::now(),
         })
     }
 
@@ -181,10 +227,19 @@ impl SessionLogger {
         writer
             .write_all(&payload)
             .map_err(|error| format!("写入日志失败：{error}"))?;
-        writer
-            .flush()
-            .map_err(|error| format!("刷新日志文件失败：{error}"))?;
         self.bytes_written = self.bytes_written.saturating_add(payload.len() as u64);
+        self.pending_flush_bytes = self
+            .pending_flush_bytes
+            .saturating_add(payload.len() as u64);
+        if self.pending_flush_bytes >= LOG_FLUSH_THRESHOLD_BYTES
+            || self.last_flush_at.elapsed() >= LOG_FLUSH_INTERVAL
+        {
+            writer
+                .flush()
+                .map_err(|error| format!("刷新日志文件失败：{error}"))?;
+            self.pending_flush_bytes = 0;
+            self.last_flush_at = Instant::now();
+        }
         Ok(())
     }
 
@@ -229,6 +284,8 @@ impl SessionLogger {
             .map_err(|error| format!("轮转后重新打开日志 {} 失败：{error}", self.path.display()))?;
         self.writer = Some(BufWriter::new(file));
         self.bytes_written = 0;
+        self.pending_flush_bytes = 0;
+        self.last_flush_at = Instant::now();
         Ok(())
     }
 }
@@ -281,14 +338,6 @@ fn rotated_path(path: &PathBuf, index: usize) -> PathBuf {
 
 const fn default_rotate_count() -> u32 {
     3
-}
-
-fn ensure_path_in_directory(path: &PathBuf, directory: &PathBuf) -> Result<(), String> {
-    if path.starts_with(directory) {
-        Ok(())
-    } else {
-        Err("只能打开 iTerm 日志目录中的文件。".into())
-    }
 }
 
 fn open_with_system(path: &PathBuf) -> Result<(), String> {
@@ -444,13 +493,6 @@ mod tests {
         fs::remove_file(&path).unwrap();
         fs::remove_file(rotated_path(&path, 1)).unwrap();
         fs::remove_file(rotated_path(&path, 2)).unwrap();
-    }
-
-    #[test]
-    fn restricts_opening_files_to_the_log_directory() {
-        let directory = std::env::temp_dir().join("iterm-log-root");
-        assert!(ensure_path_in_directory(&directory.join("session.log"), &directory).is_ok());
-        assert!(ensure_path_in_directory(&std::env::temp_dir(), &directory).is_err());
     }
 
     fn temporary_log_path(label: &str) -> PathBuf {

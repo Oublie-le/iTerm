@@ -71,7 +71,11 @@ import {
 } from "./lib/remote";
 import { appendReceiveChunk } from "./lib/receive";
 import { sendFileInChunks } from "./lib/fileTransfer";
-import { openLogDirectory, openLogFile } from "./lib/logging";
+import {
+  openLogDirectory,
+  openLogFile,
+  selectLogOutputFile,
+} from "./lib/logging";
 import {
   createRuntimeSession,
   duplicateSessionProfile,
@@ -173,6 +177,9 @@ import {
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
 const MAX_RECONNECT_ATTEMPTS = 8;
+const RECEIVE_BATCH_INTERVAL_MS = 32;
+
+type DataSerialEvent = Extract<SerialEvent, { type: "data" }>;
 
 type TopMenuId =
   | "session"
@@ -366,6 +373,9 @@ export default function App() {
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
+  const pendingDataEventsRef = useRef<DataSerialEvent[]>([]);
+  const receiveFlushTimerRef = useRef<number | null>(null);
+  const receiveNonceRef = useRef(0);
   const adbRefreshInFlightRef = useRef(false);
   const tabListRef = useRef<HTMLDivElement>(null);
   const topMenuBarRef = useRef<HTMLDivElement>(null);
@@ -708,7 +718,109 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", confirmWindowClose);
   }, [preferences.confirmActiveSessionClose, sessions]);
 
+  const flushPendingDataEvents = useCallback(() => {
+    if (receiveFlushTimerRef.current !== null) {
+      window.clearTimeout(receiveFlushTimerRef.current);
+      receiveFlushTimerRef.current = null;
+    }
+    const pending = pendingDataEventsRef.current;
+    if (pending.length === 0) return;
+    pendingDataEventsRef.current = [];
+
+    const eventsBySession = new Map<string, DataSerialEvent[]>();
+    for (const event of pending) {
+      const events = eventsBySession.get(event.sessionId);
+      if (events) events.push(event);
+      else eventsBySession.set(event.sessionId, [event]);
+    }
+
+    setSessions((current) =>
+      current.map((session) => {
+        const events = eventsBySession.get(session.id);
+        if (!events) return session;
+
+        let sequence = session.sequence;
+        let bytesRead = session.bytesRead;
+        let receivedAtMs = events[events.length - 1].receivedAtMs;
+        const visibleParts: number[][] = [];
+
+        for (const event of events) {
+          sequence = event.sequence;
+          bytesRead += event.bytes.length;
+          receivedAtMs = event.receivedAtMs;
+
+          const zmodemBridge = zmodemBridgesRef.current.get(event.sessionId);
+          if (zmodemBridge) {
+            const terminalBytes = zmodemBridge.consume(event.bytes);
+            if (terminalBytes.length > 0) {
+              visibleParts.push(Array.from(terminalBytes));
+            }
+            continue;
+          }
+
+          const transferQueue = transferByteQueuesRef.current.get(
+            event.sessionId,
+          );
+          if (transferQueue) {
+            transferQueue.push(event.bytes);
+            continue;
+          }
+          visibleParts.push(event.bytes);
+        }
+
+        if (visibleParts.length === 0) {
+          return { ...session, sequence, bytesRead };
+        }
+
+        const byteLength = visibleParts.reduce(
+          (total, bytes) => total + bytes.length,
+          0,
+        );
+        const merged = new Uint8Array(byteLength);
+        let offset = 0;
+        for (const bytes of visibleParts) {
+          merged.set(bytes, offset);
+          offset += bytes.length;
+        }
+        const chunk = {
+          nonce: ++receiveNonceRef.current,
+          sequence,
+          receivedAtMs,
+          bytes: Array.from(merged),
+        };
+        return {
+          ...session,
+          sequence,
+          receiveChunks: appendReceiveChunk(session.receiveChunks, chunk),
+          lastChunk: chunk,
+          bytesRead,
+        };
+      }),
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (receiveFlushTimerRef.current !== null) {
+        window.clearTimeout(receiveFlushTimerRef.current);
+      }
+      pendingDataEventsRef.current = [];
+    },
+    [],
+  );
+
   const applyEvent = useCallback((event: SerialEvent) => {
+    if (event.type === "data") {
+      pendingDataEventsRef.current.push(event);
+      if (receiveFlushTimerRef.current === null) {
+        receiveFlushTimerRef.current = window.setTimeout(
+          flushPendingDataEvents,
+          RECEIVE_BATCH_INTERVAL_MS,
+        );
+      }
+      return;
+    }
+    flushPendingDataEvents();
     const displayMessage = "message" in event && event.message
       ? localizedErrorMessage(event.message, resolvedLocale)
       : undefined;
@@ -783,59 +895,6 @@ export default function App() {
                       }
                     : session.notice,
             };
-          case "data": {
-            const zmodemBridge = zmodemBridgesRef.current.get(event.sessionId);
-            if (zmodemBridge) {
-              const terminalBytes = zmodemBridge.consume(event.bytes);
-              if (terminalBytes.length === 0) {
-                return {
-                  ...session,
-                  sequence: event.sequence,
-                  bytesRead: session.bytesRead + event.bytes.length,
-                };
-              }
-              const chunk = {
-                nonce: performance.now(),
-                sequence: event.sequence,
-                receivedAtMs: event.receivedAtMs,
-                bytes: Array.from(terminalBytes),
-              };
-              return {
-                ...session,
-                sequence: event.sequence,
-                receiveChunks: appendReceiveChunk(
-                  session.receiveChunks,
-                  chunk,
-                ),
-                lastChunk: chunk,
-                bytesRead: session.bytesRead + event.bytes.length,
-              };
-            }
-            const transferQueue = transferByteQueuesRef.current.get(
-              event.sessionId,
-            );
-            transferQueue?.push(event.bytes);
-            if (transferQueue) {
-              return {
-                ...session,
-                sequence: event.sequence,
-                bytesRead: session.bytesRead + event.bytes.length,
-              };
-            }
-            const chunk = {
-              nonce: performance.now(),
-              sequence: event.sequence,
-              receivedAtMs: event.receivedAtMs,
-              bytes: event.bytes,
-            };
-            return {
-              ...session,
-              sequence: event.sequence,
-              receiveChunks: appendReceiveChunk(session.receiveChunks, chunk),
-              lastChunk: chunk,
-              bytesRead: session.bytesRead + event.bytes.length,
-            };
-          }
           case "writeComplete":
             return {
               ...session,
@@ -890,11 +949,30 @@ export default function App() {
         }
       }),
     );
-  }, [captureDiagnostic, resolvedLocale, t]);
+  }, [
+    captureDiagnostic,
+    flushPendingDataEvents,
+    resolvedLocale,
+    t,
+  ]);
 
   const startLogging = useCallback(
-    async (sessionId: string, profile: SessionProfile) => {
+    async (
+      sessionId: string,
+      profile: SessionProfile,
+      choosePath = false,
+    ) => {
       try {
+        let selectedPath: string | undefined;
+        if (choosePath) {
+          const pickedPath = await selectLogOutputFile(
+            profile.name,
+            profile.logging.mode,
+            t("shell.log.saveAs"),
+            );
+          if (!pickedPath) return;
+          selectedPath = pickedPath;
+        }
         const startLog =
           profile.protocol === "serial" ? startSerialLog : startProcessLog;
         const path = await startLog(
@@ -905,6 +983,7 @@ export default function App() {
           profile.logging.append,
           profile.logging.maxFileSizeMiB,
           profile.logging.rotateCount,
+          selectedPath,
         );
         setSessions((current) =>
           current.map((session) =>
@@ -2084,6 +2163,21 @@ export default function App() {
     }
   };
 
+  const openLogFolder = async (path?: string) => {
+    setUtilityError("");
+    try {
+      await openLogDirectory(path);
+    } catch (error) {
+      setUtilityError(
+        localizedErrorMessage(
+          error,
+          resolvedLocale,
+          t("runtime.logLocationFallback"),
+        ),
+      );
+    }
+  };
+
   const openLogs = async (path?: string) => {
     setUtilityError("");
     try {
@@ -2469,7 +2563,7 @@ export default function App() {
             ) {
               void toggleLogPaused();
             } else {
-              void startLogging(activeSession.id, activeProfile);
+              void startLogging(activeSession.id, activeProfile, true);
             }
           },
         },
@@ -2489,7 +2583,8 @@ export default function App() {
         },
         {
           label: t("menu.tools.openLogDirectory"),
-          onSelect: () => void openLogs(),
+          onSelect: () =>
+            void openLogFolder(activeSession?.logPath),
         },
         {
           label: t("menu.tools.clearBuffers"),
@@ -2972,7 +3067,7 @@ export default function App() {
                   onClick={() =>
                     activeSession &&
                     activeProfile &&
-                    void startLogging(activeSession.id, activeProfile)
+                    void startLogging(activeSession.id, activeProfile, true)
                   }
                   title={t("shell.log.start")}
                 >
@@ -2993,7 +3088,7 @@ export default function App() {
               </button>
               <button
                 className="icon-button"
-                onClick={() => void openLogs()}
+                onClick={() => void openLogFolder(activeSession?.logPath)}
                 title={t("shell.log.openDirectory")}
               >
                 <FolderOpen size={16} />

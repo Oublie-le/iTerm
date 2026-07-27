@@ -237,6 +237,7 @@ export async function startProcessLog(
   append: boolean,
   maxFileSizeMiB: number,
   rotateCount: number,
+  path?: string,
 ): Promise<string> {
   if (isTauriRuntime()) {
     return invoke<string>("start_process_log", {
@@ -248,6 +249,7 @@ export async function startProcessLog(
         append,
         maxFileSizeMiB,
         rotateCount,
+        path,
       },
     });
   }

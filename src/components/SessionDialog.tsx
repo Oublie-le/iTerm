@@ -1248,7 +1248,7 @@ export function SessionDialog({
                     <input
                       type="number"
                       min={0}
-                      max={2_000_000}
+                      max={200_000}
                       value={draft.terminal.scrollback}
                       onChange={(event) =>
                         updateTerminal({

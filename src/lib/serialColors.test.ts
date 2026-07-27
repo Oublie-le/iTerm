@@ -7,9 +7,11 @@ describe("serial semantic colors", () => {
       "INFO boot started\r\nWARN voltage low\r\nERROR sensor failed\r\n",
     );
 
-    expect(value).toContain("\u001b[36mINFO boot started");
-    expect(value).toContain("\u001b[1;33mWARN voltage low");
-    expect(value).toContain("\u001b[1;31mERROR sensor failed");
+    expect(value).toContain("\u001b[36mINFO\u001b[0m");
+    expect(value).toContain("\u001b[1;33mWARN\u001b[0m voltage low");
+    expect(value).toContain("\u001b[1;31mERROR\u001b[0m sensor");
+    expect(value).toContain("\u001b[1;31mfailed\u001b[0m");
+    expect(value).not.toContain("\u001b[1;31mERROR sensor failed");
   });
 
   it("preserves device-provided ANSI styling exactly", () => {
@@ -22,7 +24,28 @@ describe("serial semantic colors", () => {
     const value = colorizeSerialText(`${deviceLine}ERROR sensor failed\r\n`);
 
     expect(value).toBe(
-      `${deviceLine}\u001b[1;31mERROR sensor failed\r\n\u001b[0m`,
+      `${deviceLine}\u001b[1;31mERROR\u001b[0m sensor \u001b[1;31mfailed\u001b[0m\r\n`,
+    );
+  });
+
+  it("styles serial shell prompts and entered commands separately", () => {
+    expect(colorizeSerialText("console:/ # ls\r\n")).toBe(
+      "\u001b[1;32mconsole:/ #\u001b[0m \u001b[1;36mls\u001b[0m\r\n",
+    );
+    expect(colorizeSerialText("console:/ # ")).toBe(
+      "\u001b[1;32mconsole:/ #\u001b[0m ",
+    );
+  });
+
+  it("styles tabular shell listings so serial output is visibly colored", () => {
+    expect(colorizeSerialText("apex      data      system\r\n")).toBe(
+      "\u001b[1;34mapex\u001b[0m      \u001b[1;34mdata\u001b[0m      \u001b[1;34msystem\u001b[0m\r\n",
+    );
+  });
+
+  it("highlights paths in otherwise plain device output", () => {
+    expect(colorizeSerialText("mount=/data/local/tmp rw\r\n")).toContain(
+      "mount=\u001b[36m/data/local/tmp\u001b[0m rw",
     );
   });
 

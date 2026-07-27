@@ -27,7 +27,9 @@ import type { ResolvedTheme } from "../lib/preferences";
 import {
   installUnicode11,
   clampTerminalFontSize,
+  classifyTerminalCompletionResponse,
   DEFAULT_TERMINAL_FONT_SIZE,
+  isTerminalCompletionTab,
   MAX_TERMINAL_FONT_SIZE,
   mapTerminalSpecialKey,
   MIN_TERMINAL_FONT_SIZE,
@@ -60,6 +62,8 @@ import { loadSenderPresets } from "../lib/senders";
 import type { SenderPreset } from "../lib/types";
 import { colorizeSerialText } from "../lib/serialColors";
 import { resolveTerminalTheme } from "../lib/terminalTheme";
+
+const COMPLETION_RESPONSE_WINDOW_MS = 500;
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -104,6 +108,8 @@ export function TerminalPane({
   const decoderRef = useRef<TextDecoder | null>(null);
   const lastWrittenNonceRef = useRef<number | null>(null);
   const startsNewLineRef = useRef(true);
+  const completionPendingRef = useRef(false);
+  const completionTimerRef = useRef<number | null>(null);
   const typedCommandRef = useRef("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -133,18 +139,21 @@ export function TerminalPane({
   );
   const hexDump = useMemo(
     () =>
-      formatHexDump(
-        session.receiveChunks,
-        session.bytesRead - session.receiveBaseOffset,
-        profile.terminal.hexColumns,
-        undefined,
-        profile.terminal.timestamp,
-        profile.terminal.hexGroupSize,
-      ),
+      receiveMode === "hex"
+        ? formatHexDump(
+            session.receiveChunks,
+            session.bytesRead - session.receiveBaseOffset,
+            profile.terminal.hexColumns,
+            undefined,
+            profile.terminal.timestamp,
+            profile.terminal.hexGroupSize,
+          )
+        : { text: "", omittedBytes: 0 },
     [
       profile.terminal.hexColumns,
       profile.terminal.hexGroupSize,
       profile.terminal.timestamp,
+      receiveMode,
       session.receiveBaseOffset,
       session.bytesRead,
       session.receiveChunks,
@@ -167,6 +176,14 @@ export function TerminalPane({
   resizeRef.current = onResize;
   fontSizeRef.current = profile.terminal.fontSize;
   fontSizeChangeRef.current = onFontSizeChange;
+
+  const clearPendingCompletion = () => {
+    completionPendingRef.current = false;
+    if (completionTimerRef.current !== null) {
+      window.clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+    }
+  };
 
   const changeTerminalFontSize = (requestedSize: number) => {
     const fontSize = clampTerminalFontSize(requestedSize);
@@ -290,6 +307,20 @@ export function TerminalPane({
         window.setTimeout(() => searchInputRef.current?.focus(), 0);
         return false;
       }
+      if (
+        profile.protocol === "serial" &&
+        isTerminalCompletionTab(event)
+      ) {
+        event.preventDefault();
+        clearPendingCompletion();
+        completionPendingRef.current = true;
+        completionTimerRef.current = window.setTimeout(
+          clearPendingCompletion,
+          COMPLETION_RESPONSE_WINDOW_MS,
+        );
+        trackedInputRef.current("\t");
+        return false;
+      }
       const mappedInput = mapTerminalSpecialKey(event, profile.terminal);
       if (mappedInput !== null) {
         trackedInputRef.current(mappedInput);
@@ -297,9 +328,12 @@ export function TerminalPane({
       }
       return true;
     });
-    const inputDisposable = terminal.onData((value) =>
-      trackedInputRef.current(value),
-    );
+    const inputDisposable = terminal.onData((value) => {
+      if (completionPendingRef.current && value !== "\t") {
+        clearPendingCompletion();
+      }
+      trackedInputRef.current(value);
+    });
     const dimensionsDisposable = terminal.onResize(({ cols, rows }) =>
       resizeRef.current(cols, rows),
     );
@@ -320,6 +354,7 @@ export function TerminalPane({
     decoderRef.current = new TextDecoder(profile.terminal.encoding, {
       fatal: false,
     });
+    const replayParts: string[] = [];
     for (const chunk of session.receiveChunks) {
       const decoded = decoderRef.current.decode(new Uint8Array(chunk.bytes), {
         stream: true,
@@ -335,9 +370,10 @@ export function TerminalPane({
         profile.protocol === "serial" && profile.terminal.semanticColors
           ? colorizeSerialText(text)
           : text;
-      if (displayText) terminal.write(displayText);
+      if (displayText) replayParts.push(displayText);
       lastWrittenNonceRef.current = chunk.nonce;
     }
+    if (replayParts.length > 0) terminal.write(replayParts.join(""));
     terminal.focus();
 
     return () => {
@@ -351,6 +387,7 @@ export function TerminalPane({
       decoderRef.current = null;
       lastWrittenNonceRef.current = null;
       startsNewLineRef.current = true;
+      clearPendingCompletion();
     };
     // Receive history is intentionally replayed only when the terminal itself
     // is recreated by one of the terminal configuration dependencies below.
@@ -392,11 +429,21 @@ export function TerminalPane({
     );
     startsNewLineRef.current = timestamped.startsNewLine;
     const text = profile.terminal.timestamp ? timestamped.text : decoded;
+    let completionPrefix = "";
+    if (completionPendingRef.current) {
+      const response = classifyTerminalCompletionResponse(decoded);
+      if (response !== "wait") {
+        clearPendingCompletion();
+        if (response === "newline") completionPrefix = "\r\n";
+      }
+    }
     const displayText =
       profile.protocol === "serial" && profile.terminal.semanticColors
         ? colorizeSerialText(text)
         : text;
-    if (displayText) terminalRef.current.write(displayText);
+    if (displayText) {
+      terminalRef.current.write(`${completionPrefix}${displayText}`);
+    }
     lastWrittenNonceRef.current = session.lastChunk.nonce;
   }, [session.lastChunk]);
 
@@ -516,9 +563,15 @@ export function TerminalPane({
 
   return (
     <section
-      className={`terminal-pane ${visible ? "is-visible" : ""} ${
-        active ? "is-active" : ""
-      }`}
+      className={[
+        "terminal-pane",
+        visible ? "is-visible" : "",
+        active ? "is-active" : "",
+        commandOpen ? "has-command-composer" : "",
+        commandOpen && commandSuggestions.length > 0
+          ? "has-command-suggestions"
+          : "",
+      ].filter(Boolean).join(" ")}
       aria-label={t("terminal.label", { name: profile.name })}
       onMouseDown={onActivate}
       onContextMenu={(event) => {

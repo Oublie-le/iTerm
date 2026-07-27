@@ -74,7 +74,7 @@ export function AppSettingsDialog({
     if (
       !Number.isInteger(draft.sessionDefaults.terminal.scrollback) ||
       draft.sessionDefaults.terminal.scrollback < 0 ||
-      draft.sessionDefaults.terminal.scrollback > 2_000_000
+      draft.sessionDefaults.terminal.scrollback > 200_000
     ) {
       setError(t("settings.error.scrollback"));
       return;
@@ -269,7 +269,7 @@ export function AppSettingsDialog({
                 <input
                   type="number"
                   min={0}
-                  max={2_000_000}
+                  max={200_000}
                   value={draft.sessionDefaults.terminal.scrollback}
                   onChange={(event) =>
                     updateTerminal({ scrollback: Number(event.target.value) })

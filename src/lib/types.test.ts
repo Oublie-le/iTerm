@@ -85,8 +85,8 @@ describe("normalizeSessionProfile", () => {
       backspaceKey: "del",
       paletteMode: "theme",
       customPalette: expect.objectContaining({
-        background: "#0d0f12",
-        brightBlue: "#409cff",
+        background: "#0b1220",
+        brightBlue: "#93c5fd",
       }),
       semanticColors: true,
     });

@@ -142,6 +142,7 @@ const zhCN = {
   "shell.log.stop": "停止日志",
   "shell.log.start": "开始会话日志",
   "shell.log.openFile": "打开当前日志文件",
+  "shell.log.saveAs": "选择日志保存位置",
   "shell.log.openDirectory": "打开日志目录",
   "shell.receive.toggle": "切换文本与 Hex 接收视图",
   "shell.signal.dtr": "切换 DTR",
@@ -477,10 +478,10 @@ const zhCN = {
   "dialog.window.note":
     "终端行列会随窗口尺寸自动调整，当前值显示在底部状态栏。",
   "dialog.logging.title": "日志",
-  "dialog.logging.subtitle": "将当前会话的接收数据保存到本机应用日志目录。",
+  "dialog.logging.subtitle": "手动开始时可选择保存路径；自动日志仍保存到应用日志目录。",
   "dialog.logging.mode": "日志模式",
   "dialog.logging.mode.raw": "原始字节（无损）",
-  "dialog.logging.mode.text": "可读文本（带行时间戳）",
+  "dialog.logging.mode.text": "可读文本（每行带毫秒时间戳）",
   "dialog.logging.writeMode": "写入方式",
   "dialog.logging.append": "文件已存在时追加内容",
   "dialog.logging.auto": "自动记录",
@@ -490,7 +491,7 @@ const zhCN = {
   "dialog.logging.rotation": "轮转保留",
   "dialog.logging.rotationHint": "最多保留 20 份旧日志",
   "dialog.logging.note":
-    "日志按“会话名_日期_时间.log”命名。原始模式逐字节保存，文本模式按当前会话字符集增量解码；达到上限后自动轮转为 .1、.2 等备份。",
+    "默认文件名包含本地日期时间；文本模式每行写入毫秒级时间戳，原始模式逐字节保存且不插入内容。达到上限后自动轮转为 .1、.2 等备份。",
   "dialog.triggers.title": "触发器",
   "dialog.triggers.subtitle":
     "接收内容匹配后自动执行动作，并通过冷却和次数限制防止循环。",
@@ -674,6 +675,7 @@ const enUS: Record<TranslationKey, string> = {
   "shell.log.stop": "Stop log",
   "shell.log.start": "Start session log",
   "shell.log.openFile": "Open current log file",
+  "shell.log.saveAs": "Choose log save location",
   "shell.log.openDirectory": "Open log directory",
   "shell.receive.toggle": "Toggle text and Hex receive view",
   "shell.signal.dtr": "Toggle DTR",
@@ -1026,10 +1028,10 @@ const enUS: Record<TranslationKey, string> = {
     "Terminal rows and columns follow the window size; current values appear in the status bar.",
   "dialog.logging.title": "Logging",
   "dialog.logging.subtitle":
-    "Save received data from this session in the local application log directory.",
+    "Choose a destination when starting manually; automatic logs stay in the application log directory.",
   "dialog.logging.mode": "Log mode",
   "dialog.logging.mode.raw": "Raw bytes (lossless)",
-  "dialog.logging.mode.text": "Readable text (with line timestamps)",
+  "dialog.logging.mode.text": "Readable text (millisecond timestamp on every line)",
   "dialog.logging.writeMode": "Write mode",
   "dialog.logging.append": "Append when the file already exists",
   "dialog.logging.auto": "Automatic logging",
@@ -1039,7 +1041,7 @@ const enUS: Record<TranslationKey, string> = {
   "dialog.logging.rotation": "Rotated logs",
   "dialog.logging.rotationHint": "Retain up to 20 old logs",
   "dialog.logging.note":
-    "Logs use the name “session_date_time.log”. Raw mode preserves every byte; text mode incrementally decodes with the session encoding. Files rotate to .1, .2, and so on when the size limit is reached.",
+    "Default filenames include local date and time. Text mode adds millisecond timestamps per line; raw mode preserves exact bytes without inserting content. Files rotate to .1, .2, and so on at the size limit.",
   "dialog.triggers.title": "Triggers",
   "dialog.triggers.subtitle":
     "Run actions when received content matches, with cooldown and count limits to prevent loops.",

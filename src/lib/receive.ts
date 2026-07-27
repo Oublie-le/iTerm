@@ -10,24 +10,25 @@ export function appendReceiveChunk(
 ): ReceiveChunk[] {
   if (maxBytes <= 0 || chunk.bytes.length === 0) return chunks;
 
-  const next = [...chunks, chunk];
-  let byteCount = next.reduce((total, item) => total + item.bytes.length, 0);
-
-  while (next.length > 1 && byteCount > maxBytes) {
-    byteCount -= next.shift()?.bytes.length ?? 0;
-  }
-
-  if (byteCount > maxBytes) {
-    const only = next[0];
+  if (chunk.bytes.length > maxBytes) {
     return [
       {
-        ...only,
-        bytes: only.bytes.slice(only.bytes.length - maxBytes),
+        ...chunk,
+        bytes: chunk.bytes.slice(chunk.bytes.length - maxBytes),
       },
     ];
   }
 
-  return next;
+  let start = chunks.length;
+  let byteCount = chunk.bytes.length;
+  while (
+    start > 0 &&
+    byteCount + chunks[start - 1].bytes.length <= maxBytes
+  ) {
+    start -= 1;
+    byteCount += chunks[start].bytes.length;
+  }
+  return [...chunks.slice(start), chunk];
 }
 
 export function formatHexDump(

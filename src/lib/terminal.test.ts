@@ -4,7 +4,9 @@ import { Terminal } from "@xterm/xterm";
 import {
   DEC_SOFT_RESET_SEQUENCE,
   clampTerminalFontSize,
+  classifyTerminalCompletionResponse,
   installUnicode11,
+  isTerminalCompletionTab,
   mapTerminalSpecialKey,
   resetTerminal,
   TERMINAL_CONVERT_EOL,
@@ -92,6 +94,34 @@ describe("terminal special key mapping", () => {
         backspaceKey: "bs",
       }),
     ).toBe("\b");
+  });
+
+  it("recognizes only an unmodified Tab keydown as shell completion", () => {
+    expect(isTerminalCompletionTab(keyEvent("Tab"))).toBe(true);
+    expect(
+      isTerminalCompletionTab({ ...keyEvent("Tab"), type: "keyup" }),
+    ).toBe(false);
+    expect(
+      isTerminalCompletionTab({ ...keyEvent("Tab"), ctrlKey: true }),
+    ).toBe(false);
+    expect(
+      isTerminalCompletionTab({ ...keyEvent("Tab"), isComposing: true }),
+    ).toBe(false);
+    expect(isTerminalCompletionTab(keyEvent("Enter"))).toBe(false);
+  });
+
+  it("moves valid completion text to a new line", () => {
+    expect(classifyTerminalCompletionResponse("onsole")).toBe("newline");
+    expect(
+      classifyTerminalCompletionResponse("\u001b[36monsole\u001b[0m"),
+    ).toBe("newline");
+  });
+
+  it("does not move rejected or already multiline completions", () => {
+    expect(classifyTerminalCompletionResponse("\u0007")).toBe("none");
+    expect(classifyTerminalCompletionResponse("\r\ncommand")).toBe("none");
+    expect(classifyTerminalCompletionResponse("\u001b[31m")).toBe("wait");
+    expect(classifyTerminalCompletionResponse("")).toBe("wait");
   });
 
   it("leaves modified, composing, and unrelated keys to xterm", () => {

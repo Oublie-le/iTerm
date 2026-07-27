@@ -285,6 +285,7 @@ export async function startSerialLog(
   append: boolean,
   maxFileSizeMiB: number,
   rotateCount: number,
+  path?: string,
 ): Promise<string> {
   if (isTauriRuntime()) {
     return invoke<string>("start_serial_log", {
@@ -296,6 +297,7 @@ export async function startSerialLog(
         append,
         maxFileSizeMiB,
         rotateCount,
+        path,
       },
     });
   }

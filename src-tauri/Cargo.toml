@@ -1,6 +1,6 @@
 [package]
 name = "iterm"
-version = "0.7.2"
+version = "0.7.3"
 description = "A cross-platform, local-first desktop serial, SSH, and ADB terminal"
 authors = ["iTerm contributors"]
 edition = "2021"

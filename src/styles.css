@@ -3355,3 +3355,568 @@ progress {
     margin-right: 5px;
   }
 }
+
+/* Professional workbench refresh -------------------------------------------
+ * Solid surfaces and restrained geometry keep controls visually separate
+ * from terminal output. The workspace intentionally has no floating outer
+ * card, translucent chrome, or decorative gradients.
+ */
+
+.app-shell {
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-pressed: #1e40af;
+  --accent-soft: #e8efff;
+  --accent-border: #a9c1f8;
+  --danger: #dc2626;
+  --warning: #b45309;
+  --success: #15803d;
+  --window-background: #e9edf3;
+  --content-background: #ffffff;
+  --sidebar-background: #f1f4f8;
+  --toolbar-background: #f8fafc;
+  --control-background: #edf1f6;
+  --control-hover: #e1e7ef;
+  --control-active: #d4dce7;
+  --separator: #d5dce6;
+  --separator-strong: #bcc6d3;
+  --label: #172033;
+  --secondary-label: #526074;
+  --tertiary-label: #7b8798;
+  --popover-background: #ffffff;
+  --terminal-chrome: #f3f6fa;
+  --terminal-control: #ffffff;
+  --terminal-border: #d5dce6;
+  --terminal-label: #526074;
+  --terminal-muted: #7b8798;
+  --green: var(--accent);
+  --green-dark: var(--accent);
+  --green-soft: var(--accent-soft);
+  --border: var(--separator-strong);
+  --border-light: var(--separator);
+  --surface: var(--content-background);
+  --surface-muted: var(--sidebar-background);
+  --text: var(--label);
+  --muted: var(--secondary-label);
+  --terminal: #ffffff;
+  grid-template-rows: 42px minmax(0, 1fr);
+  background: var(--window-background);
+  color: var(--label);
+  font-family:
+    Inter, "Segoe UI Variable Text", "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+}
+
+.app-shell[data-theme="dark"] {
+  --accent: #60a5fa;
+  --accent-hover: #93c5fd;
+  --accent-pressed: #3b82f6;
+  --accent-soft: #1d3152;
+  --accent-border: #365a8c;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --success: #4ade80;
+  --window-background: #111827;
+  --content-background: #151e2d;
+  --sidebar-background: #182232;
+  --toolbar-background: #1b2637;
+  --control-background: #263246;
+  --control-hover: #303e55;
+  --control-active: #3b4a62;
+  --separator: #2d3a4d;
+  --separator-strong: #40506a;
+  --label: #e5e7eb;
+  --secondary-label: #aeb9c8;
+  --tertiary-label: #7f8ca0;
+  --popover-background: #202b3d;
+  --terminal-chrome: #121b29;
+  --terminal-control: #1e293b;
+  --terminal-border: #334155;
+  --terminal-label: #cbd5e1;
+  --terminal-muted: #94a3b8;
+  --terminal: #0b1220;
+  background: var(--window-background);
+}
+
+.app-menubar,
+.app-shell[data-theme="dark"] .app-menubar {
+  z-index: 30;
+  gap: 2px;
+  padding: 0 8px;
+  background: var(--toolbar-background);
+  border-color: var(--separator);
+  box-shadow: none;
+  color: var(--label);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.app-brand {
+  height: 31px;
+  gap: 8px;
+  margin-right: 7px;
+  padding: 0 11px 0 4px;
+  border-color: var(--separator);
+}
+
+.app-brand-symbol {
+  width: 25px;
+  height: 25px;
+  background: var(--accent);
+  border: 0;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.app-brand strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.top-menu > button,
+.menu-actions > button {
+  height: 29px;
+  border-radius: 4px;
+  color: var(--secondary-label);
+  font-size: 12px;
+}
+
+.top-menu-panel,
+.tab-list-menu,
+.app-shell[data-theme="dark"] .top-menu-panel,
+.app-shell[data-theme="dark"] .tab-list-menu {
+  top: calc(100% + 3px);
+  padding: 5px;
+  background: var(--popover-background);
+  border: 1px solid var(--separator-strong);
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2);
+  color: var(--label);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.top-menu-panel > button,
+.tab-list-menu button {
+  min-height: 30px;
+  border-radius: 4px;
+  color: var(--label);
+}
+
+.workspace {
+  background: var(--window-background);
+}
+
+.session-sidebar,
+.app-shell[data-theme="dark"] .session-sidebar {
+  flex-basis: 252px;
+  background: var(--sidebar-background);
+  border-color: var(--separator);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.sidebar-search {
+  height: 31px;
+  background: var(--control-background);
+  border: 1px solid var(--separator);
+  border-radius: 5px;
+}
+
+.tree-session,
+.tree-port {
+  border-radius: 5px;
+}
+
+.main-area {
+  margin: 0;
+  overflow: hidden;
+  background: var(--content-background);
+  border: 0;
+  border-left: 1px solid var(--separator);
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tab-strip,
+.app-shell[data-theme="dark"] .tab-strip {
+  flex-basis: 40px;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 5px 7px 0;
+  background: var(--sidebar-background);
+  border-color: var(--separator);
+}
+
+.sidebar-toggle,
+.tab-action {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--secondary-label);
+}
+
+.tabs {
+  align-self: stretch;
+  gap: 3px;
+  padding: 0;
+}
+
+.tabs > button,
+.app-shell[data-theme="dark"] .tabs > button {
+  min-width: 136px;
+  max-width: 230px;
+  height: 35px;
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: var(--secondary-label);
+}
+
+.tabs > button.is-active,
+.app-shell[data-theme="dark"] .tabs > button.is-active {
+  margin-bottom: -1px;
+  background: var(--content-background);
+  border-color: var(--separator);
+  border-bottom-color: var(--content-background);
+  box-shadow: none;
+  color: var(--label);
+}
+
+.tab-close,
+.icon-button {
+  border-radius: 5px;
+}
+
+.session-toolbar,
+.app-shell[data-theme="dark"] .session-toolbar {
+  min-height: 40px;
+  padding: 0 9px;
+  background: var(--content-background);
+  border-color: var(--separator);
+  color: var(--secondary-label);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.icon-button {
+  width: 29px;
+  height: 29px;
+  border: 1px solid transparent;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--control-background);
+  border-color: var(--separator);
+}
+
+.signal-button,
+.toolbar-button,
+.file-protocol-select,
+.app-shell[data-theme="dark"] .signal-button,
+.app-shell[data-theme="dark"] .toolbar-button,
+.app-shell[data-theme="dark"] .file-protocol-select {
+  min-height: 27px;
+  background: var(--control-background);
+  border: 1px solid var(--separator);
+  border-radius: 5px;
+  color: var(--secondary-label);
+}
+
+.signal-button.is-active,
+.toolbar-button.primary {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.terminal-pane,
+.terminal-stack,
+.terminal-hex-view {
+  background: var(--terminal);
+}
+
+.terminal-host {
+  inset: 45px 8px 6px 10px;
+  transition: bottom 120ms ease;
+}
+
+.terminal-hex-view {
+  top: 39px;
+  transition: bottom 120ms ease;
+}
+
+.terminal-pane.has-command-composer .terminal-host,
+.terminal-pane.has-command-composer .terminal-hex-view {
+  bottom: 53px;
+}
+
+.terminal-pane.has-command-suggestions .terminal-host,
+.terminal-pane.has-command-suggestions .terminal-hex-view {
+  bottom: 250px;
+}
+
+.terminal-tools {
+  z-index: 4;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 39px;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 10px;
+  background: var(--terminal-chrome);
+  border-bottom: 1px solid var(--terminal-border);
+}
+
+.terminal-tool-button,
+.terminal-search button {
+  width: 27px;
+  height: 27px;
+  background: var(--terminal-control);
+  border: 1px solid var(--terminal-border);
+  border-radius: 5px;
+  color: var(--terminal-label);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.terminal-tool-button:hover:not(:disabled),
+.terminal-search button:hover {
+  background: var(--control-hover);
+  color: var(--label);
+}
+
+.terminal-zoom-controls {
+  gap: 1px;
+  padding: 2px;
+  background: var(--terminal-control);
+  border: 1px solid var(--terminal-border);
+  border-radius: 5px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.terminal-zoom-controls .terminal-tool-button {
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+}
+
+.terminal-font-size {
+  color: var(--terminal-label);
+}
+
+.terminal-font-size:hover {
+  background: var(--control-hover);
+  color: var(--label);
+}
+
+.terminal-search {
+  height: 31px;
+  background: var(--terminal-control);
+  border: 1px solid var(--terminal-border);
+  border-radius: 5px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+  color: var(--terminal-label);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.terminal-search input,
+.app-shell[data-theme="dark"] .terminal-search input {
+  height: 24px;
+  background: var(--content-background);
+  border: 1px solid var(--terminal-border);
+  border-radius: 4px;
+  color: var(--label);
+}
+
+.command-composer {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: var(--popover-background);
+  border: 0;
+  border-top: 1px solid var(--terminal-border);
+  border-radius: 0;
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.14);
+  color: var(--label);
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.command-composer-input {
+  min-height: 52px;
+  padding: 8px 10px;
+}
+
+.command-composer-input > svg,
+.command-suggestion-icon {
+  color: var(--accent);
+}
+
+.command-composer-input input {
+  height: 34px;
+  padding: 0 9px;
+  background: var(--control-background);
+  border: 1px solid var(--separator);
+  border-radius: 5px;
+  color: var(--label);
+}
+
+.command-composer-input input::placeholder {
+  color: var(--tertiary-label);
+}
+
+.command-composer-input kbd {
+  background: var(--control-background);
+  border-color: var(--separator);
+  border-radius: 4px;
+  color: var(--secondary-label);
+}
+
+.command-composer-input button {
+  border: 1px solid var(--separator);
+  border-radius: 5px;
+  background: var(--control-background);
+  color: var(--secondary-label);
+}
+
+.command-composer-input button:first-of-type {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.command-suggestions {
+  max-height: 198px;
+  padding: 5px 8px 8px;
+  background: var(--popover-background);
+  border-color: var(--separator);
+}
+
+.command-suggestions > button {
+  min-height: 40px;
+  border-radius: 4px;
+  color: var(--label);
+}
+
+.command-suggestion-copy code,
+.command-suggestions small {
+  color: var(--tertiary-label);
+}
+
+.terminal-context-menu {
+  background: var(--popover-background);
+  border: 1px solid var(--separator-strong);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.24);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.terminal-context-menu > button {
+  border-radius: 4px;
+  color: var(--label);
+}
+
+.terminal-context-menu > button:disabled,
+.terminal-context-menu kbd {
+  color: var(--tertiary-label);
+}
+
+.terminal-context-separator {
+  background: var(--separator);
+}
+
+.sender-pane,
+.statusbar,
+.app-shell[data-theme="dark"] .sender-pane,
+.app-shell[data-theme="dark"] .statusbar {
+  background: var(--toolbar-background);
+  border-color: var(--separator);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.modal-backdrop {
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.session-dialog,
+.shortcut-dialog,
+.app-settings-dialog,
+.app-shell[data-theme="dark"] .session-dialog,
+.app-shell[data-theme="dark"] .shortcut-dialog,
+.app-shell[data-theme="dark"] .app-settings-dialog {
+  background: var(--content-background);
+  border: 1px solid var(--separator-strong);
+  border-radius: 8px;
+  box-shadow: 0 18px 52px rgba(15, 23, 42, 0.28);
+  color: var(--label);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (max-width: 930px) {
+  .main-area {
+    margin-right: 0;
+  }
+}
+
+/* Keep the sender dock on the same neutral blue-gray system in both themes. */
+.sender-toolbar,
+.sender-tabs,
+.app-shell[data-theme="dark"] .sender-toolbar,
+.app-shell[data-theme="dark"] .sender-tabs {
+  background: var(--toolbar-background);
+  border-color: var(--separator);
+  color: var(--secondary-label);
+}
+
+.sender-body,
+.sender-options,
+.app-shell[data-theme="dark"] .sender-body,
+.app-shell[data-theme="dark"] .sender-options {
+  background: var(--content-background);
+  border-color: var(--separator);
+  color: var(--secondary-label);
+}
+
+.sender-body > textarea,
+.sender-options select,
+.sender-options input[type="number"],
+.sender-options .sender-name-input,
+.app-shell[data-theme="dark"] .sender-body > textarea,
+.app-shell[data-theme="dark"] .sender-options select,
+.app-shell[data-theme="dark"] .sender-options input[type="number"],
+.app-shell[data-theme="dark"] .sender-options .sender-name-input {
+  background: var(--control-background);
+  border-color: var(--separator);
+  color: var(--label);
+}
+
+.sender-tabs button,
+.app-shell[data-theme="dark"] .sender-tabs button {
+  border-radius: 4px 4px 0 0;
+  color: var(--secondary-label);
+}
+
+.sender-tabs button.is-active,
+.app-shell[data-theme="dark"] .sender-tabs button.is-active {
+  background: var(--content-background);
+  border-color: var(--separator);
+  border-bottom-color: var(--content-background);
+  color: var(--label);
