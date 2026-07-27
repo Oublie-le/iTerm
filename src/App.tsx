@@ -1107,7 +1107,10 @@ export default function App() {
   };
 
   const duplicateProfile = (profile: SessionProfile) => {
-    const duplicate = duplicateSessionProfile(profile);
+    const duplicate = duplicateSessionProfile(
+      profile,
+      t("profile.copySuffix"),
+    );
     setProfiles((current) => [...current, duplicate]);
     setEditingProfile(duplicate);
     setSessionDialogOpen(true);
@@ -2157,7 +2160,11 @@ export default function App() {
               <ChevronDown size={13} />
               <span>
                 {activeProfile
-                  ? sessionTargetLabel(activeProfile)
+                  ? sessionTargetLabel(activeProfile, {
+                      sshUnset: t("profile.target.sshUnset"),
+                      adbUnset: t("profile.target.adbUnset"),
+                      serialUnset: t("profile.target.serialUnset"),
+                    })
                   : t("shell.session.none")}
               </span>
             </div>

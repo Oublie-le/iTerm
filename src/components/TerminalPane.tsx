@@ -433,7 +433,13 @@ export function TerminalPane({
       {session.state === "opening" && (
         <div className="terminal-loading">
           <span className="spinner" />
-          {t("terminal.opening", { target: sessionTargetLabel(profile) })}
+          {t("terminal.opening", {
+            target: sessionTargetLabel(profile, {
+              sshUnset: t("profile.target.sshUnset"),
+              adbUnset: t("profile.target.adbUnset"),
+              serialUnset: t("profile.target.serialUnset"),
+            }),
+          })}
         </div>
       )}
     </section>

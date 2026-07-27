@@ -9,7 +9,7 @@ import {
   type TerminalConfig,
 } from "./types";
 import { setPersistentItem } from "./persistence";
-import type { AppLocale } from "./i18n";
+import { createTranslator, type AppLocale } from "./i18n";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
@@ -121,7 +121,15 @@ export function createSessionProfileWithPreferences(
   preferences: AppPreferences,
   port?: SerialPortDescriptor,
 ): SessionProfile {
-  const profile = createSessionProfile(port, preferences.defaultProtocol);
+  const t = createTranslator(preferences.locale);
+  const profile = createSessionProfile(port, preferences.defaultProtocol, {
+    serialName: t("dialog.defaultName.serial"),
+    serialGroup: t("dialog.defaultGroup.serial"),
+    sshName: t("dialog.defaultName.ssh"),
+    sshGroup: t("dialog.defaultGroup.ssh"),
+    adbName: t("dialog.defaultName.adb"),
+    adbGroup: t("dialog.defaultGroup.adb"),
+  });
   return {
     ...profile,
     terminal: { ...preferences.sessionDefaults.terminal },

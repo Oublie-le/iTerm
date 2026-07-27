@@ -273,19 +273,38 @@ export const DEFAULT_LOGGING_CONFIG: LoggingConfig = {
   rotateCount: 3,
 };
 
+export interface SessionProfileLabels {
+  serialName: string;
+  serialGroup: string;
+  sshName: string;
+  sshGroup: string;
+  adbName: string;
+  adbGroup: string;
+}
+
+const DEFAULT_SESSION_PROFILE_LABELS: SessionProfileLabels = {
+  serialName: "新串口会话",
+  serialGroup: "串口会话",
+  sshName: "新 SSH 会话",
+  sshGroup: "SSH 会话",
+  adbName: "新 ADB 会话",
+  adbGroup: "ADB 会话",
+};
+
 export function createSessionProfile(
   port?: SerialPortDescriptor,
   protocol: SessionProtocol = "serial",
+  labels: SessionProfileLabels = DEFAULT_SESSION_PROFILE_LABELS,
 ): SessionProfile {
   const timestamp = now();
   const defaults: Record<SessionProtocol, { name: string; group: string; color: string }> = {
     serial: {
-      name: port?.displayName || port?.path || "新串口会话",
-      group: "串口会话",
+      name: port?.displayName || port?.path || labels.serialName,
+      group: labels.serialGroup,
       color: "#17a34a",
     },
-    ssh: { name: "新 SSH 会话", group: "SSH 会话", color: "#2563eb" },
-    adb: { name: "新 ADB 会话", group: "ADB 会话", color: "#f59e0b" },
+    ssh: { name: labels.sshName, group: labels.sshGroup, color: "#2563eb" },
+    adb: { name: labels.adbName, group: labels.adbGroup, color: "#f59e0b" },
   };
   const selected = defaults[protocol];
   return {
@@ -314,12 +333,13 @@ export function createSessionProfile(
 
 export function duplicateSessionProfile(
   profile: SessionProfile,
+  copySuffix = "副本",
 ): SessionProfile {
   const timestamp = now();
   return {
     ...profile,
     id: crypto.randomUUID(),
-    name: `${profile.name} 副本`,
+    name: `${profile.name} ${copySuffix}`,
     serial: { ...profile.serial },
     ssh: { ...profile.ssh },
     adb: { ...profile.adb },
@@ -361,7 +381,22 @@ export function normalizeSessionProfile(
   };
 }
 
-export function sessionTargetLabel(profile: SessionProfile): string {
+export interface SessionTargetLabels {
+  sshUnset: string;
+  adbUnset: string;
+  serialUnset: string;
+}
+
+const DEFAULT_SESSION_TARGET_LABELS: SessionTargetLabels = {
+  sshUnset: "尚未配置 SSH 主机",
+  adbUnset: "尚未选择 ADB 设备",
+  serialUnset: "尚未选择串口设备",
+};
+
+export function sessionTargetLabel(
+  profile: SessionProfile,
+  labels: SessionTargetLabels = DEFAULT_SESSION_TARGET_LABELS,
+): string {
   switch (profile.protocol) {
     case "ssh": {
       const destination = profile.ssh.username
@@ -369,14 +404,14 @@ export function sessionTargetLabel(profile: SessionProfile): string {
         : profile.ssh.host;
       return destination
         ? `${destination}:${profile.ssh.port}`
-        : "尚未配置 SSH 主机";
+        : labels.sshUnset;
     }
     case "adb":
-      return profile.adb.deviceId || "尚未选择 ADB 设备";
+      return profile.adb.deviceId || labels.adbUnset;
     case "serial":
       return profile.serial.portPath
         ? `${profile.serial.portPath} · ${profile.serial.baudRate}`
-        : "尚未选择串口设备";
+        : labels.serialUnset;
   }
 }
 

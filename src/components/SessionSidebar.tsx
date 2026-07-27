@@ -57,8 +57,13 @@ export function SessionSidebar({
   onImport,
 }: SessionSidebarProps) {
   const { t } = useI18n();
+  const targetLabels = {
+    sshUnset: t("profile.target.sshUnset"),
+    adbUnset: t("profile.target.adbUnset"),
+    serialUnset: t("profile.target.serialUnset"),
+  };
   const visibleProfiles = profiles.filter((profile) =>
-    `${profile.name} ${profile.group} ${profile.protocol} ${sessionTargetLabel(profile)}`
+    `${profile.name} ${profile.group} ${profile.protocol} ${sessionTargetLabel(profile, targetLabels)}`
       .toLocaleLowerCase()
       .includes(filter.toLocaleLowerCase()),
   );
@@ -152,7 +157,7 @@ export function SessionSidebar({
                     <ProfileIcon size={16} />
                     <span className="tree-session-text">
                       <strong>{profile.name}</strong>
-                      <small>{sessionTargetLabel(profile)}</small>
+                      <small>{sessionTargetLabel(profile, targetLabels)}</small>
                     </span>
                   </button>
                   <div className="tree-session-actions">
