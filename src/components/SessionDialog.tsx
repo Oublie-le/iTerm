@@ -230,7 +230,21 @@ export function SessionDialog({
       return;
     }
     for (const trigger of draft.triggers.filter((item) => item.enabled)) {
-      const triggerError = validateTriggerRule(trigger);
+      const triggerError = validateTriggerRule(trigger, {
+        nameRequired: t("dialog.validation.triggerName"),
+        patternRequired: (name) =>
+          t("dialog.validation.triggerPattern", { name }),
+        cooldownInvalid: (name) =>
+          t("dialog.validation.triggerCooldown", { name }),
+        maxTriggersInvalid: (name) =>
+          t("dialog.validation.triggerMaxCount", { name }),
+        payloadRequired: (name) =>
+          t("dialog.validation.triggerPayload", { name }),
+        regexMatchesEmpty: (name) =>
+          t("dialog.validation.triggerRegexEmpty", { name }),
+        regexInvalid: (name, reason) =>
+          t("dialog.validation.triggerRegexInvalid", { name, reason }),
+      });
       if (triggerError) {
         setPage("triggers");
         setError(triggerError);
@@ -879,12 +893,12 @@ export function SessionDialog({
             {page === "terminal" && (
               <>
                 <div className="page-heading">
-                  <h3>终端</h3>
-                  <p>配置字符集、终端类型和字体。</p>
+                  <h3>{t("dialog.terminal.title")}</h3>
+                  <p>{t("dialog.terminal.subtitle")}</p>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
-                    <span>字符集</span>
+                    <span>{t("dialog.terminal.encoding")}</span>
                     <select
                       value={draft.terminal.encoding}
                       onChange={(event) =>
@@ -899,7 +913,7 @@ export function SessionDialog({
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>终端类型</span>
+                    <span>{t("dialog.terminal.type")}</span>
                     <select
                       value={draft.terminal.termType}
                       onChange={(event) =>
@@ -913,7 +927,7 @@ export function SessionDialog({
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>Enter 键</span>
+                    <span>{t("dialog.terminal.enterKey")}</span>
                     <select
                       value={draft.terminal.enterKey}
                       onChange={(event) =>
@@ -929,7 +943,7 @@ export function SessionDialog({
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>Backspace 键</span>
+                    <span>{t("dialog.terminal.backspaceKey")}</span>
                     <select
                       value={draft.terminal.backspaceKey}
                       onChange={(event) =>
@@ -944,7 +958,7 @@ export function SessionDialog({
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>字体</span>
+                    <span>{t("dialog.terminal.font")}</span>
                     <input
                       value={draft.terminal.fontFamily}
                       onChange={(event) =>
@@ -953,7 +967,7 @@ export function SessionDialog({
                     />
                   </label>
                   <label className="field-row">
-                    <span>字号</span>
+                    <span>{t("dialog.terminal.fontSize")}</span>
                     <input
                       type="number"
                       min={8}
@@ -967,7 +981,7 @@ export function SessionDialog({
                     />
                   </label>
                   <label className="field-row">
-                    <span>光标</span>
+                    <span>{t("dialog.terminal.cursor")}</span>
                     <select
                       value={draft.terminal.cursorStyle}
                       onChange={(event) =>
@@ -977,9 +991,15 @@ export function SessionDialog({
                         })
                       }
                     >
-                      <option value="block">块</option>
-                      <option value="bar">竖线</option>
-                      <option value="underline">下划线</option>
+                      <option value="block">
+                        {t("dialog.terminal.cursor.block")}
+                      </option>
+                      <option value="bar">
+                        {t("dialog.terminal.cursor.bar")}
+                      </option>
+                      <option value="underline">
+                        {t("dialog.terminal.cursor.underline")}
+                      </option>
                     </select>
                   </label>
                 </div>
@@ -989,12 +1009,12 @@ export function SessionDialog({
             {page === "window" && (
               <>
                 <div className="page-heading">
-                  <h3>窗口</h3>
-                  <p>控制回滚、时间戳和终端尺寸行为。</p>
+                  <h3>{t("dialog.window.title")}</h3>
+                  <p>{t("dialog.window.subtitle")}</p>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
-                    <span>回滚行数</span>
+                    <span>{t("dialog.window.scrollback")}</span>
                     <input
                       type="number"
                       min={0}
@@ -1008,7 +1028,7 @@ export function SessionDialog({
                     />
                   </label>
                   <div className="field-row">
-                    <span>行时间戳</span>
+                    <span>{t("dialog.window.timestamp")}</span>
                     <label className="toggle-row">
                       <input
                         type="checkbox"
@@ -1017,11 +1037,11 @@ export function SessionDialog({
                           updateTerminal({ timestamp: event.target.checked })
                         }
                       />
-                      在终端左侧显示接收时间
+                      {t("dialog.window.timestampDetail")}
                     </label>
                   </div>
                   <label className="field-row">
-                    <span>Hex 每行字节</span>
+                    <span>{t("dialog.window.hexColumns")}</span>
                     <select
                       value={draft.terminal.hexColumns}
                       onChange={(event) =>
@@ -1040,7 +1060,7 @@ export function SessionDialog({
                     </select>
                   </label>
                   <label className="field-row">
-                    <span>Hex 字节分组</span>
+                    <span>{t("dialog.window.hexGroup")}</span>
                     <select
                       value={draft.terminal.hexGroupSize}
                       onChange={(event) =>
@@ -1053,14 +1073,14 @@ export function SessionDialog({
                     >
                       {[1, 2, 4, 8].map((value) => (
                         <option key={value} value={value}>
-                          {value} 字节
+                          {t("dialog.window.bytes", { value })}
                         </option>
                       ))}
                     </select>
                   </label>
                   <div className="settings-note">
                     <Settings2 size={17} />
-                    终端行列会随窗口尺寸自动调整，当前值显示在底部状态栏。
+                    {t("dialog.window.note")}
                   </div>
                 </div>
               </>
@@ -1069,12 +1089,12 @@ export function SessionDialog({
             {page === "logging" && (
               <>
                 <div className="page-heading">
-                  <h3>日志</h3>
-                  <p>将当前会话的接收数据保存到本机应用日志目录。</p>
+                  <h3>{t("dialog.logging.title")}</h3>
+                  <p>{t("dialog.logging.subtitle")}</p>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
-                    <span>日志模式</span>
+                    <span>{t("dialog.logging.mode")}</span>
                     <select
                       value={draft.logging.mode}
                       onChange={(event) =>
@@ -1083,12 +1103,16 @@ export function SessionDialog({
                         })
                       }
                     >
-                      <option value="raw">原始字节（无损）</option>
-                      <option value="text">可读文本（带行时间戳）</option>
+                      <option value="raw">
+                        {t("dialog.logging.mode.raw")}
+                      </option>
+                      <option value="text">
+                        {t("dialog.logging.mode.text")}
+                      </option>
                     </select>
                   </label>
                   <div className="field-row">
-                    <span>写入方式</span>
+                    <span>{t("dialog.logging.writeMode")}</span>
                     <label className="toggle-row">
                       <input
                         type="checkbox"
@@ -1097,11 +1121,11 @@ export function SessionDialog({
                           updateLogging({ append: event.target.checked })
                         }
                       />
-                      文件已存在时追加内容
+                      {t("dialog.logging.append")}
                     </label>
                   </div>
                   <div className="field-row">
-                    <span>自动记录</span>
+                    <span>{t("dialog.logging.auto")}</span>
                     <label className="toggle-row">
                       <input
                         type="checkbox"
@@ -1110,11 +1134,11 @@ export function SessionDialog({
                           updateLogging({ autoStart: event.target.checked })
                         }
                       />
-                      会话连接成功后自动开始
+                      {t("dialog.logging.autoDetail")}
                     </label>
                   </div>
                   <label className="field-row">
-                    <span>单文件上限</span>
+                    <span>{t("dialog.logging.maxSize")}</span>
                     <input
                       type="number"
                       min={0}
@@ -1126,10 +1150,10 @@ export function SessionDialog({
                         })
                       }
                     />
-                    <small>MiB，0 表示不限制</small>
+                    <small>{t("dialog.logging.maxSizeHint")}</small>
                   </label>
                   <label className="field-row">
-                    <span>轮转保留</span>
+                    <span>{t("dialog.logging.rotation")}</span>
                     <input
                       type="number"
                       min={0}
@@ -1142,13 +1166,11 @@ export function SessionDialog({
                         })
                       }
                     />
-                    <small>最多保留 20 份旧日志</small>
+                    <small>{t("dialog.logging.rotationHint")}</small>
                   </label>
                   <div className="settings-note">
                     <FileClock size={17} />
-                    日志按“会话名_日期_时间.log”命名。原始模式逐字节保存，
-                    文本模式按当前会话字符集增量解码；达到上限后自动轮转为
-                    .1、.2 等备份。
+                    {t("dialog.logging.note")}
                   </div>
                 </div>
               </>
@@ -1158,8 +1180,8 @@ export function SessionDialog({
               <>
                 <div className="page-heading heading-with-action">
                   <div>
-                    <h3>触发器</h3>
-                    <p>接收内容匹配后自动执行动作，并通过冷却和次数限制防止循环。</p>
+                    <h3>{t("dialog.triggers.title")}</h3>
+                    <p>{t("dialog.triggers.subtitle")}</p>
                   </div>
                   <button
                     className="secondary-button"
@@ -1171,7 +1193,11 @@ export function SessionDialog({
                               ...current,
                               triggers: [
                                 ...current.triggers,
-                                createTriggerRule(current.triggers.length + 1),
+                                createTriggerRule(
+                                  current.triggers.length + 1,
+                                  t("dialog.triggers.defaultName"),
+                                  t("dialog.triggers.defaultPayload"),
+                                ),
                               ],
                             }
                           : current,
@@ -1179,15 +1205,15 @@ export function SessionDialog({
                     }
                   >
                     <Plus size={14} />
-                    添加触发器
+                    {t("dialog.triggers.add")}
                   </button>
                 </div>
                 {draft.triggers.length === 0 ? (
                   <div className="coming-soon-card">
                     <Zap size={18} />
                     <div>
-                      <strong>尚未配置触发器</strong>
-                      <p>添加规则后，可在串口、SSH 或 ADB 输出中自动匹配并执行动作。</p>
+                      <strong>{t("dialog.triggers.empty")}</strong>
+                      <p>{t("dialog.triggers.emptyDetail")}</p>
                     </div>
                   </div>
                 ) : (
@@ -1205,10 +1231,10 @@ export function SessionDialog({
                                 })
                               }
                             />
-                            启用
+                            {t("dialog.triggers.enabled")}
                           </label>
                           <input
-                            aria-label="触发器名称"
+                            aria-label={t("dialog.triggers.name")}
                             value={trigger.name}
                             onChange={(event) =>
                               updateTrigger(trigger.id, {
@@ -1219,7 +1245,9 @@ export function SessionDialog({
                           <button
                             className="icon-button"
                             type="button"
-                            title={`删除 ${trigger.name}`}
+                            title={t("dialog.triggers.delete", {
+                              name: trigger.name,
+                            })}
                             onClick={() =>
                               setDraft((current) =>
                                 current
@@ -1238,7 +1266,7 @@ export function SessionDialog({
                         </header>
                         <div className="trigger-grid">
                           <label>
-                            <span>匹配方式</span>
+                            <span>{t("dialog.triggers.matcher")}</span>
                             <select
                               value={trigger.matcher}
                               onChange={(event) =>
@@ -1248,18 +1276,26 @@ export function SessionDialog({
                                 })
                               }
                             >
-                              <option value="text">文本</option>
-                              <option value="regex">正则表达式</option>
+                              <option value="text">
+                                {t("dialog.triggers.matcher.text")}
+                              </option>
+                              <option value="regex">
+                                {t("dialog.triggers.matcher.regex")}
+                              </option>
                             </select>
                           </label>
                           <label className="trigger-pattern">
-                            <span>匹配内容</span>
+                            <span>{t("dialog.triggers.pattern")}</span>
                             <input
                               value={trigger.pattern}
                               placeholder={
                                 trigger.matcher === "regex"
-                                  ? "例如：error\\s+\\d+"
-                                  : "例如：READY>"
+                                  ? t(
+                                      "dialog.triggers.pattern.regexPlaceholder",
+                                    )
+                                  : t(
+                                      "dialog.triggers.pattern.textPlaceholder",
+                                    )
                               }
                               onChange={(event) =>
                                 updateTrigger(trigger.id, {
@@ -1278,10 +1314,10 @@ export function SessionDialog({
                                 })
                               }
                             />
-                            区分大小写
+                            {t("dialog.triggers.caseSensitive")}
                           </label>
                           <label>
-                            <span>动作</span>
+                            <span>{t("dialog.triggers.action")}</span>
                             <select
                               value={trigger.action}
                               onChange={(event) =>
@@ -1291,17 +1327,23 @@ export function SessionDialog({
                                 })
                               }
                             >
-                              <option value="notification">显示通知</option>
-                              <option value="sendText">发送文本</option>
-                              <option value="startLog">开始日志</option>
+                              <option value="notification">
+                                {t("dialog.triggers.action.notification")}
+                              </option>
+                              <option value="sendText">
+                                {t("dialog.triggers.action.sendText")}
+                              </option>
+                              <option value="startLog">
+                                {t("dialog.triggers.action.startLog")}
+                              </option>
                             </select>
                           </label>
                           {trigger.action !== "startLog" && (
                             <label className="trigger-pattern">
                               <span>
                                 {trigger.action === "sendText"
-                                  ? "发送内容"
-                                  : "通知内容"}
+                                  ? t("dialog.triggers.payload.send")
+                                  : t("dialog.triggers.payload.notification")}
                               </span>
                               <input
                                 value={trigger.payload}
@@ -1314,7 +1356,7 @@ export function SessionDialog({
                             </label>
                           )}
                           <label>
-                            <span>冷却时间</span>
+                            <span>{t("dialog.triggers.cooldown")}</span>
                             <input
                               type="number"
                               min={0}
@@ -1325,10 +1367,10 @@ export function SessionDialog({
                                 })
                               }
                             />
-                            <small>毫秒</small>
+                            <small>{t("dialog.triggers.milliseconds")}</small>
                           </label>
                           <label>
-                            <span>最大次数</span>
+                            <span>{t("dialog.triggers.maxCount")}</span>
                             <input
                               type="number"
                               min={0}
@@ -1339,7 +1381,7 @@ export function SessionDialog({
                                 })
                               }
                             />
-                            <small>0 表示不限</small>
+                            <small>{t("dialog.triggers.unlimited")}</small>
                           </label>
                         </div>
                       </section>
@@ -1356,13 +1398,13 @@ export function SessionDialog({
             {error}
           </div>
           <button className="secondary-button" onClick={onCancel}>
-            取消
+            {t("dialog.actions.cancel")}
           </button>
           <button className="secondary-button" onClick={() => submit(false)}>
-            保存
+            {t("dialog.actions.save")}
           </button>
           <button className="primary-button" onClick={() => submit(true)}>
-            保存并连接
+            {t("dialog.actions.saveConnect")}
           </button>
         </footer>
       </section>
