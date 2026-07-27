@@ -112,10 +112,81 @@ import {
 } from "./lib/layout";
 import { AsyncByteQueue, sendXmodemCrc } from "./lib/xmodem";
 import { sendYmodemBatch } from "./lib/ymodem";
+import {
+  receiveYmodemBatch,
+  type YmodemReceiveProgress,
+} from "./lib/ymodemReceive";
+import {
+  saveReceivedBinaryFiles,
+  selectBinaryOutputDirectory,
+} from "./lib/binaryFiles";
+import {
+  ZmodemSentryBridge,
+  receiveZmodemFiles,
+  sendZmodemFiles,
+  type ZmodemProgress,
+} from "./lib/zmodem";
+import { openJsonDocument, saveJsonDocument } from "./lib/jsonFiles";
+import {
+  mergeImportedProfiles,
+  parseSessionProfiles,
+  serializeSessionProfiles,
+} from "./lib/profileTransfer";
+import {
+  clearDiagnosticEvents,
+  loadDiagnosticEvents,
+  recordDiagnostic,
+  serializeDiagnosticEvents,
+  type DiagnosticLevel,
+} from "./lib/diagnostics";
+import {
+  getLatestPersistenceError,
+  PERSISTENCE_ERROR_EVENT,
+  setPersistentItem,
+} from "./lib/persistence";
+import {
+  createTranslator,
+  I18nProvider,
+  resolveLocale,
+  type TranslationKey,
+  type Translator,
+} from "./lib/i18n";
+import { localizedErrorMessage } from "./lib/errorMessages";
+import {
+  requestTerminalCommand,
+  requestTerminalSearch,
+} from "./lib/uiCommands";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
 const MAX_RECONNECT_ATTEMPTS = 8;
+
+type TopMenuId =
+  | "session"
+  | "edit"
+  | "search"
+  | "select"
+  | "go"
+  | "view"
+  | "mode"
+  | "tools"
+  | "window"
+  | "help";
+
+interface TopMenuItem {
+  label: string;
+  shortcut?: string;
+  disabled?: boolean;
+  checked?: boolean;
+  separatorBefore?: boolean;
+  onSelect: () => void;
+}
+
+interface TopMenuDefinition {
+  id: TopMenuId;
+  labelKey: TranslationKey;
+  items: TopMenuItem[];
+}
 
 function loadProfiles(): SessionProfile[] {
   try {
@@ -130,16 +201,19 @@ function loadProfiles(): SessionProfile[] {
   }
 }
 
-function stateLabel(state: RuntimeSession["state"]): string {
-  const labels: Record<RuntimeSession["state"], string> = {
-    disconnected: "已断开",
-    opening: "正在连接",
-    connected: "已连接",
-    closing: "正在关闭",
-    deviceLost: "设备丢失",
-    error: "连接错误",
+function stateLabel(
+  state: RuntimeSession["state"],
+  t: Translator,
+): string {
+  const labels: Record<RuntimeSession["state"], TranslationKey> = {
+    disconnected: "state.disconnected",
+    opening: "state.opening",
+    connected: "state.connected",
+    closing: "state.closing",
+    deviceLost: "state.deviceLost",
+    error: "state.error",
   };
-  return labels[state];
+  return t(labels[state]);
 }
 
 function hasConnectionTarget(profile: SessionProfile): boolean {
@@ -218,7 +292,9 @@ export default function App() {
           ...createRuntimeSession(profile),
           notice: {
             tone: "info" as const,
-            title: "会话已从上次工作区恢复，点击连接以建立连接。",
+            title: createTranslator(preferences.locale)(
+              "runtime.workspaceRestored",
+            ),
           },
         },
       ];
@@ -254,15 +330,30 @@ export default function App() {
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [tabListOpen, setTabListOpen] = useState(false);
+  const [activeTopMenu, setActiveTopMenu] = useState<TopMenuId | null>(null);
   const [editingProfile, setEditingProfile] =
     useState<SessionProfile | null>(null);
   const [sidebarFilter, setSidebarFilter] = useState("");
   const [portError, setPortError] = useState("");
   const [adbError, setAdbError] = useState("");
   const [utilityError, setUtilityError] = useState("");
+  const [persistenceError, setPersistenceError] = useState(
+    getLatestPersistenceError,
+  );
+  const [profileTransferNotice, setProfileTransferNotice] = useState<{
+    tone: "info" | "error";
+    title: string;
+    detail?: string;
+  } | null>(null);
+  const [diagnosticCount, setDiagnosticCount] = useState(
+    () => loadDiagnosticEvents().length,
+  );
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const topMenuBarRef = useRef<HTMLDivElement>(null);
   const triggerEvaluatorsRef = useRef(
     new Map<
       string,
@@ -272,6 +363,24 @@ export default function App() {
   const processedTriggerChunksRef = useRef(new Map<string, number>());
   const startingTriggerLogsRef = useRef(new Set<string>());
   const transferByteQueuesRef = useRef(new Map<string, AsyncByteQueue>());
+  const zmodemBridgesRef = useRef(
+    new Map<string, ZmodemSentryBridge>(),
+  );
+  const captureDiagnostic = useCallback(
+    (
+      area: string,
+      event: string,
+      options: {
+        level?: DiagnosticLevel;
+        message?: string;
+        context?: Record<string, unknown>;
+      } = {},
+    ) => {
+      recordDiagnostic(area, event, options);
+      setDiagnosticCount(loadDiagnosticEvents().length);
+    },
+    [],
+  );
 
   const activeSession = sessions.find(
     (session) => session.id === activeSessionId,
@@ -280,6 +389,107 @@ export default function App() {
     (profile) => profile.id === activeSession?.profileId,
   );
   const resolvedTheme = resolveTheme(preferences.theme, systemPrefersDark);
+  const resolvedLocale = resolveLocale(
+    preferences.locale,
+    navigator.language,
+  );
+  const t = useMemo(
+    () => createTranslator(resolvedLocale),
+    [resolvedLocale],
+  );
+  const workspaceSessionIdentity = sessions
+    .map((session) => `${session.id}:${session.profileId}`)
+    .join("|");
+
+  useEffect(() => {
+    captureDiagnostic("app", "started", {
+      context: {
+        profileCount: profiles.length,
+        restoredSessionCount: sessions.length,
+      },
+    });
+    // Startup is recorded once; later profile/session changes are separate events.
+  }, [captureDiagnostic]);
+
+  useEffect(() => {
+    document.documentElement.lang = resolvedLocale;
+  }, [resolvedLocale]);
+
+  useEffect(() => {
+    if (!tabListOpen) return;
+    const dismissOnPointerDown = (event: PointerEvent) => {
+      if (!tabListRef.current?.contains(event.target as Node)) {
+        setTabListOpen(false);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTabListOpen(false);
+    };
+    window.addEventListener("pointerdown", dismissOnPointerDown);
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", dismissOnPointerDown);
+      window.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [tabListOpen]);
+
+  useEffect(() => {
+    if (!activeTopMenu) return;
+    const dismissOnPointerDown = (event: PointerEvent) => {
+      if (!topMenuBarRef.current?.contains(event.target as Node)) {
+        setActiveTopMenu(null);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActiveTopMenu(null);
+    };
+    window.addEventListener("pointerdown", dismissOnPointerDown);
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", dismissOnPointerDown);
+      window.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [activeTopMenu]);
+
+  useEffect(() => {
+    const restoredMessages = new Set([
+      createTranslator("zh-CN")("runtime.workspaceRestored"),
+      createTranslator("en-US")("runtime.workspaceRestored"),
+    ]);
+    setSessions((current) =>
+      current.map((session) =>
+        session.notice && restoredMessages.has(session.notice.title)
+          ? {
+              ...session,
+              notice: {
+                ...session.notice,
+                title: t("runtime.workspaceRestored"),
+              },
+            }
+          : session,
+      ),
+    );
+  }, [t]);
+
+  useEffect(() => {
+    const handlePersistenceError = (event: Event) => {
+      const message = (event as CustomEvent<string>).detail;
+      setPersistenceError(localizedErrorMessage(message, resolvedLocale));
+      captureDiagnostic("persistence", "sync_failed", {
+        level: "error",
+        message,
+      });
+    };
+    window.addEventListener(
+      PERSISTENCE_ERROR_EVENT,
+      handlePersistenceError,
+    );
+    return () =>
+      window.removeEventListener(
+        PERSISTENCE_ERROR_EVENT,
+        handlePersistenceError,
+      );
+  }, [captureDiagnostic, resolvedLocale]);
 
   const activateSession = useCallback(
     (sessionId: string) => {
@@ -306,13 +516,17 @@ export default function App() {
     } catch (error) {
       if (!silent) {
         setPortError(
-          error instanceof Error ? error.message : "无法读取本机串口设备。",
+          localizedErrorMessage(
+            error,
+            resolvedLocale,
+            t("runtime.serialListFallback"),
+          ),
         );
       }
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, []);
+  }, [resolvedLocale, t]);
 
   const refreshAdbDevices = useCallback(async (silent = false) => {
     if (!silent) setAdbError("");
@@ -323,11 +537,15 @@ export default function App() {
       setAdbDevices([]);
       if (!silent) {
         setAdbError(
-          error instanceof Error ? error.message : "无法读取 ADB 设备。",
+          localizedErrorMessage(
+            error,
+            resolvedLocale,
+            t("runtime.adbListFallback"),
+          ),
         );
       }
     }
-  }, []);
+  }, [resolvedLocale, t]);
 
   const refreshExternalTools = useCallback(async () => {
     setExternalTools(await listExternalTools());
@@ -353,7 +571,7 @@ export default function App() {
   }, [refreshExternalTools]);
 
   useEffect(() => {
-    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
+    setPersistentItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
   }, [profiles]);
 
   useEffect(() => {
@@ -406,10 +624,10 @@ export default function App() {
   }, [
     activeSessionId,
     senderOpen,
-    sessions,
     sidebarOpen,
     splitMode,
     splitSessionIds,
+    workspaceSessionIdentity,
   ]);
 
   useEffect(() => {
@@ -449,6 +667,35 @@ export default function App() {
   }, [preferences.confirmActiveSessionClose, sessions]);
 
   const applyEvent = useCallback((event: SerialEvent) => {
+    const displayMessage = "message" in event && event.message
+      ? localizedErrorMessage(event.message, resolvedLocale)
+      : undefined;
+    if (event.type === "state") {
+      captureDiagnostic("session", "state_changed", {
+        level:
+          event.state === "error" || event.state === "deviceLost"
+            ? "warning"
+            : "info",
+        message: event.message,
+        context: { sessionId: event.sessionId, state: event.state },
+      });
+    } else if (event.type === "error") {
+      captureDiagnostic("session", "error", {
+        level: "error",
+        message: event.message,
+        context: {
+          sessionId: event.sessionId,
+          code: event.code,
+          recoverable: event.recoverable,
+        },
+      });
+    } else if (event.type === "log" && event.state === "error") {
+      captureDiagnostic("logging", "write_failed", {
+        level: "error",
+        message: event.message,
+        context: { sessionId: event.sessionId },
+      });
+    }
     setSessions((current) =>
       current.map((session) => {
         if (session.id !== event.sessionId) return session;
@@ -461,7 +708,9 @@ export default function App() {
             ) {
               transferByteQueuesRef.current
                 .get(event.sessionId)
-                ?.close(new Error("会话已断开，文件传输停止。"));
+                ?.close(new Error(t("runtime.transferStopped")));
+              zmodemBridgesRef.current.get(event.sessionId)?.abort();
+              zmodemBridgesRef.current.delete(event.sessionId);
             }
             return {
               ...session,
@@ -481,21 +730,56 @@ export default function App() {
               notice:
                 event.state === "connected"
                   ? undefined
-                  : event.message
+                  : displayMessage
                     ? {
                         tone:
                           event.state === "error" ||
                           event.state === "deviceLost"
                             ? ("error" as const)
                             : ("info" as const),
-                        title: event.message,
+                        title: displayMessage,
                       }
                     : session.notice,
             };
           case "data": {
-            transferByteQueuesRef.current
-              .get(event.sessionId)
-              ?.push(event.bytes);
+            const zmodemBridge = zmodemBridgesRef.current.get(event.sessionId);
+            if (zmodemBridge) {
+              const terminalBytes = zmodemBridge.consume(event.bytes);
+              if (terminalBytes.length === 0) {
+                return {
+                  ...session,
+                  sequence: event.sequence,
+                  bytesRead: session.bytesRead + event.bytes.length,
+                };
+              }
+              const chunk = {
+                nonce: performance.now(),
+                sequence: event.sequence,
+                receivedAtMs: event.receivedAtMs,
+                bytes: Array.from(terminalBytes),
+              };
+              return {
+                ...session,
+                sequence: event.sequence,
+                receiveChunks: appendReceiveChunk(
+                  session.receiveChunks,
+                  chunk,
+                ),
+                lastChunk: chunk,
+                bytesRead: session.bytesRead + event.bytes.length,
+              };
+            }
+            const transferQueue = transferByteQueuesRef.current.get(
+              event.sessionId,
+            );
+            transferQueue?.push(event.bytes);
+            if (transferQueue) {
+              return {
+                ...session,
+                sequence: event.sequence,
+                bytesRead: session.bytesRead + event.bytes.length,
+              };
+            }
             const chunk = {
               nonce: performance.now(),
               sequence: event.sequence,
@@ -530,9 +814,16 @@ export default function App() {
                 : undefined,
               notice: {
                 tone: "error",
-                title: event.message,
+                title: localizedErrorMessage(
+                  event.message,
+                  resolvedLocale,
+                ),
                 detail: willReconnect
-                  ? `${event.code} · 将自动尝试第 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} 次重连`
+                  ? t("runtime.reconnectAttempt", {
+                      code: event.code,
+                      attempt: reconnectAttempts,
+                      max: MAX_RECONNECT_ATTEMPTS,
+                    })
                   : event.code,
               },
             };
@@ -546,15 +837,18 @@ export default function App() {
                 event.state === "error"
                   ? {
                       tone: "error" as const,
-                      title: "日志写入失败",
-                      detail: event.message,
+                      title: t("runtime.logWriteFailed"),
+                      detail: localizedErrorMessage(
+                        event.message,
+                        resolvedLocale,
+                      ),
                     }
                   : session.notice,
             };
         }
       }),
     );
-  }, []);
+  }, [captureDiagnostic, resolvedLocale, t]);
 
   const startLogging = useCallback(
     async (sessionId: string, profile: SessionProfile) => {
@@ -586,9 +880,8 @@ export default function App() {
                   logState: "error",
                   notice: {
                     tone: "error",
-                    title: "无法开始日志",
-                    detail:
-                      error instanceof Error ? error.message : String(error),
+                    title: t("runtime.logStartFailed"),
+                    detail: localizedErrorMessage(error, resolvedLocale),
                   },
                 }
               : session,
@@ -596,7 +889,7 @@ export default function App() {
         );
       }
     },
-    [],
+    [resolvedLocale, t],
   );
 
   const connectProfile = useCallback(
@@ -628,6 +921,13 @@ export default function App() {
             ),
           );
           try {
+            captureDiagnostic("session", "open_requested", {
+              context: {
+                sessionId: alreadyOpen.id,
+                profileId: profile.id,
+                protocol: profile.protocol,
+              },
+            });
             await openConfiguredSession(alreadyOpen.id, profile, applyEvent);
             if (profile.logging.autoStart) {
               await startLogging(alreadyOpen.id, profile);
@@ -676,6 +976,9 @@ export default function App() {
       }
 
       try {
+        captureDiagnostic("session", "open_requested", {
+          context: { sessionId, profileId: profile.id, protocol: profile.protocol },
+        });
         await openConfiguredSession(sessionId, profile, applyEvent);
         if (profile.logging.autoStart) {
           await startLogging(sessionId, profile);
@@ -691,7 +994,7 @@ export default function App() {
         });
       }
     },
-    [activateSession, applyEvent, sessions, startLogging],
+    [activateSession, applyEvent, captureDiagnostic, sessions, startLogging],
   );
 
   useEffect(() => {
@@ -747,7 +1050,10 @@ export default function App() {
                     notice: {
                       tone: "info",
                       title: match.rule.payload,
-                      detail: `触发器：${match.rule.name} · 匹配：${match.matchedText}`,
+                      detail: t("runtime.triggerDetail", {
+                        name: match.rule.name,
+                        match: match.matchedText,
+                      }),
                     },
                   }
                 : item,
@@ -784,11 +1090,13 @@ export default function App() {
                         ...item,
                         notice: {
                           tone: "error",
-                          title: `触发器“${match.rule.name}”发送失败`,
-                          detail:
-                            error instanceof Error
-                              ? error.message
-                              : String(error),
+                          title: t("runtime.triggerSendFailed", {
+                            name: match.rule.name,
+                          }),
+                          detail: localizedErrorMessage(
+                            error,
+                            resolvedLocale,
+                          ),
                         },
                       }
                     : item,
@@ -811,7 +1119,7 @@ export default function App() {
         }
       }
     }
-  }, [profiles, sessions, startLogging]);
+  }, [profiles, resolvedLocale, sessions, startLogging, t]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -857,7 +1165,7 @@ export default function App() {
                 logState: "stopped",
                 notice: {
                   tone: "info",
-                  title: "会话已断开，点击重连可重新建立连接。",
+                  title: t("runtime.disconnected"),
                 },
               }
             : item,
@@ -881,7 +1189,7 @@ export default function App() {
       preferences.confirmActiveSessionClose &&
       requiresCloseConfirmation(target) &&
       !window.confirm(
-        `“${target.title}”仍有活动连接或任务，确定要断开并关闭吗？`,
+        t("runtime.confirmClose", { name: target.title }),
       )
     ) {
       return;
@@ -918,7 +1226,10 @@ export default function App() {
   };
 
   const duplicateProfile = (profile: SessionProfile) => {
-    const duplicate = duplicateSessionProfile(profile);
+    const duplicate = duplicateSessionProfile(
+      profile,
+      t("profile.copySuffix"),
+    );
     setProfiles((current) => [...current, duplicate]);
     setEditingProfile(duplicate);
     setSessionDialogOpen(true);
@@ -928,7 +1239,7 @@ export default function App() {
     const runtime = sessions.find(
       (session) => session.profileId === profile.id,
     );
-    if (!window.confirm(`确定删除会话“${profile.name}”吗？此操作无法撤销。`)) {
+    if (!window.confirm(t("runtime.confirmDelete", { name: profile.name }))) {
       return;
     }
     if (runtime) {
@@ -940,6 +1251,77 @@ export default function App() {
       );
     }
     setProfiles((current) => current.filter((item) => item.id !== profile.id));
+  };
+
+  const exportProfiles = async () => {
+    setProfileTransferNotice(null);
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      const path = await saveJsonDocument(
+        `iTerm-sessions-${date}.json`,
+        serializeSessionProfiles(profiles),
+      );
+      if (path) {
+        captureDiagnostic("configuration", "profiles_exported", {
+          context: { profileCount: profiles.length },
+        });
+        setProfileTransferNotice({
+          tone: "info",
+          title: t("runtime.profilesExported", { count: profiles.length }),
+          detail: path,
+        });
+      }
+    } catch (error) {
+      captureDiagnostic("configuration", "profiles_export_failed", {
+        level: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      setProfileTransferNotice({
+        tone: "error",
+        title: t("runtime.profilesExportFailed"),
+        detail: localizedErrorMessage(error, resolvedLocale),
+      });
+    }
+  };
+
+  const importProfiles = async () => {
+    setProfileTransferNotice(null);
+    try {
+      const document = await openJsonDocument();
+      if (!document) return;
+      const imported = parseSessionProfiles(document.contents);
+      const merged = mergeImportedProfiles(profiles, imported);
+      setProfiles(merged.profiles);
+      captureDiagnostic("configuration", "profiles_imported", {
+        context: {
+          importedCount: merged.importedCount,
+          remappedCount: merged.remappedCount,
+        },
+      });
+      setProfileTransferNotice({
+        tone: "info",
+        title: t("runtime.profilesImported", {
+          count: merged.importedCount,
+        }),
+        detail:
+          merged.remappedCount > 0
+            ? t("runtime.profilesRemapped", {
+                file: document.name,
+                count: merged.remappedCount,
+              })
+            : document.name,
+      });
+    } catch (error) {
+      captureDiagnostic("configuration", "profiles_import_failed", {
+        level: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      setProfileTransferNotice({
+        tone: "error",
+        title: t("runtime.profilesImportFailed"),
+        detail: localizedErrorMessage(error, resolvedLocale),
+      });
+    }
   };
 
   useEffect(() => {
@@ -1096,13 +1478,13 @@ export default function App() {
 
   const sendPreset = async (preset: SenderPreset): Promise<number> => {
     if (!activeSession || !activeProfile) {
-      throw new Error("没有活动会话。");
+      throw new Error(t("runtime.noActiveSession"));
     }
     if (activeSession.state !== "connected") {
-      throw new Error("会话未连接。");
+      throw new Error(t("runtime.notConnected"));
     }
     if (activeSession.transferActive) {
-      throw new Error("文件发送期间不能发送普通数据。");
+      throw new Error(t("runtime.transferBusy"));
     }
     const count =
       preset.mode === "hex"
@@ -1134,17 +1516,90 @@ export default function App() {
     signal: AbortSignal,
   ): Promise<number> => {
     const file = files[0];
-    if (!file) throw new Error("请选择要发送的文件。");
+    if (!file) throw new Error(t("runtime.selectFile"));
     if (
       !activeSession ||
       !activeProfile ||
       activeSession.state !== "connected" ||
       activeSession.transferActive
     ) {
-      throw new Error("会话未连接。");
+      throw new Error(t("runtime.notConnected"));
     }
     const sessionId = activeSession.id;
     const profile = activeProfile;
+    if (protocol === "zmodem") {
+      const bridge = new ZmodemSentryBridge(async (bytes) => {
+        const count = await writeConfiguredBytes(sessionId, profile, bytes);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  bytesWritten: session.bytesWritten + count,
+                }
+              : session,
+          ),
+        );
+        return count;
+      });
+      zmodemBridgesRef.current.set(sessionId, bridge);
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: true }
+            : session,
+        ),
+      );
+      captureDiagnostic("transfer", "started", {
+        context: {
+          protocol,
+          fileCount: files.length,
+          totalBytes: files.reduce((sum, item) => sum + item.size, 0),
+        },
+      });
+      try {
+        const zsession = await bridge.waitForSession("send", signal);
+        const totalBytes = files.reduce((sum, item) => sum + item.size, 0);
+        const transferred = await bridge.guard(
+          sendZmodemFiles(
+            zsession,
+            files,
+            ({ fileIndex, transferredBytes }) => {
+              const completed = files
+                .slice(0, fileIndex)
+                .reduce((sum, item) => sum + item.size, 0);
+              onProgress(completed + transferredBytes, totalBytes);
+            },
+            signal,
+          ),
+        );
+        await bridge.flush();
+        captureDiagnostic("transfer", "completed", {
+          context: { protocol, fileCount: files.length, transferred },
+        });
+        return transferred;
+      } catch (error) {
+        captureDiagnostic("transfer", "failed", {
+          level: signal.aborted ? "warning" : "error",
+          message: signal.aborted
+            ? t("runtime.transferCancelled")
+            : error instanceof Error
+              ? error.message
+              : String(error),
+          context: { protocol, fileCount: files.length },
+        });
+        throw error;
+      } finally {
+        zmodemBridgesRef.current.delete(sessionId);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? { ...session, transferActive: false }
+              : session,
+          ),
+        );
+      }
+    }
     const byteQueue =
       protocol === "raw" ? undefined : new AsyncByteQueue();
     if (byteQueue) transferByteQueuesRef.current.set(sessionId, byteQueue);
@@ -1155,6 +1610,10 @@ export default function App() {
           : session,
       ),
     );
+    const totalBytes = files.reduce((sum, item) => sum + item.size, 0);
+    captureDiagnostic("transfer", "started", {
+      context: { protocol, fileCount: files.length, totalBytes },
+    });
     try {
       const sendBytes = async (bytes: Uint8Array) => {
         const count = await writeConfiguredBytes(sessionId, profile, bytes);
@@ -1170,33 +1629,233 @@ export default function App() {
         );
         return count;
       };
+      let transferred: number;
       if (protocol === "xmodemCrc" && byteQueue) {
-        return await sendXmodemCrc(
+        transferred = await sendXmodemCrc(
           file,
           sendBytes,
           byteQueue,
           onProgress,
           signal,
         );
-      }
-      if (protocol === "ymodem" && byteQueue) {
-        return await sendYmodemBatch(
+      } else if (protocol === "ymodem" && byteQueue) {
+        transferred = await sendYmodemBatch(
           files,
           sendBytes,
           byteQueue,
           ({ sentBytes, totalBytes }) => onProgress(sentBytes, totalBytes),
           signal,
         );
+      } else {
+        transferred = await sendFileInChunks(
+          file,
+          sendBytes,
+          onProgress,
+          signal,
+        );
       }
-      return await sendFileInChunks(
-            file,
-            sendBytes,
-            onProgress,
-            signal,
-          );
+      captureDiagnostic("transfer", "completed", {
+        context: { protocol, fileCount: files.length, transferred },
+      });
+      return transferred;
+    } catch (error) {
+      captureDiagnostic("transfer", "failed", {
+        level: signal.aborted ? "warning" : "error",
+        message: signal.aborted
+          ? t("runtime.transferCancelled")
+          : error instanceof Error
+            ? error.message
+            : String(error),
+        context: { protocol, fileCount: files.length },
+      });
+      throw error;
     } finally {
       transferByteQueuesRef.current.delete(sessionId);
       byteQueue?.close();
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: false }
+            : session,
+        ),
+      );
+    }
+  };
+
+  const receiveYmodemFiles = async (
+    onProgress: (progress: YmodemReceiveProgress) => void,
+    signal: AbortSignal,
+  ): Promise<{ fileCount: number; totalBytes: number } | null> => {
+    if (
+      !activeSession ||
+      !activeProfile ||
+      activeSession.state !== "connected" ||
+      activeSession.transferActive
+    ) {
+      throw new Error(t("runtime.notConnected"));
+    }
+    const outputDirectory = await selectBinaryOutputDirectory(
+      t("runtime.selectReceiveDirectory"),
+    );
+    if (outputDirectory === null) return null;
+
+    const sessionId = activeSession.id;
+    const profile = activeProfile;
+    const byteQueue = new AsyncByteQueue();
+    transferByteQueuesRef.current.set(sessionId, byteQueue);
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === sessionId
+          ? { ...session, transferActive: true }
+          : session,
+      ),
+    );
+    captureDiagnostic("transfer", "receive_started", {
+      context: { protocol: "ymodem" },
+    });
+    try {
+      const sendBytes = async (bytes: Uint8Array) => {
+        const count = await writeConfiguredBytes(sessionId, profile, bytes);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  bytesWritten: session.bytesWritten + count,
+                }
+              : session,
+          ),
+        );
+        return count;
+      };
+      const files = await receiveYmodemBatch(
+        sendBytes,
+        byteQueue,
+        onProgress,
+        signal,
+      );
+      await saveReceivedBinaryFiles(outputDirectory, files);
+      const totalBytes = files.reduce(
+        (sum, file) => sum + file.bytes.length,
+        0,
+      );
+      captureDiagnostic("transfer", "receive_completed", {
+        context: {
+          protocol: "ymodem",
+          fileCount: files.length,
+          totalBytes,
+        },
+      });
+      return { fileCount: files.length, totalBytes };
+    } catch (error) {
+      captureDiagnostic("transfer", "receive_failed", {
+        level: signal.aborted ? "warning" : "error",
+        message: signal.aborted
+          ? t("runtime.receiveCancelled")
+          : error instanceof Error
+            ? error.message
+            : String(error),
+        context: { protocol: "ymodem" },
+      });
+      throw error;
+    } finally {
+      transferByteQueuesRef.current.delete(sessionId);
+      byteQueue.close();
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: false }
+            : session,
+        ),
+      );
+    }
+  };
+
+  const receiveZmodemBatchFiles = async (
+    onProgress: (progress: YmodemReceiveProgress) => void,
+    signal: AbortSignal,
+  ): Promise<{ fileCount: number; totalBytes: number } | null> => {
+    if (
+      !activeSession ||
+      !activeProfile ||
+      activeSession.state !== "connected" ||
+      activeSession.transferActive
+    ) {
+      throw new Error(t("runtime.notConnected"));
+    }
+    const outputDirectory = await selectBinaryOutputDirectory(
+      t("runtime.selectReceiveDirectory"),
+    );
+    if (outputDirectory === null) return null;
+    const sessionId = activeSession.id;
+    const profile = activeProfile;
+    const bridge = new ZmodemSentryBridge(async (bytes) => {
+      const count = await writeConfiguredBytes(sessionId, profile, bytes);
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                bytesWritten: session.bytesWritten + count,
+              }
+            : session,
+        ),
+      );
+      return count;
+    });
+    zmodemBridgesRef.current.set(sessionId, bridge);
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === sessionId
+          ? { ...session, transferActive: true }
+          : session,
+      ),
+    );
+    captureDiagnostic("transfer", "receive_started", {
+      context: { protocol: "zmodem" },
+    });
+    try {
+      const zsession = await bridge.waitForSession("receive", signal);
+      const files = await bridge.guard(
+        receiveZmodemFiles(
+          zsession,
+          (progress: ZmodemProgress) =>
+            onProgress({
+              fileName: progress.fileName,
+              fileIndex: progress.fileIndex,
+              receivedBytes: progress.transferredBytes,
+              fileSize: progress.fileSize,
+            }),
+          signal,
+        ),
+      );
+      await bridge.flush();
+      await saveReceivedBinaryFiles(outputDirectory, files);
+      const totalBytes = files.reduce(
+        (sum, file) => sum + file.bytes.length,
+        0,
+      );
+      captureDiagnostic("transfer", "receive_completed", {
+        context: {
+          protocol: "zmodem",
+          fileCount: files.length,
+          totalBytes,
+        },
+      });
+      return { fileCount: files.length, totalBytes };
+    } catch (error) {
+      captureDiagnostic("transfer", "receive_failed", {
+        level: signal.aborted ? "warning" : "error",
+        message: signal.aborted
+          ? t("runtime.receiveCancelled")
+          : error instanceof Error
+            ? error.message
+            : String(error),
+        context: { protocol: "zmodem" },
+      });
+      throw error;
+    } finally {
+      zmodemBridgesRef.current.delete(sessionId);
       setSessions((current) =>
         current.map((session) =>
           session.id === sessionId
@@ -1239,8 +1898,8 @@ export default function App() {
                 ...session,
                 notice: {
                   tone: "error",
-                  title: "无法更改日志状态",
-                  detail: error instanceof Error ? error.message : String(error),
+                  title: t("runtime.logStateFailed"),
+                  detail: localizedErrorMessage(error, resolvedLocale),
                 },
               }
             : session,
@@ -1272,8 +1931,8 @@ export default function App() {
                 ...session,
                 notice: {
                   tone: "error",
-                  title: "无法停止日志",
-                  detail: error instanceof Error ? error.message : String(error),
+                  title: t("runtime.logStopFailed"),
+                  detail: localizedErrorMessage(error, resolvedLocale),
                 },
               }
             : session,
@@ -1289,9 +1948,51 @@ export default function App() {
       else await openLogDirectory();
     } catch (error) {
       setUtilityError(
-        error instanceof Error ? error.message : "无法打开日志位置。",
+        localizedErrorMessage(
+          error,
+          resolvedLocale,
+          t("runtime.logLocationFallback"),
+        ),
       );
     }
+  };
+
+  const exportDiagnostics = async () => {
+    try {
+      const events = loadDiagnosticEvents();
+      const date = new Date().toISOString().slice(0, 10);
+      await saveJsonDocument(
+        `iTerm-diagnostics-${date}.json`,
+        serializeDiagnosticEvents(
+          events,
+          new Date().toISOString(),
+          resolvedLocale,
+        ),
+      );
+    } catch (error) {
+      setProfileTransferNotice({
+        tone: "error",
+        title: t("runtime.diagnosticsExportFailed"),
+        detail: localizedErrorMessage(error, resolvedLocale),
+      });
+    }
+  };
+
+  const clearDiagnostics = () => {
+    if (!window.confirm(t("runtime.confirmClearDiagnostics"))) return;
+    clearDiagnosticEvents();
+    setDiagnosticCount(0);
+  };
+
+  const setSyncChannel = (channel: SyncChannel) => {
+    if (!activeSession) return;
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === activeSession.id
+          ? { ...session, syncChannel: channel }
+          : session,
+      ),
+    );
   };
 
   const cycleSyncChannel = () => {
@@ -1301,13 +2002,29 @@ export default function App() {
       channels[
         (channels.indexOf(activeSession.syncChannel) + 1) % channels.length
       ];
+    setSyncChannel(next);
+  };
+
+  const setReceiveMode = (receiveMode: RuntimeSession["receiveMode"]) => {
+    if (!activeSession) return;
     setSessions((current) =>
       current.map((session) =>
         session.id === activeSession.id
-          ? { ...session, syncChannel: next }
+          ? { ...session, receiveMode }
           : session,
       ),
     );
+  };
+
+  const goToRelativeSession = (offset: -1 | 1) => {
+    if (sessions.length < 2) return;
+    const currentIndex = Math.max(
+      0,
+      sessions.findIndex((session) => session.id === activeSessionId),
+    );
+    const nextIndex =
+      (currentIndex + offset + sessions.length) % sessions.length;
+    activateSession(sessions[nextIndex].id);
   };
 
   const changeSplitMode = (mode: Exclude<SplitMode, "single">) => {
@@ -1335,59 +2052,417 @@ export default function App() {
     [profiles],
   );
 
+  const topMenus: TopMenuDefinition[] = [
+    {
+      id: "session",
+      labelKey: "shell.menu.session",
+      items: [
+        {
+          label: t("menu.session.new"),
+          shortcut: "Ctrl/⌘+N",
+          onSelect: openNewDialog,
+        },
+        {
+          label:
+            activeSession?.state === "connected"
+              ? t("menu.session.disconnect")
+              : t("menu.session.connect"),
+          shortcut: "Ctrl/⌘+Enter",
+          disabled: !activeProfile,
+          separatorBefore: true,
+          onSelect: () => {
+            if (!activeSession || !activeProfile) return;
+            if (activeSession.state === "connected") {
+              void disconnectSession(activeSession);
+            } else {
+              void connectProfile(activeProfile, activeSession.id);
+            }
+          },
+        },
+        {
+          label: t("menu.session.reconnect"),
+          disabled: !activeProfile || activeSession?.state === "opening",
+          onSelect: () => {
+            if (activeProfile) {
+              void connectProfile(activeProfile, activeSession?.id);
+            }
+          },
+        },
+        {
+          label: t("menu.session.settings"),
+          shortcut: "Ctrl/⌘+,",
+          disabled: !activeProfile,
+          onSelect: () => {
+            if (!activeProfile) return;
+            setEditingProfile(activeProfile);
+            setSessionDialogOpen(true);
+          },
+        },
+        {
+          label: t("menu.session.close"),
+          shortcut: "Ctrl/⌘+W",
+          disabled: !activeSession,
+          separatorBefore: true,
+          onSelect: () => {
+            if (activeSession) void closeTab(activeSession.id);
+          },
+        },
+      ],
+    },
+    {
+      id: "edit",
+      labelKey: "shell.menu.edit",
+      items: [
+        {
+          label: t("menu.edit.copy"),
+          shortcut: "⌘C / Ctrl+Shift+C",
+          disabled: !activeSession,
+          onSelect: () => requestTerminalCommand("copy"),
+        },
+        {
+          label: t("menu.edit.paste"),
+          shortcut: "⌘V / Ctrl+Shift+V",
+          disabled: activeSession?.state !== "connected",
+          onSelect: () => requestTerminalCommand("paste"),
+        },
+      ],
+    },
+    {
+      id: "search",
+      labelKey: "shell.menu.search",
+      items: [
+        {
+          label: t("menu.search.find"),
+          shortcut: "Ctrl/⌘+F",
+          disabled: !activeSession,
+          onSelect: requestTerminalSearch,
+        },
+      ],
+    },
+    {
+      id: "select",
+      labelKey: "shell.menu.select",
+      items: [
+        {
+          label: t("menu.select.all"),
+          disabled: !activeSession,
+          onSelect: () => requestTerminalCommand("selectAll"),
+        },
+      ],
+    },
+    {
+      id: "go",
+      labelKey: "shell.menu.go",
+      items: [
+        {
+          label: t("menu.go.next"),
+          shortcut: "Ctrl/⌘+Tab",
+          disabled: sessions.length < 2,
+          onSelect: () => goToRelativeSession(1),
+        },
+        {
+          label: t("menu.go.previous"),
+          shortcut: "Ctrl/⌘+Shift+Tab",
+          disabled: sessions.length < 2,
+          onSelect: () => goToRelativeSession(-1),
+        },
+      ],
+    },
+    {
+      id: "view",
+      labelKey: "shell.menu.view",
+      items: [
+        {
+          label: t("menu.view.sidebar"),
+          shortcut: "Ctrl/⌘+B",
+          checked: sidebarOpen,
+          onSelect: () => setSidebarOpen((current) => !current),
+        },
+        {
+          label: t("menu.view.sender"),
+          shortcut: "Ctrl/⌘+J",
+          checked: senderOpen,
+          onSelect: () => setSenderOpen((current) => !current),
+        },
+        {
+          label: t("menu.view.focus"),
+          shortcut: "Ctrl/⌘+Shift+F",
+          checked: focusMode,
+          onSelect: () => setFocusMode((current) => !current),
+        },
+        {
+          label: t("menu.view.splitHorizontal"),
+          checked: splitMode === "horizontal",
+          disabled: sessions.length < 2,
+          separatorBefore: true,
+          onSelect: () => changeSplitMode("horizontal"),
+        },
+        {
+          label: t("menu.view.splitVertical"),
+          checked: splitMode === "vertical",
+          disabled: sessions.length < 2,
+          onSelect: () => changeSplitMode("vertical"),
+        },
+        {
+          label: t("menu.view.closeSplit"),
+          disabled: splitMode === "single",
+          onSelect: closeSplit,
+        },
+      ],
+    },
+    {
+      id: "mode",
+      labelKey: "shell.menu.mode",
+      items: [
+        {
+          label: t("menu.mode.text"),
+          checked: activeSession?.receiveMode === "text",
+          disabled: !activeSession,
+          onSelect: () => setReceiveMode("text"),
+        },
+        {
+          label: t("menu.mode.hex"),
+          checked: activeSession?.receiveMode === "hex",
+          disabled: !activeSession,
+          onSelect: () => setReceiveMode("hex"),
+        },
+        ...(["off", "A", "B", "C", "D"] as SyncChannel[]).map(
+          (channel, index): TopMenuItem => ({
+            label:
+              channel === "off"
+                ? t("menu.mode.syncOff")
+                : t("menu.mode.syncChannel", { channel }),
+            checked: activeSession?.syncChannel === channel,
+            disabled: !activeSession,
+            separatorBefore: index === 0,
+            onSelect: () => setSyncChannel(channel),
+          }),
+        ),
+      ],
+    },
+    {
+      id: "tools",
+      labelKey: "shell.menu.tools",
+      items: [
+        {
+          label:
+            activeSession?.logState === "recording"
+              ? t("menu.tools.pauseLog")
+              : activeSession?.logState === "paused"
+                ? t("menu.tools.resumeLog")
+                : t("menu.tools.startLog"),
+          disabled:
+            !activeSession ||
+            !activeProfile ||
+            activeSession.state !== "connected",
+          onSelect: () => {
+            if (!activeSession || !activeProfile) return;
+            if (
+              activeSession.logState === "recording" ||
+              activeSession.logState === "paused"
+            ) {
+              void toggleLogPaused();
+            } else {
+              void startLogging(activeSession.id, activeProfile);
+            }
+          },
+        },
+        {
+          label: t("menu.tools.stopLog"),
+          disabled:
+            activeSession?.logState !== "recording" &&
+            activeSession?.logState !== "paused",
+          onSelect: () => void stopLogging(),
+        },
+        {
+          label: t("menu.tools.openLog"),
+          disabled: !activeSession?.logPath,
+          onSelect: () => {
+            if (activeSession?.logPath) void openLogs(activeSession.logPath);
+          },
+        },
+        {
+          label: t("menu.tools.openLogDirectory"),
+          onSelect: () => void openLogs(),
+        },
+        {
+          label: t("menu.tools.clearBuffers"),
+          disabled:
+            activeProfile?.protocol !== "serial" ||
+            activeSession?.state !== "connected",
+          separatorBefore: true,
+          onSelect: () => {
+            if (activeSession) void clearSerialBuffers(activeSession.id, "all");
+          },
+        },
+        {
+          label: t("menu.tools.sendBreak"),
+          disabled:
+            activeProfile?.protocol !== "serial" ||
+            activeSession?.state !== "connected",
+          onSelect: () => {
+            if (activeSession) void sendSerialBreak(activeSession.id);
+          },
+        },
+        {
+          label: t("menu.tools.refresh"),
+          separatorBefore: true,
+          onSelect: () => {
+            void refreshPorts();
+            void refreshAdbDevices();
+          },
+        },
+      ],
+    },
+    {
+      id: "window",
+      labelKey: "shell.menu.window",
+      items: [
+        {
+          label: t("menu.window.themeLight"),
+          checked: preferences.theme === "light",
+          onSelect: () =>
+            setPreferences((current) => ({ ...current, theme: "light" })),
+        },
+        {
+          label: t("menu.window.themeDark"),
+          checked: preferences.theme === "dark",
+          onSelect: () =>
+            setPreferences((current) => ({ ...current, theme: "dark" })),
+        },
+        {
+          label: t("menu.window.themeSystem"),
+          checked: preferences.theme === "system",
+          onSelect: () =>
+            setPreferences((current) => ({ ...current, theme: "system" })),
+        },
+        {
+          label: t("menu.window.settings"),
+          separatorBefore: true,
+          onSelect: () => setAppSettingsOpen(true),
+        },
+      ],
+    },
+    {
+      id: "help",
+      labelKey: "shell.menu.help",
+      items: [
+        {
+          label: t("menu.help.shortcuts"),
+          shortcut: "Ctrl/⌘+/",
+          onSelect: () => setShortcutHelpOpen(true),
+        },
+      ],
+    },
+  ];
+
   return (
-    <div
-      className={`app-shell ${focusMode ? "is-focus-mode" : ""}`}
-      data-theme={resolvedTheme}
-    >
+    <I18nProvider locale={resolvedLocale}>
+      <div
+        className={`app-shell ${focusMode ? "is-focus-mode" : ""}`}
+        data-theme={resolvedTheme}
+      >
       <header className="app-menubar">
-        <div className="menu-items">
-          {["会话", "编辑", "搜索", "选择", "转到", "查看", "模式", "工具", "窗口", "帮助"].map(
-            (item) => (
+        <div className="menu-items" ref={topMenuBarRef}>
+          {topMenus.map((menu) => (
+            <div className="top-menu" key={menu.id}>
               <button
-                key={item}
-                onClick={() => item === "帮助" && setShortcutHelpOpen(true)}
-                title={item === "帮助" ? "快捷键帮助（Ctrl/⌘+/）" : item}
+                className={activeTopMenu === menu.id ? "is-open" : ""}
+                aria-haspopup="menu"
+                aria-expanded={activeTopMenu === menu.id}
+                onClick={() => {
+                  setTabListOpen(false);
+                  setActiveTopMenu((current) =>
+                    current === menu.id ? null : menu.id,
+                  );
+                }}
+                onMouseEnter={() => {
+                  if (activeTopMenu) setActiveTopMenu(menu.id);
+                }}
+                title={t(menu.labelKey)}
               >
-                {item}
+                {t(menu.labelKey)}
               </button>
-            ),
-          )}
+              {activeTopMenu === menu.id && (
+                <div className="top-menu-panel" role="menu">
+                  {menu.items.map((item, index) => (
+                    <button
+                      key={`${item.label}-${index}`}
+                      className={[
+                        item.checked ? "is-checked" : "",
+                        item.separatorBefore ? "has-separator" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      role={
+                        item.checked === undefined
+                          ? "menuitem"
+                          : "menuitemcheckbox"
+                      }
+                      aria-checked={
+                        item.checked === undefined ? undefined : item.checked
+                      }
+                      disabled={item.disabled}
+                      onClick={() => {
+                        setActiveTopMenu(null);
+                        item.onSelect();
+                      }}
+                    >
+                      <span className="top-menu-check">
+                        {item.checked ? "✓" : ""}
+                      </span>
+                      <span className="top-menu-label">{item.label}</span>
+                      {item.shortcut && (
+                        <kbd className="top-menu-shortcut">
+                          {item.shortcut}
+                        </kbd>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
         <div className="menu-actions">
-          <button title="搜索">
+          <button
+            title={t("shell.search")}
+            onClick={() => requestTerminalSearch()}
+            disabled={!activeSession}
+          >
             <Search size={17} />
           </button>
           <button
             className={
               activeSession?.syncChannel !== "off" ? "is-active" : ""
             }
-            title="切换同步输入通道 A/B/C/D"
+            title={t("shell.sync.title")}
             disabled={!activeSession}
             onClick={cycleSyncChannel}
           >
             <Link2 size={17} />
-            同步{" "}
+            {t("shell.sync")}{" "}
             {activeSession?.syncChannel === "off"
               ? "—"
               : activeSession?.syncChannel}
           </button>
           <button
             className={focusMode ? "is-active" : ""}
-            title="专注模式（Ctrl/⌘+Shift+F）"
+            title={t("shell.focus.title")}
             onClick={() => setFocusMode((current) => !current)}
           >
             <Zap size={16} />
-            专注模式
+            {t("shell.focus")}
           </button>
           <button
-            title={`主题：${
-              preferences.theme === "light"
-                ? "浅色"
-                : preferences.theme === "dark"
-                  ? "深色"
-                  : "跟随系统"
-            }（点击切换）`}
+            title={t("shell.theme.title", {
+              theme:
+                preferences.theme === "light"
+                  ? t("shell.theme.light")
+                  : preferences.theme === "dark"
+                    ? t("shell.theme.dark")
+                    : t("shell.theme.system"),
+            })}
             onClick={() =>
               setPreferences((current) => ({
                 ...current,
@@ -1397,13 +2472,13 @@ export default function App() {
           >
             <SunMoon size={16} />
             {preferences.theme === "light"
-              ? "浅色"
+              ? t("shell.theme.light")
               : preferences.theme === "dark"
-                ? "深色"
-                : "系统"}
+                ? t("shell.theme.dark")
+                : t("shell.theme.systemShort")}
           </button>
           <button
-            title="应用设置"
+            title={t("shell.settings")}
             onClick={() => setAppSettingsOpen(true)}
           >
             <Menu size={18} />
@@ -1432,6 +2507,8 @@ export default function App() {
               void refreshPorts();
               void refreshAdbDevices();
             }}
+            onExport={() => void exportProfiles()}
+            onImport={() => void importProfiles()}
           />
         )}
 
@@ -1440,7 +2517,11 @@ export default function App() {
             <button
               className="sidebar-toggle"
               onClick={() => setSidebarOpen((value) => !value)}
-              title={sidebarOpen ? "隐藏会话管理器" : "显示会话管理器"}
+              title={
+                sidebarOpen
+                  ? t("shell.sidebar.hide")
+                  : t("shell.sidebar.show")
+              }
             >
               {sidebarOpen ? (
                 <PanelLeftClose size={17} />
@@ -1490,7 +2571,7 @@ export default function App() {
               }`}
               disabled={sessions.length < 2}
               onClick={() => changeSplitMode("horizontal")}
-              title="左右分屏"
+              title={t("shell.split.horizontal")}
             >
               <Columns2 size={17} />
             </button>
@@ -1500,7 +2581,7 @@ export default function App() {
               }`}
               disabled={sessions.length < 2}
               onClick={() => changeSplitMode("vertical")}
-              title="上下分屏"
+              title={t("shell.split.vertical")}
             >
               <Rows2 size={17} />
             </button>
@@ -1508,7 +2589,7 @@ export default function App() {
               <button
                 className="tab-action"
                 onClick={closeSplit}
-                title="关闭分屏"
+                title={t("shell.split.close")}
               >
                 <PanelTopClose size={17} />
               </button>
@@ -1516,13 +2597,55 @@ export default function App() {
             <button
               className="tab-action"
               onClick={openNewDialog}
-              title="新建会话（Ctrl/⌘+N）"
+              title={t("shell.session.newTitle")}
             >
               <CirclePlus size={18} />
             </button>
-            <button className="tab-action" title="标签列表">
-              <Menu size={17} />
-            </button>
+            <div className="tab-list-control" ref={tabListRef}>
+              <button
+                className={`tab-action ${tabListOpen ? "is-active" : ""}`}
+                title={t("shell.tabs.list")}
+                aria-label={t("shell.tabs.list")}
+                aria-haspopup="menu"
+                aria-expanded={tabListOpen}
+                disabled={sessions.length === 0}
+                onClick={() => setTabListOpen((current) => !current)}
+              >
+                <Menu size={17} />
+              </button>
+              {tabListOpen && (
+                <div className="tab-list-menu" role="menu">
+                  {sessions.map((session, index) => (
+                    <button
+                      key={session.id}
+                      className={
+                        session.id === activeSessionId ? "is-active" : ""
+                      }
+                      role="menuitem"
+                      onClick={() => {
+                        activateSession(session.id);
+                        setTabListOpen(false);
+                      }}
+                    >
+                      <span
+                        className={`tab-state state-${session.state}`}
+                        style={{
+                          background:
+                            profileById.get(session.profileId)?.color ??
+                            "#17a34a",
+                        }}
+                      />
+                      <span>
+                        {index + 1}. {session.title}
+                      </span>
+                      {session.id === activeSessionId && (
+                        <small>{t("shell.tabs.current")}</small>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="session-toolbar">
@@ -1530,7 +2653,7 @@ export default function App() {
               <button
                 className="icon-button"
                 onClick={openNewDialog}
-                title="新建会话（Ctrl/⌘+N）"
+                title={t("shell.session.newTitle")}
               >
                 <CirclePlus size={19} />
               </button>
@@ -1538,7 +2661,7 @@ export default function App() {
                 <button
                   className="icon-button"
                   onClick={() => void disconnectSession(activeSession)}
-                  title="断开会话（Ctrl/⌘+Enter）"
+                  title={t("shell.session.disconnectTitle")}
                 >
                   <Unplug size={18} />
                 </button>
@@ -1549,7 +2672,7 @@ export default function App() {
                   onClick={() =>
                     activeProfile && void connectProfile(activeProfile)
                   }
-                  title="连接会话（Ctrl/⌘+Enter）"
+                  title={t("shell.session.connectTitle")}
                 >
                   <PlugZap size={18} />
                 </button>
@@ -1561,7 +2684,7 @@ export default function App() {
                   activeProfile &&
                   void connectProfile(activeProfile, activeSession?.id)
                 }
-                title="重新连接"
+                title={t("shell.session.reconnect")}
               >
                 <RotateCw size={18} />
               </button>
@@ -1573,7 +2696,7 @@ export default function App() {
                   setEditingProfile(activeProfile);
                   setSessionDialogOpen(true);
                 }}
-                title="会话设置（Ctrl/⌘+,）"
+                title={t("shell.session.settingsTitle")}
               >
                 <Settings size={18} />
               </button>
@@ -1587,8 +2710,12 @@ export default function App() {
               <ChevronDown size={13} />
               <span>
                 {activeProfile
-                  ? sessionTargetLabel(activeProfile)
-                  : "尚未打开会话"}
+                  ? sessionTargetLabel(activeProfile, {
+                      sshUnset: t("profile.target.sshUnset"),
+                      adbUnset: t("profile.target.adbUnset"),
+                      serialUnset: t("profile.target.serialUnset"),
+                    })
+                  : t("shell.session.none")}
               </span>
             </div>
 
@@ -1603,8 +2730,8 @@ export default function App() {
                     onClick={() => void toggleLogPaused()}
                     title={
                       activeSession.logState === "recording"
-                        ? "暂停日志"
-                        : "继续日志"
+                        ? t("shell.log.pause")
+                        : t("shell.log.resume")
                     }
                   >
                     {activeSession.logState === "recording" ? (
@@ -1617,7 +2744,7 @@ export default function App() {
                   <button
                     className="icon-button"
                     onClick={() => void stopLogging()}
-                    title="停止日志"
+                    title={t("shell.log.stop")}
                   >
                     <CircleStop size={16} />
                   </button>
@@ -1635,7 +2762,7 @@ export default function App() {
                     activeProfile &&
                     void startLogging(activeSession.id, activeProfile)
                   }
-                  title="开始会话日志"
+                  title={t("shell.log.start")}
                 >
                   <FileClock size={14} />
                   LOG
@@ -1648,14 +2775,14 @@ export default function App() {
                   activeSession?.logPath &&
                   void openLogs(activeSession.logPath)
                 }
-                title="打开当前日志文件"
+                title={t("shell.log.openFile")}
               >
                 <FileText size={16} />
               </button>
               <button
                 className="icon-button"
                 onClick={() => void openLogs()}
-                title="打开日志目录"
+                title={t("shell.log.openDirectory")}
               >
                 <FolderOpen size={16} />
               </button>
@@ -1677,7 +2804,7 @@ export default function App() {
                     ),
                   )
                 }
-                title="切换文本与 Hex 接收视图"
+                title={t("shell.receive.toggle")}
               >
                 <Binary size={15} />
                 HEX
@@ -1689,7 +2816,7 @@ export default function App() {
                   activeSession?.state !== "connected"
                 }
                 onClick={() => void toggleSignal("dtr")}
-                title="切换 DTR"
+                title={t("shell.signal.dtr")}
               >
                 DTR
               </button>
@@ -1700,7 +2827,7 @@ export default function App() {
                   activeSession?.state !== "connected"
                 }
                 onClick={() => void toggleSignal("rts")}
-                title="切换 RTS"
+                title={t("shell.signal.rts")}
               >
                 RTS
               </button>
@@ -1713,7 +2840,7 @@ export default function App() {
                 onClick={() =>
                   activeSession && void sendSerialBreak(activeSession.id)
                 }
-                title="发送 Break"
+                title={t("shell.signal.break")}
               >
                 <CircleStop size={18} />
               </button>
@@ -1727,14 +2854,14 @@ export default function App() {
                   activeSession &&
                   void clearSerialBuffers(activeSession.id, "all")
                 }
-                title="清空串口输入/输出缓冲"
+                title={t("shell.signal.clear")}
               >
                 <Eraser size={17} />
               </button>
               <button
                 className="icon-button"
                 onClick={() => void refreshPorts()}
-                title="刷新设备"
+                title={t("shell.devices.refresh")}
               >
                 <RefreshCw size={18} />
               </button>
@@ -1745,7 +2872,7 @@ export default function App() {
             <div className="notice-bar error">
               <Info size={18} />
               <div>
-                <strong>读取串口列表失败</strong>
+                <strong>{t("shell.error.serialList")}</strong>
                 <span>{portError}</span>
               </div>
               <button onClick={() => setPortError("")}>
@@ -1758,7 +2885,7 @@ export default function App() {
             <div className="notice-bar error">
               <Info size={18} />
               <div>
-                <strong>读取 ADB 设备失败</strong>
+                <strong>{t("shell.error.adbList")}</strong>
                 <span>{adbError}</span>
               </div>
               <button onClick={() => setAdbError("")}>
@@ -1771,10 +2898,40 @@ export default function App() {
             <div className="notice-bar error">
               <Info size={18} />
               <div>
-                <strong>无法打开日志位置</strong>
+                <strong>{t("shell.error.logLocation")}</strong>
                 <span>{utilityError}</span>
               </div>
               <button onClick={() => setUtilityError("")}>
+                <X size={17} />
+              </button>
+            </div>
+          )}
+
+          {persistenceError && (
+            <div className="notice-bar error">
+              <Info size={18} />
+              <div>
+                <strong>{t("shell.error.persistence")}</strong>
+                <span>
+                  {persistenceError} {t("shell.error.persistenceFallback")}
+                </span>
+              </div>
+              <button onClick={() => setPersistenceError("")}>
+                <X size={17} />
+              </button>
+            </div>
+          )}
+
+          {profileTransferNotice && (
+            <div className={`notice-bar ${profileTransferNotice.tone}`}>
+              <Info size={18} />
+              <div>
+                <strong>{profileTransferNotice.title}</strong>
+                {profileTransferNotice.detail && (
+                  <span>{profileTransferNotice.detail}</span>
+                )}
+              </div>
+              <button onClick={() => setProfileTransferNotice(null)}>
                 <X size={17} />
               </button>
             </div>
@@ -1799,7 +2956,7 @@ export default function App() {
                       void connectProfile(activeProfile, activeSession.id)
                     }
                   >
-                    重新连接
+                    {t("shell.action.reconnect")}
                   </button>
                 )}
               <button
@@ -1825,11 +2982,11 @@ export default function App() {
                   <Cable size={34} />
                 </div>
                 <h1>iTerm</h1>
-                <p>WindTerm 风格的串口、SSH 与 ADB 终端工作区</p>
+                <p>{t("shell.welcome.subtitle")}</p>
                 <div className="welcome-actions">
                   <button className="primary-button" onClick={openNewDialog}>
                     <CirclePlus size={17} />
-                    新建会话
+                    {t("shell.welcome.new")}
                   </button>
                   <button
                     className="secondary-button"
@@ -1839,13 +2996,15 @@ export default function App() {
                     }}
                   >
                     <RefreshCw size={16} />
-                    刷新设备
+                    {t("shell.welcome.refresh")}
                   </button>
                 </div>
                 <div className="available-port-summary">
                   <Cable size={15} />
-                  已发现 {ports.length} 个串口设备、{adbDevices.length} 个
-                  ADB 设备
+                  {t("shell.welcome.discovered", {
+                    serialCount: ports.length,
+                    adbCount: adbDevices.length,
+                  })}
                 </div>
               </div>
             )}
@@ -1888,11 +3047,11 @@ export default function App() {
                                     ...item,
                                     notice: {
                                       tone: "warning",
-                                      title: "远程终端尺寸同步失败",
-                                      detail:
-                                        error instanceof Error
-                                          ? error.message
-                                          : String(error),
+                                      title: t("shell.error.remoteResize"),
+                                      detail: localizedErrorMessage(
+                                        error,
+                                        resolvedLocale,
+                                      ),
                                     },
                                   }
                                 : item,
@@ -1931,6 +3090,8 @@ export default function App() {
               onClose={() => setSenderOpen(false)}
               onSend={sendPreset}
               onSendFiles={sendFiles}
+              onReceiveYmodem={receiveYmodemFiles}
+              onReceiveZmodem={receiveZmodemBatchFiles}
             />
           )}
 
@@ -1940,19 +3101,25 @@ export default function App() {
                 <Cable size={15} />
               </span>
               <strong>
-                {activeSession ? stateLabel(activeSession.state) : "就绪"}
+                {activeSession
+                  ? stateLabel(activeSession.state, t)
+                  : t("shell.status.ready")}
               </strong>
             </div>
             <div className="status-items">
               <button>
-                {activeSession?.state === "connected" ? "远程模式" : "本地模式"}
+                {activeSession?.state === "connected"
+                  ? t("shell.status.remote")
+                  : t("shell.status.local")}
               </button>
               <span>
-                窗口 {activeSession?.terminalCols ?? 80}×
-                {activeSession?.terminalRows ?? 24}
+                {t("shell.status.window", {
+                  cols: activeSession?.terminalCols ?? 80,
+                  rows: activeSession?.terminalRows ?? 24,
+                })}
               </span>
-              <span>行 1</span>
-              <span>字符 0</span>
+              <span>{t("shell.status.line")}</span>
+              <span>{t("shell.status.character")}</span>
               <span>{activeProfile?.terminal.termType ?? "Plain Text"}</span>
               <span>
                 RX {formatByteCount(activeSession?.bytesRead ?? 0)} · TX{" "}
@@ -1963,12 +3130,12 @@ export default function App() {
                   className={`log-status state-${activeSession.logState}`}
                   title={activeSession.logPath}
                 >
-                  日志{" "}
+                  {t("shell.status.log")}{" "}
                   {activeSession.logState === "recording"
-                    ? "记录中"
+                    ? t("shell.status.recording")
                     : activeSession.logState === "paused"
-                      ? "已暂停"
-                      : "错误"}
+                      ? t("shell.status.paused")
+                      : t("shell.status.error")}
                 </span>
               )}
               <button
@@ -1977,7 +3144,7 @@ export default function App() {
                 disabled={sessions.length === 0}
               >
                 <PanelBottom size={15} />
-                发送
+                {t("shell.status.sender")}
               </button>
             </div>
           </footer>
@@ -2002,6 +3169,9 @@ export default function App() {
       <AppSettingsDialog
         open={appSettingsOpen}
         preferences={preferences}
+        diagnosticCount={diagnosticCount}
+        onExportDiagnostics={() => void exportDiagnostics()}
+        onClearDiagnostics={clearDiagnostics}
         onCancel={() => setAppSettingsOpen(false)}
         onSave={(nextPreferences) => {
           setPreferences(nextPreferences);
@@ -2020,30 +3190,37 @@ export default function App() {
               <div>
                 <Keyboard size={20} />
                 <div>
-                  <h2 id="shortcut-dialog-title">键盘快捷键</h2>
-                  <p>Ctrl 与 ⌘ 会根据当前平台使用。</p>
+                  <h2 id="shortcut-dialog-title">
+                    {t("shell.shortcuts.title")}
+                  </h2>
+                  <p>{t("shell.shortcuts.subtitle")}</p>
                 </div>
               </div>
               <button
                 className="icon-button"
                 onClick={() => setShortcutHelpOpen(false)}
-                aria-label="关闭快捷键帮助"
+                aria-label={t("shell.shortcuts.close")}
               >
                 <X size={17} />
               </button>
             </header>
             <div className="shortcut-list">
               {[
-                ["新建会话", "Ctrl/⌘ + N"],
-                ["关闭当前标签", "Ctrl/⌘ + W"],
-                ["下一个 / 上一个标签", "Ctrl/⌘ + Tab / Shift + Tab"],
-                ["连接或断开", "Ctrl/⌘ + Enter"],
-                ["会话设置", "Ctrl/⌘ + ,"],
-                ["切换会话侧栏", "Ctrl/⌘ + B"],
-                ["切换发送窗格", "Ctrl/⌘ + J"],
-                ["切换专注模式", "Ctrl/⌘ + Shift + F"],
-                ["打开快捷键帮助", "Ctrl/⌘ + /"],
-                ["关闭对话框 / 退出专注", "Esc"],
+                [t("shell.shortcuts.new"), "Ctrl/⌘ + N"],
+                [t("shell.shortcuts.closeTab"), "Ctrl/⌘ + W"],
+                [
+                  t("shell.shortcuts.switchTabs"),
+                  "Ctrl/⌘ + Tab / Shift + Tab",
+                ],
+                [t("shell.shortcuts.connect"), "Ctrl/⌘ + Enter"],
+                [t("shell.shortcuts.settings"), "Ctrl/⌘ + ,"],
+                [t("shell.shortcuts.sidebar"), "Ctrl/⌘ + B"],
+                [t("shell.shortcuts.sender"), "Ctrl/⌘ + J"],
+                [t("shell.shortcuts.focus"), "Ctrl/⌘ + Shift + F"],
+                [t("shell.shortcuts.help"), "Ctrl/⌘ + /"],
+                [t("shell.shortcuts.dismiss"), "Esc"],
+                [t("shell.shortcuts.copy"), "⌘C / Ctrl+Shift+C"],
+                [t("shell.shortcuts.paste"), "⌘V / Ctrl+Shift+V"],
               ].map(([label, keys]) => (
                 <div key={label}>
                   <span>{label}</span>
@@ -2058,12 +3235,13 @@ export default function App() {
         <button
           className="focus-exit-button"
           onClick={() => setFocusMode(false)}
-          title="退出专注模式（Esc）"
+          title={t("shell.focus.exitTitle")}
         >
           <Zap size={15} />
-          退出专注
+          {t("shell.focus.exit")}
         </button>
       )}
-    </div>
+      </div>
+    </I18nProvider>
   );
 }

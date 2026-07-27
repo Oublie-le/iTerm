@@ -3,6 +3,7 @@ import {
   ChevronDown,
   CirclePlus,
   Copy,
+  Download,
   Folder,
   Network,
   Pencil,
@@ -10,6 +11,7 @@ import {
   Search,
   Smartphone,
   Trash2,
+  Upload,
   Usb,
 } from "lucide-react";
 import type {
@@ -19,6 +21,7 @@ import type {
   SessionProfile,
 } from "../lib/types";
 import { sessionTargetLabel } from "../lib/types";
+import { useI18n } from "../lib/i18n";
 
 interface SessionSidebarProps {
   profiles: SessionProfile[];
@@ -33,6 +36,8 @@ interface SessionSidebarProps {
   onDuplicate: (profile: SessionProfile) => void;
   onDelete: (profile: SessionProfile) => void;
   onRefresh: () => void;
+  onExport: () => void;
+  onImport: () => void;
 }
 
 export function SessionSidebar({
@@ -48,9 +53,17 @@ export function SessionSidebar({
   onDuplicate,
   onDelete,
   onRefresh,
+  onExport,
+  onImport,
 }: SessionSidebarProps) {
+  const { t } = useI18n();
+  const targetLabels = {
+    sshUnset: t("profile.target.sshUnset"),
+    adbUnset: t("profile.target.adbUnset"),
+    serialUnset: t("profile.target.serialUnset"),
+  };
   const visibleProfiles = profiles.filter((profile) =>
-    `${profile.name} ${profile.group} ${profile.protocol} ${sessionTargetLabel(profile)}`
+    `${profile.name} ${profile.group} ${profile.protocol} ${sessionTargetLabel(profile, targetLabels)}`
       .toLocaleLowerCase()
       .includes(filter.toLocaleLowerCase()),
   );
@@ -65,10 +78,33 @@ export function SessionSidebar({
     <aside className="session-sidebar">
       <header className="dock-title">
         <span className="dock-title-mark" />
-        <span>会话管理器</span>
-        <button className="icon-button" title="新建会话" onClick={onNew}>
-          <CirclePlus size={17} />
-        </button>
+        <span>{t("sidebar.title")}</span>
+        <div className="dock-actions">
+          <button
+            className="icon-button"
+            title={t("sidebar.import")}
+            aria-label={t("sidebar.import")}
+            onClick={onImport}
+          >
+            <Upload size={15} />
+          </button>
+          <button
+            className="icon-button"
+            title={t("sidebar.export")}
+            aria-label={t("sidebar.export")}
+            onClick={onExport}
+            disabled={profiles.length === 0}
+          >
+            <Download size={15} />
+          </button>
+          <button
+            className="icon-button"
+            title={t("sidebar.new")}
+            onClick={onNew}
+          >
+            <CirclePlus size={17} />
+          </button>
+        </div>
       </header>
 
       <div className="sidebar-search">
@@ -76,10 +112,14 @@ export function SessionSidebar({
         <input
           value={filter}
           onChange={(event) => onFilterChange(event.target.value)}
-          placeholder="筛选会话"
-          aria-label="筛选会话"
+          placeholder={t("sidebar.filter")}
+          aria-label={t("sidebar.filter")}
         />
-        <button className="icon-button" title="刷新串口" onClick={onRefresh}>
+        <button
+          className="icon-button"
+          title={t("sidebar.refresh")}
+          onClick={onRefresh}
+        >
           <RefreshCw size={15} />
         </button>
       </div>
@@ -89,13 +129,13 @@ export function SessionSidebar({
           <div className="tree-group-label">
             <ChevronDown size={15} />
             <Folder size={16} />
-            <span>保存的会话</span>
+            <span>{t("sidebar.saved")}</span>
             <span className="tree-count">{visibleProfiles.length}</span>
           </div>
           {visibleProfiles.length === 0 ? (
             <button className="empty-tree-action" onClick={onNew}>
               <CirclePlus size={16} />
-              新建第一个会话
+              {t("sidebar.empty")}
             </button>
           ) : (
             visibleProfiles.map((profile) => {
@@ -109,7 +149,7 @@ export function SessionSidebar({
                     className="tree-session"
                     onDoubleClick={() => onOpen(profile)}
                     onClick={() => (runtime ? onOpen(profile) : onEdit(profile))}
-                    title="双击连接，单击打开或编辑"
+                    title={t("sidebar.interactionHint")}
                   >
                     <span
                       className={`connection-dot state-${runtime?.state ?? "disconnected"}`}
@@ -117,28 +157,30 @@ export function SessionSidebar({
                     <ProfileIcon size={16} />
                     <span className="tree-session-text">
                       <strong>{profile.name}</strong>
-                      <small>{sessionTargetLabel(profile)}</small>
+                      <small>{sessionTargetLabel(profile, targetLabels)}</small>
                     </span>
                   </button>
                   <div className="tree-session-actions">
                     <button
                       onClick={() => onEdit(profile)}
-                      title={`编辑 ${profile.name}`}
-                      aria-label={`编辑 ${profile.name}`}
+                      title={t("sidebar.edit", { name: profile.name })}
+                      aria-label={t("sidebar.edit", { name: profile.name })}
                     >
                       <Pencil size={13} />
                     </button>
                     <button
                       onClick={() => onDuplicate(profile)}
-                      title={`复制 ${profile.name}`}
-                      aria-label={`复制 ${profile.name}`}
+                      title={t("sidebar.duplicate", { name: profile.name })}
+                      aria-label={t("sidebar.duplicate", {
+                        name: profile.name,
+                      })}
                     >
                       <Copy size={13} />
                     </button>
                     <button
                       onClick={() => onDelete(profile)}
-                      title={`删除 ${profile.name}`}
-                      aria-label={`删除 ${profile.name}`}
+                      title={t("sidebar.delete", { name: profile.name })}
+                      aria-label={t("sidebar.delete", { name: profile.name })}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -153,7 +195,7 @@ export function SessionSidebar({
           <div className="tree-group-label">
             <ChevronDown size={15} />
             <Usb size={16} />
-            <span>可用设备</span>
+            <span>{t("sidebar.available")}</span>
             <span className="tree-count">{ports.length}</span>
           </div>
           {ports.map((port) => (
@@ -176,7 +218,7 @@ export function SessionSidebar({
           <div className="tree-group-label">
             <ChevronDown size={15} />
             <Smartphone size={16} />
-            <span>ADB 设备</span>
+            <span>{t("sidebar.adb")}</span>
             <span className="tree-count">{adbDevices.length}</span>
           </div>
           {adbDevices.map((device) => (
@@ -194,10 +236,14 @@ export function SessionSidebar({
       </div>
 
       <footer className="sidebar-footer">
-        <span>{ports.length + adbDevices.length} 个设备</span>
+        <span>
+          {t("sidebar.deviceCount", {
+            count: ports.length + adbDevices.length,
+          })}
+        </span>
         <button onClick={onNew}>
           <CirclePlus size={15} />
-          新建会话
+          {t("sidebar.new")}
         </button>
       </footer>
     </aside>

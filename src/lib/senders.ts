@@ -1,4 +1,5 @@
 import { createSenderPreset, type SenderPreset } from "./types";
+import { setPersistentItem } from "./persistence";
 
 const SENDERS_STORAGE_KEY = "iterm.senders.v1";
 
@@ -18,13 +19,14 @@ function readStore(storage: Pick<Storage, "getItem">): SenderStore {
 export function loadSenderPresets(
   profileId: string,
   storage: Pick<Storage, "getItem"> = localStorage,
+  defaultLabel = "发送",
 ): SenderPreset[] {
   const stored = readStore(storage)[profileId];
   if (!Array.isArray(stored) || stored.length === 0) {
-    return [createSenderPreset()];
+    return [createSenderPreset(1, defaultLabel)];
   }
   return stored.map((preset, index) => ({
-    ...createSenderPreset(index + 1),
+    ...createSenderPreset(index + 1, defaultLabel),
     ...preset,
     id: typeof preset.id === "string" ? preset.id : crypto.randomUUID(),
   }));
@@ -37,5 +39,5 @@ export function saveSenderPresets(
 ): void {
   const store = readStore(storage);
   store[profileId] = presets;
-  storage.setItem(SENDERS_STORAGE_KEY, JSON.stringify(store));
+  setPersistentItem(SENDERS_STORAGE_KEY, JSON.stringify(store), storage);
 }

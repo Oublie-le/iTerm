@@ -310,18 +310,15 @@ stateDiagram-v2
 
 ## 9. 持久化设计
 
-SQLite 仅存配置和轻量历史：
+SQLite 仅存配置和轻量历史。当前 schema v1 使用受白名单限制的
+`persistent_items(storage_key, value_json, updated_at_ms)` 表承载版本化 JSON，
+通过 `PRAGMA user_version` 和事务执行迁移；WAL、busy timeout 和有序前端写队列避免
+并发覆盖。原生应用启动时优先恢复数据库，并把旧 Web Storage 中缺失的配置一次性迁入。
+浏览器 Mock 模式继续使用 Web Storage。
 
-```text
-session_groups
-session_profiles
-sender_presets
-trigger_rules
-workspace_layouts
-recent_sessions
-app_settings
-schema_migrations
-```
+后续需要跨配置查询或轻量历史时，再把对应数据迁入规范化表，例如
+`session_profiles`、`sender_presets`、`trigger_rules`、`workspace_layouts`、
+`recent_sessions` 和 `app_settings`，不在 schema v1 过早拆表。
 
 大数据不写数据库：
 

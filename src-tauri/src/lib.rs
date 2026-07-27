@@ -1,13 +1,23 @@
 mod logging;
 mod process;
 mod serial;
+mod storage;
 
 use process::ProcessRegistry;
 use serial::SerialRegistry;
+use storage::PersistentStore;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            let store = PersistentStore::open(app.handle()).map_err(std::io::Error::other)?;
+            app.manage(store);
+            Ok(())
+        })
         .manage(SerialRegistry::default())
         .manage(ProcessRegistry::default())
         .invoke_handler(tauri::generate_handler![
@@ -35,6 +45,9 @@ pub fn run() {
             serial::start_serial_log,
             serial::set_serial_log_paused,
             serial::stop_serial_log,
+            storage::load_persistent_items,
+            storage::save_persistent_items,
+            storage::remove_persistent_item,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run iTerm");

@@ -1,6 +1,8 @@
 import {
   ChevronDown,
   ChevronUp,
+  Power,
+  RotateCcw,
   Search,
   Trash2,
   X,
@@ -13,12 +15,24 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { formatHexDump, timestampReceivedText } from "../lib/receive";
 import type { ResolvedTheme } from "../lib/preferences";
+import {
+  installUnicode11,
+  mapTerminalSpecialKey,
+  resetTerminal,
+} from "../lib/terminal";
 import type {
   ReceiveMode,
   RuntimeSession,
   SessionProfile,
 } from "../lib/types";
 import { sessionTargetLabel } from "../lib/types";
+import { useI18n } from "../lib/i18n";
+import {
+  executeTerminalCommand,
+  TERMINAL_COMMAND_EVENT,
+  TERMINAL_SEARCH_EVENT,
+  type TerminalUiCommand,
+} from "../lib/uiCommands";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -45,6 +59,7 @@ export function TerminalPane({
   onClear,
   onInput,
 }: TerminalPaneProps) {
+  const { locale, t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -153,6 +168,7 @@ export function TerminalPane({
     const search = new SearchAddon();
     terminal.loadAddon(fit);
     terminal.loadAddon(search);
+    installUnicode11(terminal);
     terminal.open(host);
 
     try {
@@ -162,13 +178,33 @@ export function TerminalPane({
     }
 
     terminal.attachCustomKeyEventHandler((event) => {
+      const shortcutKey = event.key.toLocaleLowerCase();
+      const copyShortcut =
+        (event.metaKey && shortcutKey === "c" && terminal.hasSelection()) ||
+        (event.ctrlKey && event.shiftKey && shortcutKey === "c");
+      const pasteShortcut =
+        (event.metaKey && shortcutKey === "v") ||
+        (event.ctrlKey && event.shiftKey && shortcutKey === "v");
+      if (event.type === "keydown" && (copyShortcut || pasteShortcut)) {
+        void executeTerminalCommand(
+          copyShortcut ? "copy" : "paste",
+          terminal,
+          (value) => inputRef.current(value),
+        ).catch(() => undefined);
+        return false;
+      }
       if (
         event.type === "keydown" &&
         (event.ctrlKey || event.metaKey) &&
-        event.key.toLocaleLowerCase() === "f"
+        shortcutKey === "f"
       ) {
         setSearchOpen(true);
         window.setTimeout(() => searchInputRef.current?.focus(), 0);
+        return false;
+      }
+      const mappedInput = mapTerminalSpecialKey(event, profile.terminal);
+      if (mappedInput !== null) {
+        inputRef.current(mappedInput);
         return false;
       }
       return true;
@@ -230,6 +266,8 @@ export function TerminalPane({
     profile.terminal.fontFamily,
     profile.terminal.fontSize,
     profile.terminal.lineHeight,
+    profile.terminal.backspaceKey,
+    profile.terminal.enterKey,
     profile.terminal.scrollback,
     profile.terminal.timestamp,
     profile.protocol,
@@ -267,6 +305,30 @@ export function TerminalPane({
     resizeRef.current(terminalRef.current.cols, terminalRef.current.rows);
   }, [session.state]);
 
+  useEffect(() => {
+    if (!active || !visible) return;
+    const openSearch = () => {
+      setSearchOpen(true);
+      window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    };
+    window.addEventListener(TERMINAL_SEARCH_EVENT, openSearch);
+    const executeCommand = (event: Event) => {
+      if (!terminalRef.current) return;
+      const command = (event as CustomEvent<TerminalUiCommand>).detail;
+      if (command === "paste" && session.state !== "connected") return;
+      void executeTerminalCommand(
+        command,
+        terminalRef.current,
+        (value) => inputRef.current(value),
+      ).catch(() => undefined);
+    };
+    window.addEventListener(TERMINAL_COMMAND_EVENT, executeCommand);
+    return () => {
+      window.removeEventListener(TERMINAL_SEARCH_EVENT, openSearch);
+      window.removeEventListener(TERMINAL_COMMAND_EVENT, executeCommand);
+    };
+  }, [active, session.state, visible]);
+
   const find = (
     direction: "next" | "previous",
     query = searchTerm,
@@ -293,12 +355,29 @@ export function TerminalPane({
     setSearchFound(null);
   };
 
+  const softResetTerminal = () => {
+    if (!terminalRef.current) return;
+    resetTerminal(terminalRef.current, "soft");
+    setSearchFound(null);
+  };
+
+  const hardResetTerminal = () => {
+    if (!terminalRef.current) return;
+    resetTerminal(terminalRef.current, "hard");
+    decoderRef.current = new TextDecoder(profile.terminal.encoding, {
+      fatal: false,
+    });
+    startsNewLineRef.current = true;
+    onClear();
+    setSearchFound(null);
+  };
+
   return (
     <section
       className={`terminal-pane ${visible ? "is-visible" : ""} ${
         active ? "is-active" : ""
       }`}
-      aria-label={`${profile.name} 终端`}
+      aria-label={t("terminal.label", { name: profile.name })}
       onMouseDown={onActivate}
     >
       <div
@@ -306,13 +385,18 @@ export function TerminalPane({
         className={`terminal-host ${receiveMode === "text" ? "" : "is-hidden"}`}
       />
       {receiveMode === "hex" && (
-        <div className="terminal-hex-view" aria-label="Hex 接收视图">
+        <div
+          className="terminal-hex-view"
+          aria-label={t("terminal.hexView")}
+        >
           {hexDump.omittedBytes > 0 && (
             <div className="hex-omitted">
-              已隐藏较早的 {hexDump.omittedBytes.toLocaleString()} 字节
+              {t("terminal.hexOmitted", {
+                bytes: hexDump.omittedBytes.toLocaleString(locale),
+              })}
             </div>
           )}
-          <pre>{hexDump.text || "等待接收数据…"}</pre>
+          <pre>{hexDump.text || t("terminal.waiting")}</pre>
         </div>
       )}
       <div className="terminal-tools">
@@ -336,14 +420,24 @@ export function TerminalPane({
                   terminalRef.current?.focus();
                 }
               }}
-              placeholder="查找终端内容"
-              aria-label="查找终端内容"
+              placeholder={t("terminal.search")}
+              aria-label={t("terminal.search")}
             />
-            {searchFound === false && <span className="search-empty">无结果</span>}
-            <button onClick={() => find("previous")} title="上一个">
+            {searchFound === false && (
+              <span className="search-empty">
+                {t("terminal.search.empty")}
+              </span>
+            )}
+            <button
+              onClick={() => find("previous")}
+              title={t("terminal.search.previous")}
+            >
               <ChevronUp size={14} />
             </button>
-            <button onClick={() => find("next")} title="下一个">
+            <button
+              onClick={() => find("next")}
+              title={t("terminal.search.next")}
+            >
               <ChevronDown size={14} />
             </button>
             <button
@@ -351,7 +445,7 @@ export function TerminalPane({
                 setSearchOpen(false);
                 terminalRef.current?.focus();
               }}
-              title="关闭查找"
+              title={t("terminal.search.close")}
             >
               <X size={14} />
             </button>
@@ -364,22 +458,44 @@ export function TerminalPane({
             setSearchOpen(true);
             window.setTimeout(() => searchInputRef.current?.focus(), 0);
           }}
-          title="查找（Ctrl/⌘+F）"
+          title={t("terminal.search.title")}
         >
           <Search size={15} />
         </button>
         <button
           className="terminal-tool-button"
           onClick={clearTerminal}
-          title="清空接收视图"
+          title={t("terminal.clear")}
         >
           <Trash2 size={15} />
+        </button>
+        <button
+          className="terminal-tool-button"
+          onClick={softResetTerminal}
+          title={t("terminal.softReset.title")}
+          aria-label={t("terminal.softReset")}
+        >
+          <RotateCcw size={15} />
+        </button>
+        <button
+          className="terminal-tool-button"
+          onClick={hardResetTerminal}
+          title={t("terminal.hardReset.title")}
+          aria-label={t("terminal.hardReset")}
+        >
+          <Power size={15} />
         </button>
       </div>
       {session.state === "opening" && (
         <div className="terminal-loading">
           <span className="spinner" />
-          正在打开 {sessionTargetLabel(profile)}…
+          {t("terminal.opening", {
+            target: sessionTargetLabel(profile, {
+              sshUnset: t("profile.target.sshUnset"),
+              adbUnset: t("profile.target.adbUnset"),
+              serialUnset: t("profile.target.serialUnset"),
+            }),
+          })}
         </div>
       )}
     </section>

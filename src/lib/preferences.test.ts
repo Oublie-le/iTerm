@@ -34,6 +34,29 @@ describe("application preferences", () => {
     );
   });
 
+  it("validates the saved interface language", () => {
+    expect(
+      loadAppPreferences({ getItem: () => '{"locale":"en-US"}' }).locale,
+    ).toBe("en-US");
+    expect(
+      loadAppPreferences({ getItem: () => '{"locale":"fr-FR"}' }).locale,
+    ).toBe("zh-CN");
+  });
+
+  it("rejects unsupported default terminal key mappings", () => {
+    const loaded = loadAppPreferences({
+      getItem: () =>
+        JSON.stringify({
+          sessionDefaults: {
+            terminal: { enterKey: "nul", backspaceKey: "escape" },
+          },
+        }),
+    });
+
+    expect(loaded.sessionDefaults.terminal.enterKey).toBe("cr");
+    expect(loaded.sessionDefaults.terminal.backspaceKey).toBe("del");
+  });
+
   it("resolves system theme and cycles every mode", () => {
     expect(resolveTheme("system", true)).toBe("dark");
     expect(resolveTheme("system", false)).toBe("light");

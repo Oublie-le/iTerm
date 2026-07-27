@@ -140,7 +140,7 @@ textarea:disabled {
   align-items: center;
 }
 
-.menu-items > button,
+.top-menu > button,
 .menu-actions > button {
   height: 100%;
   min-width: 43px;
@@ -149,9 +149,82 @@ textarea:disabled {
   cursor: default;
 }
 
-.menu-items > button:hover,
+.top-menu > button:hover,
+.top-menu > button.is-open,
 .menu-actions > button:hover {
   background: #dfe4e4;
+}
+
+.top-menu {
+  position: relative;
+  height: 100%;
+}
+
+.top-menu-panel {
+  position: absolute;
+  z-index: 40;
+  top: 100%;
+  left: 0;
+  width: max-content;
+  min-width: 210px;
+  padding: 4px;
+  background: #f8f9f9;
+  border: 1px solid #adb5b4;
+  border-radius: 0 0 3px 3px;
+  box-shadow: 0 7px 20px rgba(18, 26, 23, 0.22);
+}
+
+.top-menu-panel > button {
+  display: grid;
+  width: 100%;
+  min-height: 27px;
+  grid-template-columns: 17px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px 3px 5px;
+  background: transparent;
+  border-radius: 2px;
+  color: #343a38;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.top-menu-panel > button:hover,
+.top-menu-panel > button:focus-visible {
+  background: #dce8df;
+  color: var(--green-dark);
+}
+
+.top-menu-panel > button:disabled {
+  background: transparent;
+  color: #9da4a2;
+  cursor: default;
+}
+
+.top-menu-panel > button.has-separator {
+  margin-top: 4px;
+  border-top: 1px solid #d4d9d8;
+  border-radius: 0 0 2px 2px;
+  padding-top: 6px;
+}
+
+.top-menu-check {
+  color: var(--green-dark);
+  font-weight: 700;
+  text-align: center;
+}
+
+.top-menu-label {
+  white-space: nowrap;
+}
+
+.top-menu-shortcut {
+  margin-left: 14px;
+  background: transparent;
+  color: #7b8380;
+  font-family: inherit;
+  font-size: 9px;
 }
 
 .menu-actions > button.is-active {
@@ -199,7 +272,14 @@ textarea:disabled {
   font-weight: 600;
 }
 
-.dock-title .icon-button {
+.dock-title > .icon-button {
+  margin-left: auto;
+}
+
+.dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   margin-left: auto;
 }
 
@@ -469,6 +549,63 @@ textarea:disabled {
 .tab-action.is-active {
   background: var(--green-soft);
   color: var(--green-dark);
+}
+
+.tab-list-control {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.tab-list-control > .tab-action {
+  height: 100%;
+}
+
+.tab-list-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 2px);
+  right: 2px;
+  width: 230px;
+  padding: 4px;
+  background: #f7f8f8;
+  border: 1px solid #aeb5b5;
+  border-radius: 3px;
+  box-shadow: 0 5px 18px rgba(20, 28, 25, 0.2);
+}
+
+.tab-list-menu button {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  background: transparent;
+  border-radius: 2px;
+  color: #3d4341;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.tab-list-menu button:hover,
+.tab-list-menu button:focus-visible,
+.tab-list-menu button.is-active {
+  background: #dce8df;
+}
+
+.tab-list-menu button > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-list-menu small {
+  color: var(--green-dark);
+  font-size: 9px;
 }
 
 .tabs {
@@ -1104,6 +1241,10 @@ textarea:disabled {
   color: #79807e;
 }
 
+.sender-stats span {
+  color: #1f7a3d;
+}
+
 .sender-stats strong {
   overflow: hidden;
   color: #b33d3d;
@@ -1492,6 +1633,19 @@ textarea:disabled {
   line-height: 1.55;
 }
 
+.diagnostic-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 8px;
+  color: #69716f;
+  font-size: 11px;
+}
+
+.diagnostic-actions > span {
+  margin-right: auto;
+}
+
 .tool-status {
   display: flex;
   align-items: center;
@@ -1793,6 +1947,35 @@ textarea:disabled {
   color: #d5dbd7;
 }
 
+.app-shell[data-theme="dark"] .top-menu > button:hover,
+.app-shell[data-theme="dark"] .top-menu > button.is-open {
+  background: #414846;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel {
+  background: #292f2d;
+  border-color: #59615e;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button {
+  color: #d5dcd8;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button:hover,
+.app-shell[data-theme="dark"] .top-menu-panel > button:focus-visible {
+  background: #414846;
+  color: #f0f4f1;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button:disabled {
+  background: transparent;
+  color: #727b77;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button.has-separator {
+  border-color: #4e5653;
+}
+
 .app-shell[data-theme="dark"] .sidebar-search,
 .app-shell[data-theme="dark"] .sender-body > textarea,
 .app-shell[data-theme="dark"] .sender-options select,
@@ -1836,6 +2019,21 @@ textarea:disabled {
 .app-shell[data-theme="dark"] .tabs > button.is-active {
   background: #272c2a;
   color: #f1f4f2;
+}
+
+.app-shell[data-theme="dark"] .tab-list-menu {
+  background: #292f2d;
+  border-color: #59615e;
+}
+
+.app-shell[data-theme="dark"] .tab-list-menu button {
+  color: #d5dcd8;
+}
+
+.app-shell[data-theme="dark"] .tab-list-menu button:hover,
+.app-shell[data-theme="dark"] .tab-list-menu button:focus-visible,
+.app-shell[data-theme="dark"] .tab-list-menu button.is-active {
+  background: #414846;
 }
 
 .app-shell[data-theme="dark"] .session-dialog {

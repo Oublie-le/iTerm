@@ -17,6 +17,9 @@ tauri-build = { version = "2", features = [] }
 chrono = "0.4"
 encoding_rs = "0.8"
 portable-pty = "0.9"
+rusqlite = { version = "0.40.1", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serialport = "4.9"
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"

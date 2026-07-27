@@ -8,11 +8,14 @@ import {
   type SessionProtocol,
   type TerminalConfig,
 } from "./types";
+import { setPersistentItem } from "./persistence";
+import { createTranslator, type AppLocale } from "./i18n";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 export interface AppPreferences {
+  locale: AppLocale;
   theme: ThemeMode;
   confirmActiveSessionClose: boolean;
   defaultProtocol: SessionProtocol;
@@ -25,6 +28,7 @@ export interface AppPreferences {
 const PREFERENCES_STORAGE_KEY = "iterm.preferences.v1";
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  locale: "zh-CN",
   theme: "light",
   confirmActiveSessionClose: true,
   defaultProtocol: "serial",
@@ -42,8 +46,15 @@ export function loadAppPreferences(
       storage.getItem(PREFERENCES_STORAGE_KEY) ?? "null",
     ) as Partial<AppPreferences> | null;
     const theme = parsed?.theme;
+    const locale = parsed?.locale;
     const defaultProtocol = parsed?.defaultProtocol;
+    const enterKey = parsed?.sessionDefaults?.terminal?.enterKey;
+    const backspaceKey = parsed?.sessionDefaults?.terminal?.backspaceKey;
     return {
+      locale:
+        locale === "zh-CN" || locale === "en-US"
+          ? locale
+          : DEFAULT_APP_PREFERENCES.locale,
       theme:
         theme === "light" || theme === "dark" || theme === "system"
           ? theme
@@ -62,6 +73,14 @@ export function loadAppPreferences(
         terminal: {
           ...DEFAULT_TERMINAL_CONFIG,
           ...parsed?.sessionDefaults?.terminal,
+          enterKey:
+            enterKey === "cr" || enterKey === "lf" || enterKey === "crlf"
+              ? enterKey
+              : DEFAULT_TERMINAL_CONFIG.enterKey,
+          backspaceKey:
+            backspaceKey === "del" || backspaceKey === "bs"
+              ? backspaceKey
+              : DEFAULT_TERMINAL_CONFIG.backspaceKey,
         },
         logging: {
           ...DEFAULT_LOGGING_CONFIG,
@@ -78,7 +97,11 @@ export function saveAppPreferences(
   preferences: AppPreferences,
   storage: Pick<Storage, "setItem"> = localStorage,
 ): void {
-  storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+  setPersistentItem(
+    PREFERENCES_STORAGE_KEY,
+    JSON.stringify(preferences),
+    storage,
+  );
 }
 
 export function resolveTheme(
@@ -98,7 +121,15 @@ export function createSessionProfileWithPreferences(
   preferences: AppPreferences,
   port?: SerialPortDescriptor,
 ): SessionProfile {
-  const profile = createSessionProfile(port, preferences.defaultProtocol);
+  const t = createTranslator(preferences.locale);
+  const profile = createSessionProfile(port, preferences.defaultProtocol, {
+    serialName: t("dialog.defaultName.serial"),
+    serialGroup: t("dialog.defaultGroup.serial"),
+    sshName: t("dialog.defaultName.ssh"),
+    sshGroup: t("dialog.defaultGroup.ssh"),
+    adbName: t("dialog.defaultName.adb"),
+    adbGroup: t("dialog.defaultGroup.adb"),
+  });
   return {
     ...profile,
     terminal: { ...preferences.sessionDefaults.terminal },

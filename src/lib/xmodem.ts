@@ -53,7 +53,7 @@ export class AsyncByteQueue implements ByteReceiver {
         reject,
         timer: window.setTimeout(() => {
           this.removeWaiter(waiter);
-          reject(new Error("等待 XModem 接收端响应超时。"));
+          reject(new Error("等待文件传输响应超时。"));
         }, timeoutMs),
         abort: () => signal.removeEventListener("abort", onAbort),
       };

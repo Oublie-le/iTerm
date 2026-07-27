@@ -1,4 +1,5 @@
 import type { SplitMode } from "./layout";
+import { setPersistentItem } from "./persistence";
 
 export interface WorkspaceSnapshot {
   sidebarOpen: boolean;
@@ -74,5 +75,5 @@ export function saveWorkspaceSnapshot(
   snapshot: WorkspaceSnapshot,
   storage: Pick<Storage, "setItem"> = localStorage,
 ): void {
-  storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(snapshot));
+  setPersistentItem(WORKSPACE_STORAGE_KEY, JSON.stringify(snapshot), storage);
 }

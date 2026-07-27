@@ -1,6 +1,7 @@
-import { Settings, X } from "lucide-react";
+import { Download, Settings, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AppPreferences, ThemeMode } from "../lib/preferences";
+import { useI18n, type AppLocale } from "../lib/i18n";
 import type {
   LogMode,
   SessionProtocol,
@@ -12,6 +13,9 @@ interface AppSettingsDialogProps {
   preferences: AppPreferences;
   onCancel: () => void;
   onSave: (preferences: AppPreferences) => void;
+  diagnosticCount: number;
+  onExportDiagnostics: () => void;
+  onClearDiagnostics: () => void;
 }
 
 export function AppSettingsDialog({
@@ -19,7 +23,11 @@ export function AppSettingsDialog({
   preferences,
   onCancel,
   onSave,
+  diagnosticCount,
+  onExportDiagnostics,
+  onClearDiagnostics,
 }: AppSettingsDialogProps) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState(preferences);
   const [error, setError] = useState("");
 
@@ -56,7 +64,7 @@ export function AppSettingsDialog({
       draft.sessionDefaults.terminal.fontSize < 8 ||
       draft.sessionDefaults.terminal.fontSize > 40
     ) {
-      setError("默认字号必须是 8–40 的整数。");
+      setError(t("settings.error.fontSize"));
       return;
     }
     if (
@@ -64,7 +72,7 @@ export function AppSettingsDialog({
       draft.sessionDefaults.terminal.scrollback < 0 ||
       draft.sessionDefaults.terminal.scrollback > 2_000_000
     ) {
-      setError("默认回滚行数必须是 0–2,000,000 的整数。");
+      setError(t("settings.error.scrollback"));
       return;
     }
     onSave(draft);
@@ -84,14 +92,14 @@ export function AppSettingsDialog({
               <Settings size={20} />
             </span>
             <div>
-              <h2 id="app-settings-title">应用设置</h2>
-              <p>应用级默认值只应用于之后创建的新会话。</p>
+              <h2 id="app-settings-title">{t("settings.title")}</h2>
+              <p>{t("settings.subtitle")}</p>
             </div>
           </div>
           <button
             className="icon-button"
             onClick={onCancel}
-            aria-label="关闭应用设置"
+            aria-label={t("settings.close")}
           >
             <X size={17} />
           </button>
@@ -100,12 +108,27 @@ export function AppSettingsDialog({
         <main className="app-settings-body">
           <section>
             <div className="page-heading">
-              <h3>外观与行为</h3>
-              <p>控制整个应用的显示和安全确认。</p>
+              <h3>{t("settings.appearance.title")}</h3>
+              <p>{t("settings.appearance.subtitle")}</p>
             </div>
             <div className="form-grid">
               <label className="field-row">
-                <span>主题</span>
+                <span>{t("settings.language")}</span>
+                <select
+                  value={draft.locale}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      locale: event.target.value as AppLocale,
+                    }))
+                  }
+                >
+                  <option value="zh-CN">{t("settings.language.zh")}</option>
+                  <option value="en-US">{t("settings.language.en")}</option>
+                </select>
+              </label>
+              <label className="field-row">
+                <span>{t("settings.theme")}</span>
                 <select
                   value={draft.theme}
                   onChange={(event) =>
@@ -115,13 +138,13 @@ export function AppSettingsDialog({
                     }))
                   }
                 >
-                  <option value="light">浅色</option>
-                  <option value="dark">深色</option>
-                  <option value="system">跟随系统</option>
+                  <option value="light">{t("settings.theme.light")}</option>
+                  <option value="dark">{t("settings.theme.dark")}</option>
+                  <option value="system">{t("settings.theme.system")}</option>
                 </select>
               </label>
               <div className="field-row">
-                <span>关闭确认</span>
+                <span>{t("settings.closeConfirmation")}</span>
                 <label className="toggle-row">
                   <input
                     type="checkbox"
@@ -133,7 +156,7 @@ export function AppSettingsDialog({
                       }))
                     }
                   />
-                  关闭活动会话或退出应用前确认
+                  {t("settings.closeConfirmation.detail")}
                 </label>
               </div>
             </div>
@@ -141,12 +164,12 @@ export function AppSettingsDialog({
 
           <section>
             <div className="page-heading">
-              <h3>新会话默认值</h3>
-              <p>当前会话保存的设置始终优先于这些默认值。</p>
+              <h3>{t("settings.defaults.title")}</h3>
+              <p>{t("settings.defaults.subtitle")}</p>
             </div>
             <div className="form-grid">
               <label className="field-row">
-                <span>默认协议</span>
+                <span>{t("settings.defaultProtocol")}</span>
                 <select
                   value={draft.defaultProtocol}
                   onChange={(event) =>
@@ -156,13 +179,13 @@ export function AppSettingsDialog({
                     }))
                   }
                 >
-                  <option value="serial">串口</option>
-                  <option value="ssh">SSH</option>
-                  <option value="adb">ADB Shell</option>
+                  <option value="serial">{t("settings.protocol.serial")}</option>
+                  <option value="ssh">{t("settings.protocol.ssh")}</option>
+                  <option value="adb">{t("settings.protocol.adb")}</option>
                 </select>
               </label>
               <label className="field-row">
-                <span>字符集</span>
+                <span>{t("settings.encoding")}</span>
                 <select
                   value={draft.sessionDefaults.terminal.encoding}
                   onChange={(event) =>
@@ -177,7 +200,37 @@ export function AppSettingsDialog({
                 </select>
               </label>
               <label className="field-row">
-                <span>字号</span>
+                <span>{t("settings.enterKey")}</span>
+                <select
+                  value={draft.sessionDefaults.terminal.enterKey}
+                  onChange={(event) =>
+                    updateTerminal({
+                      enterKey: event.target.value as TerminalConfig["enterKey"],
+                    })
+                  }
+                >
+                  <option value="cr">CR</option>
+                  <option value="lf">LF</option>
+                  <option value="crlf">CRLF</option>
+                </select>
+              </label>
+              <label className="field-row">
+                <span>{t("settings.backspaceKey")}</span>
+                <select
+                  value={draft.sessionDefaults.terminal.backspaceKey}
+                  onChange={(event) =>
+                    updateTerminal({
+                      backspaceKey: event.target
+                        .value as TerminalConfig["backspaceKey"],
+                    })
+                  }
+                >
+                  <option value="del">DEL（0x7F）</option>
+                  <option value="bs">BS（0x08）</option>
+                </select>
+              </label>
+              <label className="field-row">
+                <span>{t("settings.fontSize")}</span>
                 <input
                   type="number"
                   min={8}
@@ -189,7 +242,7 @@ export function AppSettingsDialog({
                 />
               </label>
               <label className="field-row">
-                <span>回滚行数</span>
+                <span>{t("settings.scrollback")}</span>
                 <input
                   type="number"
                   min={0}
@@ -201,7 +254,7 @@ export function AppSettingsDialog({
                 />
               </label>
               <div className="field-row">
-                <span>时间戳</span>
+                <span>{t("settings.timestamp")}</span>
                 <label className="toggle-row">
                   <input
                     type="checkbox"
@@ -210,23 +263,23 @@ export function AppSettingsDialog({
                       updateTerminal({ timestamp: event.target.checked })
                     }
                   />
-                  新会话默认显示行时间戳
+                  {t("settings.timestamp.detail")}
                 </label>
               </div>
               <label className="field-row">
-                <span>日志模式</span>
+                <span>{t("settings.logMode")}</span>
                 <select
                   value={draft.sessionDefaults.logging.mode}
                   onChange={(event) =>
                     updateLogging({ mode: event.target.value as LogMode })
                   }
                 >
-                  <option value="raw">原始字节</option>
-                  <option value="text">可读文本</option>
+                  <option value="raw">{t("settings.logMode.raw")}</option>
+                  <option value="text">{t("settings.logMode.text")}</option>
                 </select>
               </label>
               <div className="field-row">
-                <span>自动日志</span>
+                <span>{t("settings.autoLog")}</span>
                 <label className="toggle-row">
                   <input
                     type="checkbox"
@@ -235,9 +288,36 @@ export function AppSettingsDialog({
                       updateLogging({ autoStart: event.target.checked })
                     }
                   />
-                  新会话连接后自动开始日志
+                  {t("settings.autoLog.detail")}
                 </label>
               </div>
+            </div>
+          </section>
+          <section>
+            <div className="page-heading">
+              <h3>{t("settings.diagnostics.title")}</h3>
+              <p>{t("settings.diagnostics.subtitle")}</p>
+            </div>
+            <div className="diagnostic-actions">
+              <span>
+                {t("settings.diagnostics.count", { count: diagnosticCount })}
+              </span>
+              <button
+                className="secondary-button"
+                onClick={onExportDiagnostics}
+                disabled={diagnosticCount === 0}
+              >
+                <Download size={14} />
+                {t("settings.diagnostics.export")}
+              </button>
+              <button
+                className="secondary-button"
+                onClick={onClearDiagnostics}
+                disabled={diagnosticCount === 0}
+              >
+                <Trash2 size={14} />
+                {t("settings.diagnostics.clear")}
+              </button>
             </div>
           </section>
         </main>
@@ -247,10 +327,10 @@ export function AppSettingsDialog({
             {error}
           </span>
           <button className="secondary-button" onClick={onCancel}>
-            取消
+            {t("settings.cancel")}
           </button>
           <button className="primary-button" onClick={save}>
-            保存应用设置
+            {t("settings.save")}
           </button>
         </footer>
       </section>

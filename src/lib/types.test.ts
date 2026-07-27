@@ -62,6 +62,23 @@ describe("normalizeSessionProfile", () => {
 
     expect(normalizeSessionProfile(legacy).triggers).toEqual([]);
   });
+
+  it("adds default Enter and Backspace mappings to legacy profiles", () => {
+    const source = createSessionProfile();
+    const legacy = {
+      ...source,
+      terminal: {
+        ...source.terminal,
+        enterKey: undefined,
+        backspaceKey: undefined,
+      },
+    } as unknown as typeof source;
+
+    expect(normalizeSessionProfile(legacy).terminal).toMatchObject({
+      enterKey: "cr",
+      backspaceKey: "del",
+    });
+  });
 });
 
 describe("multi-protocol profiles", () => {
@@ -73,6 +90,30 @@ describe("multi-protocol profiles", () => {
     expect(ssh.ssh.authMode).toBe("agent");
     expect(adb.name).toBe("新 ADB 会话");
     expect(adb.adb.shell).toBe("");
+  });
+
+  it("supports localized default names and target placeholders", () => {
+    const ssh = createSessionProfile(undefined, "ssh", {
+      serialName: "New Serial Session",
+      serialGroup: "Serial Sessions",
+      sshName: "New SSH Session",
+      sshGroup: "SSH Sessions",
+      adbName: "New ADB Session",
+      adbGroup: "ADB Sessions",
+    });
+
+    expect(ssh.name).toBe("New SSH Session");
+    expect(ssh.group).toBe("SSH Sessions");
+    expect(
+      sessionTargetLabel(ssh, {
+        sshUnset: "SSH host not configured",
+        adbUnset: "No ADB device selected",
+        serialUnset: "No serial device selected",
+      }),
+    ).toBe("SSH host not configured");
+    expect(duplicateSessionProfile(ssh, "Copy").name).toBe(
+      "New SSH Session Copy",
+    );
   });
 
   it("preserves password authentication without adding a credential field", () => {
