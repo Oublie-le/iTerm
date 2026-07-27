@@ -280,7 +280,7 @@ fn validate_ssh_request(request: &OpenSshRequest) -> Result<(), String> {
         }
     }
     match request.auth_mode.as_str() {
-        "agent" => {}
+        "agent" | "password" => {}
         "privateKey" => {
             if request.private_key_path.trim().is_empty() {
                 return Err("使用私钥认证时必须填写私钥路径。".into());
@@ -315,8 +315,6 @@ fn ssh_arguments(request: &OpenSshRequest) -> Vec<String> {
         "-p".into(),
         request.port.to_string(),
         "-o".into(),
-        "BatchMode=yes".into(),
-        "-o".into(),
         "ConnectTimeout=10".into(),
         "-o".into(),
         format!(
@@ -324,11 +322,27 @@ fn ssh_arguments(request: &OpenSshRequest) -> Vec<String> {
             request.keep_alive_seconds.min(3_600)
         ),
     ];
-    if request.auth_mode == "privateKey" {
-        arguments.push("-i".into());
-        arguments.push(request.private_key_path.clone());
-        arguments.push("-o".into());
-        arguments.push("IdentitiesOnly=yes".into());
+    match request.auth_mode.as_str() {
+        "password" => {
+            arguments.push("-o".into());
+            arguments.push("BatchMode=no".into());
+            arguments.push("-o".into());
+            arguments.push("PreferredAuthentications=keyboard-interactive,password".into());
+            arguments.push("-o".into());
+            arguments.push("PubkeyAuthentication=no".into());
+        }
+        "privateKey" => {
+            arguments.push("-o".into());
+            arguments.push("BatchMode=yes".into());
+            arguments.push("-i".into());
+            arguments.push(request.private_key_path.clone());
+            arguments.push("-o".into());
+            arguments.push("IdentitiesOnly=yes".into());
+        }
+        _ => {
+            arguments.push("-o".into());
+            arguments.push("BatchMode=yes".into());
+        }
     }
     arguments.push("-o".into());
     if request.strict_host_key_checking {
@@ -769,6 +783,22 @@ mod tests {
         let arguments = ssh_arguments(&value);
         assert!(arguments.contains(&"/tmp/test-key".to_string()));
         assert!(arguments.contains(&"StrictHostKeyChecking=no".to_string()));
+    }
+
+    #[test]
+    fn enables_interactive_password_authentication_without_a_stored_secret() {
+        let mut value = request();
+        value.auth_mode = "password".into();
+        let arguments = ssh_arguments(&value);
+
+        assert!(validate_ssh_request(&value).is_ok());
+        assert!(arguments.contains(&"BatchMode=no".to_string()));
+        assert!(arguments
+            .contains(&"PreferredAuthentications=keyboard-interactive,password".to_string()));
+        assert!(arguments.contains(&"PubkeyAuthentication=no".to_string()));
+        assert!(!arguments
+            .iter()
+            .any(|argument| argument.contains("Password=")));
     }
 
     #[test]

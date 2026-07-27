@@ -19,7 +19,7 @@ export type LogState = "stopped" | "recording" | "paused" | "error";
 export type HexColumns = 8 | 16 | 24 | 32;
 export type HexGroupSize = 1 | 2 | 4 | 8;
 export type SessionProtocol = "serial" | "ssh" | "adb";
-export type SshAuthMode = "agent" | "privateKey";
+export type SshAuthMode = "agent" | "privateKey" | "password";
 
 export interface SerialPortDescriptor {
   path: string;

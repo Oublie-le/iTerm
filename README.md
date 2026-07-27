@@ -66,11 +66,13 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 
 ### SSH
 
-SSH 首版调用系统 OpenSSH 客户端，支持 SSH Agent、`~/.ssh/config`、默认密钥和指定私钥。
+SSH 调用系统 OpenSSH 客户端，支持 SSH Agent、`~/.ssh/config`、默认密钥、指定私钥，
+以及密码/键盘交互认证。
 选择“SSH”，填写主机、端口和用户名后连接。启用严格主机密钥校验时，目标必须已存在于
 `known_hosts`；也可在会话设置中明确关闭严格校验。
 
-当前版本不在应用内保存 SSH 密码，也不提供密码认证。系统必须能直接执行 `ssh` 命令。
+选择“密码 / 键盘交互”后，在终端显示的 OpenSSH 提示中直接输入凭据。iTerm 不读取、
+记录或持久化密码。系统必须能直接执行 `ssh` 命令。
 
 ### ADB Shell
 
@@ -188,7 +190,6 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 
 当前 MVP 尚未实现：
 
-- SSH 密码认证；
 - 横向/纵向分屏；
 - 会话触发器；
 - XModem、YModem、ZModem；

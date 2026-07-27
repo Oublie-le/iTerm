@@ -68,6 +68,15 @@ describe("multi-protocol profiles", () => {
     expect(adb.adb.shell).toBe("");
   });
 
+  it("preserves password authentication without adding a credential field", () => {
+    const ssh = createSessionProfile(undefined, "ssh");
+    ssh.ssh.authMode = "password";
+
+    const normalized = normalizeSessionProfile(ssh);
+    expect(normalized.ssh.authMode).toBe("password");
+    expect(normalized.ssh).not.toHaveProperty("password");
+  });
+
   it("formats targets for every protocol", () => {
     const ssh = createSessionProfile(undefined, "ssh");
     ssh.ssh = { ...ssh.ssh, host: "example.com", username: "root" };

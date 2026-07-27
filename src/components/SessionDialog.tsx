@@ -569,7 +569,7 @@ export function SessionDialog({
               <>
                 <div className="page-heading">
                   <h3>SSH</h3>
-                  <p>使用本机 OpenSSH、SSH Agent 或私钥连接远程主机。</p>
+                  <p>使用本机 OpenSSH、SSH Agent、私钥或交互式密码连接。</p>
                 </div>
                 <div className="form-grid">
                   <label className="field-row">
@@ -617,6 +617,7 @@ export function SessionDialog({
                     >
                       <option value="agent">SSH Agent / 默认密钥</option>
                       <option value="privateKey">指定私钥</option>
+                      <option value="password">密码 / 键盘交互</option>
                     </select>
                   </label>
                   {draft.ssh.authMode === "privateKey" && (
@@ -661,6 +662,12 @@ export function SessionDialog({
                     />
                   </label>
                 </div>
+                {draft.ssh.authMode === "password" && (
+                  <div className="settings-note">
+                    连接后请直接在终端的 OpenSSH 提示中输入密码。iTerm
+                    不读取、记录或保存密码。
+                  </div>
+                )}
               </>
             )}
 
