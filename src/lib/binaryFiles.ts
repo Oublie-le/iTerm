@@ -1,5 +1,5 @@
 import { join } from "@tauri-apps/api/path";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { isTauriRuntime } from "./serial";
 import type { ReceivedYmodemFile } from "./ymodemReceive";
@@ -13,6 +13,31 @@ export async function selectBinaryOutputDirectory(
     multiple: false,
     title,
   });
+}
+
+export async function selectBinaryOutputFile(
+  title = "选择文件保存位置",
+  suggestedName = "xmodem-received.bin",
+): Promise<string | null> {
+  if (!isTauriRuntime()) return suggestedName;
+  return save({
+    title,
+    defaultPath: suggestedName,
+    filters: [{ name: "Binary", extensions: ["bin", "img", "dat", "hex"] }],
+  });
+}
+
+export async function saveReceivedBinaryFile(
+  path: string,
+  suggestedName: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  if (isTauriRuntime()) {
+    if (!path) throw new Error("未选择接收文件。");
+    await writeFile(path, bytes);
+    return;
+  }
+  downloadBinaryFile(suggestedName, bytes);
 }
 
 export async function saveReceivedBinaryFiles(
@@ -30,14 +55,19 @@ export async function saveReceivedBinaryFiles(
 
   for (const file of files) {
     assertSafeOutputName(file.name);
-    const bytes = file.bytes.slice().buffer as ArrayBuffer;
-    const url = URL.createObjectURL(new Blob([bytes]));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = file.name;
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBinaryFile(file.name, file.bytes);
   }
+}
+
+function downloadBinaryFile(name: string, bytes: Uint8Array): void {
+  assertSafeOutputName(name);
+  const buffer = bytes.slice().buffer as ArrayBuffer;
+  const url = URL.createObjectURL(new Blob([buffer]));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function assertSafeOutputName(name: string): void {

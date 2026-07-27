@@ -7,6 +7,7 @@ const CRC_REQUEST = 0x43;
 const SUB = 0x1a;
 const BLOCK_SIZE = 128;
 const MAX_RETRIES = 10;
+const MAX_RECEIVE_SIZE = 512 * 1024 * 1024;
 
 export interface ByteReceiver {
   readByte(timeoutMs: number, signal: AbortSignal): Promise<number>;
@@ -151,6 +152,143 @@ export async function sendXmodemCrc(
   }
 }
 
+export async function receiveXmodemCrc(
+  sendBytes: (bytes: Uint8Array) => Promise<number>,
+  receiver: ByteReceiver,
+  onProgress: (receivedBytes: number) => void,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+  let expectedBlock = 1;
+  let firstItem: ReceivedXmodemItem | undefined;
+  try {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+      throwIfCancelled(signal, "XModem 文件接收已取消。");
+      await writeCompleteFrame(sendBytes, Uint8Array.of(CRC_REQUEST));
+      try {
+        firstItem = await receiveXmodemItem(receiver, 10_000, signal);
+        break;
+      } catch (error) {
+        if (!isReceiveTimeout(error) || attempt === MAX_RETRIES) throw error;
+      }
+    }
+    if (firstItem === undefined) {
+      throw new Error("等待 XModem 发送端响应超时。");
+    }
+
+    let item = firstItem;
+    let failures = 0;
+    while (true) {
+      throwIfCancelled(signal, "XModem 文件接收已取消。");
+      if (typeof item === "number") {
+        if (item === CAN) throw new Error("XModem 发送端取消了传输。");
+        if (item === EOT) {
+          await writeCompleteFrame(sendBytes, Uint8Array.of(ACK));
+          const bytes = joinReceivedChunks(chunks, receivedBytes);
+          const trimmed = trimXmodemPadding(bytes);
+          onProgress(trimmed.length);
+          return trimmed;
+        }
+      } else if (!item.valid) {
+        failures += 1;
+        await writeCompleteFrame(sendBytes, Uint8Array.of(NAK));
+      } else {
+        const previousBlock = (expectedBlock - 1) & 0xff;
+        if (item.blockNumber === previousBlock) {
+          await writeCompleteFrame(sendBytes, Uint8Array.of(ACK));
+        } else if (item.blockNumber !== expectedBlock) {
+          failures += 1;
+          await writeCompleteFrame(sendBytes, Uint8Array.of(NAK));
+        } else {
+          if (receivedBytes + item.payload.length > MAX_RECEIVE_SIZE) {
+            throw new Error("XModem 文件大小超出 512 MiB 限制。");
+          }
+          chunks.push(item.payload);
+          receivedBytes += item.payload.length;
+          expectedBlock = (expectedBlock + 1) & 0xff;
+          failures = 0;
+          await writeCompleteFrame(sendBytes, Uint8Array.of(ACK));
+          onProgress(receivedBytes);
+        }
+      }
+      if (failures >= MAX_RETRIES) {
+        throw new Error("XModem 数据块连续校验失败次数已用尽。");
+      }
+      item = await receiveXmodemItem(receiver, 30_000, signal);
+    }
+  } catch (error) {
+    await sendBytes(Uint8Array.of(CAN, CAN)).catch(() => 0);
+    throw error;
+  }
+}
+
+interface ReceivedXmodemFrame {
+  blockNumber: number;
+  payload: Uint8Array;
+  valid: boolean;
+}
+
+type ReceivedXmodemItem = ReceivedXmodemFrame | typeof EOT | typeof CAN;
+
+async function receiveXmodemItem(
+  receiver: ByteReceiver,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<ReceivedXmodemItem> {
+  const lead = await waitForControl(
+    receiver,
+    new Set([SOH, 0x02, EOT, CAN]),
+    timeoutMs,
+    signal,
+    "等待 XModem 发送端响应超时。",
+    "XModem 文件接收已取消。",
+  );
+  if (lead === EOT || lead === CAN) return lead;
+  const payloadSize = lead === SOH ? BLOCK_SIZE : 1_024;
+  const blockNumber = await receiver.readByte(timeoutMs, signal);
+  const inverse = await receiver.readByte(timeoutMs, signal);
+  const payload = new Uint8Array(payloadSize);
+  for (let index = 0; index < payloadSize; index += 1) {
+    payload[index] = await receiver.readByte(timeoutMs, signal);
+  }
+  const crcHigh = await receiver.readByte(timeoutMs, signal);
+  const crcLow = await receiver.readByte(timeoutMs, signal);
+  return {
+    blockNumber,
+    payload,
+    valid:
+      ((blockNumber + inverse) & 0xff) === 0xff &&
+      crc16Xmodem(payload) === ((crcHigh << 8) | crcLow),
+  };
+}
+
+function joinReceivedChunks(
+  chunks: Uint8Array[],
+  receivedBytes: number,
+): Uint8Array {
+  const bytes = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+}
+
+export function trimXmodemPadding(bytes: Uint8Array): Uint8Array {
+  let length = bytes.length;
+  while (length > 0 && bytes[length - 1] === SUB) length -= 1;
+  return bytes.slice(0, length);
+}
+
+function isReceiveTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message.includes("超时") || error.message.includes("timeout"))
+  );
+}
+
 export function createXmodemFrame(
   blockNumber: number,
   payload: Uint8Array,
@@ -186,12 +324,14 @@ async function waitForControl(
   accepted: Set<number>,
   timeoutMs: number,
   signal: AbortSignal,
+  timeoutMessage = "等待 XModem 接收端响应超时。",
+  cancellationMessage = "XModem 文件发送已取消。",
 ): Promise<number> {
   const deadline = Date.now() + timeoutMs;
   while (true) {
-    throwIfCancelled(signal);
+    throwIfCancelled(signal, cancellationMessage);
     const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error("等待 XModem 接收端响应超时。");
+    if (remaining <= 0) throw new Error(timeoutMessage);
     const byte = await receiver.readByte(remaining, signal);
     if (accepted.has(byte)) return byte;
   }
@@ -207,8 +347,11 @@ async function writeCompleteFrame(
   }
 }
 
-function throwIfCancelled(signal: AbortSignal): void {
-  if (signal.aborted) throw cancelledError();
+function throwIfCancelled(
+  signal: AbortSignal,
+  message = "XModem 文件发送已取消。",
+): void {
+  if (signal.aborted) throw new Error(message);
 }
 
 function cancelledError(): Error {

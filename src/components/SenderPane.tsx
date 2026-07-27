@@ -39,6 +39,10 @@ interface SenderPaneProps {
     onProgress: (sentBytes: number, totalBytes: number) => void,
     signal: AbortSignal,
   ) => Promise<number>;
+  onReceiveXmodem: (
+    onProgress: (receivedBytes: number) => void,
+    signal: AbortSignal,
+  ) => Promise<number | null>;
   onReceiveYmodem: (
     onProgress: (progress: YmodemReceiveProgress) => void,
     signal: AbortSignal,
@@ -55,6 +59,7 @@ export function SenderPane({
   onClose,
   onSend,
   onSendFiles,
+  onReceiveXmodem,
   onReceiveYmodem,
   onReceiveZmodem,
 }: SenderPaneProps) {
@@ -74,7 +79,7 @@ export function SenderPane({
   const [fileTransfer, setFileTransfer] = useState<{
     name: string;
     sentBytes: number;
-    totalBytes: number;
+    totalBytes: number | null;
   } | null>(null);
   const [fileProtocol, setFileProtocol] =
     useState<FileTransferProtocol>("raw");
@@ -279,6 +284,46 @@ export function SenderPane({
     }
   };
 
+  const receiveXmodem = async () => {
+    setLastError("");
+    setTemplateNotice("");
+    const controller = new AbortController();
+    fileAbortRef.current = controller;
+    setRunning(true);
+    setFileTransfer({
+      name: t("sender.waitXmodem"),
+      sentBytes: 0,
+      totalBytes: null,
+    });
+    try {
+      const receivedBytes = await onReceiveXmodem(
+        (value) =>
+          setFileTransfer({
+            name: t("sender.receivingXmodem"),
+            sentBytes: value,
+            totalBytes: null,
+          }),
+        controller.signal,
+      );
+      if (receivedBytes === null) {
+        setFileTransfer(null);
+      } else {
+        setTemplateNotice(
+          t("sender.receivedXmodem", {
+            bytes: receivedBytes.toLocaleString(locale),
+          }),
+        );
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setLastError(localizedErrorMessage(error, locale));
+      }
+    } finally {
+      fileAbortRef.current = null;
+      setRunning(false);
+    }
+  };
+
   const receiveZmodem = async () => {
     setLastError("");
     setTemplateNotice("");
@@ -399,6 +444,15 @@ export function SenderPane({
             }
           >
             <FileUp size={16} />
+          </button>
+          <button
+            className="icon-button"
+            onClick={() => void receiveXmodem()}
+            disabled={!connected || running}
+            title={t("sender.receive.xmodem")}
+            aria-label={t("sender.receive.xmodem")}
+          >
+            <FileDown size={16} />
           </button>
           <button
             className="icon-button"
@@ -563,16 +617,25 @@ export function SenderPane({
             <div className="file-transfer-progress">
               <span title={fileTransfer.name}>{fileTransfer.name}</span>
               <progress
-                value={fileTransfer.sentBytes}
-                max={Math.max(1, fileTransfer.totalBytes)}
+                value={
+                  fileTransfer.totalBytes === null
+                    ? undefined
+                    : fileTransfer.sentBytes
+                }
+                max={
+                  fileTransfer.totalBytes === null
+                    ? undefined
+                    : Math.max(1, fileTransfer.totalBytes)
+                }
               />
               <strong>
-                {Math.round(
-                  (fileTransfer.sentBytes /
-                    Math.max(1, fileTransfer.totalBytes)) *
-                    100,
-                )}
-                %
+                {fileTransfer.totalBytes === null
+                  ? `${fileTransfer.sentBytes.toLocaleString(locale)} B`
+                  : `${Math.round(
+                      (fileTransfer.sentBytes /
+                        Math.max(1, fileTransfer.totalBytes)) *
+                        100,
+                    )}%`}
               </strong>
             </div>
           )}

@@ -112,15 +112,21 @@ import {
   type SplitMode,
   type SplitSessionIds,
 } from "./lib/layout";
-import { AsyncByteQueue, sendXmodemCrc } from "./lib/xmodem";
+import {
+  AsyncByteQueue,
+  receiveXmodemCrc,
+  sendXmodemCrc,
+} from "./lib/xmodem";
 import { sendYmodemBatch } from "./lib/ymodem";
 import {
   receiveYmodemBatch,
   type YmodemReceiveProgress,
 } from "./lib/ymodemReceive";
 import {
+  saveReceivedBinaryFile,
   saveReceivedBinaryFiles,
   selectBinaryOutputDirectory,
+  selectBinaryOutputFile,
 } from "./lib/binaryFiles";
 import {
   ZmodemSentryBridge,
@@ -1818,6 +1824,91 @@ export default function App() {
     }
   };
 
+  const receiveXmodemFile = async (
+    onProgress: (receivedBytes: number) => void,
+    signal: AbortSignal,
+  ): Promise<number | null> => {
+    if (
+      !activeSession ||
+      !activeProfile ||
+      activeSession.state !== "connected" ||
+      activeSession.transferActive
+    ) {
+      throw new Error(t("runtime.notConnected"));
+    }
+    const suggestedName = `xmodem-${new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")}.bin`;
+    const outputPath = await selectBinaryOutputFile(
+      t("runtime.selectReceiveFile"),
+      suggestedName,
+    );
+    if (outputPath === null) return null;
+
+    const sessionId = activeSession.id;
+    const profile = activeProfile;
+    const byteQueue = new AsyncByteQueue();
+    transferByteQueuesRef.current.set(sessionId, byteQueue);
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === sessionId
+          ? { ...session, transferActive: true }
+          : session,
+      ),
+    );
+    captureDiagnostic("transfer", "receive_started", {
+      context: { protocol: "xmodemCrc" },
+    });
+    try {
+      const sendBytes = async (bytes: Uint8Array) => {
+        const count = await writeConfiguredBytes(sessionId, profile, bytes);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  bytesWritten: session.bytesWritten + count,
+                }
+              : session,
+          ),
+        );
+        return count;
+      };
+      const bytes = await receiveXmodemCrc(
+        sendBytes,
+        byteQueue,
+        onProgress,
+        signal,
+      );
+      await saveReceivedBinaryFile(outputPath, suggestedName, bytes);
+      captureDiagnostic("transfer", "receive_completed", {
+        context: { protocol: "xmodemCrc", fileCount: 1, totalBytes: bytes.length },
+      });
+      return bytes.length;
+    } catch (error) {
+      captureDiagnostic("transfer", "receive_failed", {
+        level: signal.aborted ? "warning" : "error",
+        message: signal.aborted
+          ? t("runtime.receiveCancelled")
+          : error instanceof Error
+            ? error.message
+            : String(error),
+        context: { protocol: "xmodemCrc" },
+      });
+      throw error;
+    } finally {
+      transferByteQueuesRef.current.delete(sessionId);
+      byteQueue.close();
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: false }
+            : session,
+        ),
+      );
+    }
+  };
+
   const receiveZmodemBatchFiles = async (
     onProgress: (progress: YmodemReceiveProgress) => void,
     signal: AbortSignal,
@@ -3209,6 +3300,7 @@ export default function App() {
               onClose={() => setSenderOpen(false)}
               onSend={sendPreset}
               onSendFiles={sendFiles}
+              onReceiveXmodem={receiveXmodemFile}
               onReceiveYmodem={receiveYmodemFiles}
               onReceiveZmodem={receiveZmodemBatchFiles}
             />
