@@ -39,6 +39,7 @@
 - 增加安装、串口、SSH、ADB、日志、文件传输和诊断故障排查手册。
 - 生产构建按终端、React、Tauri、文件协议和通用依赖拆分缓存块。
 - CI 和 Release 生成 npm/Cargo CycloneDX SBOM，并随 GitHub Release 上传。
+- 增加覆盖自动化、硬件、互操作、安全、发布产物和回滚的发布检查表。
 
 ### Fixed
 
