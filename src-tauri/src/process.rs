@@ -963,4 +963,59 @@ mod tests {
         assert!(child.wait().unwrap().success());
         assert!(String::from_utf8_lossy(&output).contains("PTY_OK"));
     }
+
+    #[test]
+    fn writes_resizes_and_reads_an_interactive_pty() {
+        let pty = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        pty.master
+            .resize(PtySize {
+                rows: 40,
+                cols: 120,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+
+        #[cfg(unix)]
+        let command = {
+            let mut command = CommandBuilder::new("/bin/sh");
+            command.args(["-c", "IFS= read -r line; printf 'ECHO:%s' \"$line\""]);
+            command
+        };
+        #[cfg(windows)]
+        let command = {
+            let mut command = CommandBuilder::new("cmd.exe");
+            command.args(["/V:ON", "/Q", "/C", "set /p line= & echo ECHO:!line!"]);
+            command
+        };
+
+        let mut reader = pty.master.try_clone_reader().unwrap();
+        let mut writer = pty.master.take_writer().unwrap();
+        let mut child = pty.slave.spawn_command(command).unwrap();
+        drop(pty.slave);
+
+        writer.write_all(b"roundtrip\r\n").unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+
+        let mut output = Vec::new();
+        let mut buffer = [0_u8; 256];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(count) => output.extend_from_slice(&buffer[..count]),
+                Err(error) if error.raw_os_error() == Some(5) => break,
+                Err(error) => panic!("failed to read PTY roundtrip output: {error}"),
+            }
+        }
+        assert!(child.wait().unwrap().success());
+        assert!(String::from_utf8_lossy(&output).contains("ECHO:roundtrip"));
+    }
 }
