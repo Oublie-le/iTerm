@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import {
   DEC_SOFT_RESET_SEQUENCE,
+  installUnicode11,
   mapTerminalSpecialKey,
   resetTerminal,
 } from "./terminal";
@@ -100,5 +102,19 @@ describe("terminal special key mapping", () => {
         backspaceKey: "bs",
       }),
     ).toBeNull();
+  });
+});
+
+describe("terminal Unicode width", () => {
+  it("activates the Unicode 11 width provider", () => {
+    const terminal = {
+      loadAddon: vi.fn(),
+      unicode: { activeVersion: "6" },
+    };
+    const addon = installUnicode11(terminal);
+
+    expect(terminal.unicode.activeVersion).toBe("11");
+    expect(addon).toBeInstanceOf(Unicode11Addon);
+    expect(terminal.loadAddon).toHaveBeenCalledWith(addon);
   });
 });

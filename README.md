@@ -22,7 +22,7 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 - 波特率、数据位、校验位、停止位和流控；
 - DTR、RTS 与 Serial Break；
 - 串口输入/输出缓冲清理；
-- ANSI/xterm-256color 终端、滚动缓冲和 WebGL 加速；
+- ANSI/xterm-256color 终端、Unicode 11 字符宽度、滚动缓冲和 WebGL 加速；
 - UTF-8、GBK、Big5、Shift_JIS 等 WebView 支持的字符编码；
 - Text/Hex 接收双视图、可配置 Hex 列数/分组和行时间戳；
 - 终端搜索、清屏、DEC 软复位、硬复位、Enter/Backspace 键位映射和实时行列显示；

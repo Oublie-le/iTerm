@@ -15,7 +15,11 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { formatHexDump, timestampReceivedText } from "../lib/receive";
 import type { ResolvedTheme } from "../lib/preferences";
-import { mapTerminalSpecialKey, resetTerminal } from "../lib/terminal";
+import {
+  installUnicode11,
+  mapTerminalSpecialKey,
+  resetTerminal,
+} from "../lib/terminal";
 import type {
   ReceiveMode,
   RuntimeSession,
@@ -91,7 +95,7 @@ export function TerminalPane({
     if (!host) return;
 
     const terminal = new Terminal({
-      allowProposedApi: false,
+      allowProposedApi: true,
       convertEol: false,
       cursorBlink: true,
       cursorStyle: profile.terminal.cursorStyle,
@@ -153,6 +157,7 @@ export function TerminalPane({
     const search = new SearchAddon();
     terminal.loadAddon(fit);
     terminal.loadAddon(search);
+    installUnicode11(terminal);
     terminal.open(host);
 
     try {

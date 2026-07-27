@@ -22,6 +22,20 @@ interface ResettableTerminal {
   write(data: string): void;
 }
 
+interface UnicodeTerminal {
+  loadAddon(addon: ITerminalAddon): void;
+  unicode: {
+    activeVersion: string;
+  };
+}
+
+export function installUnicode11(terminal: UnicodeTerminal): Unicode11Addon {
+  const addon = new Unicode11Addon();
+  terminal.loadAddon(addon);
+  terminal.unicode.activeVersion = "11";
+  return addon;
+}
+
 export function mapTerminalSpecialKey(
   event: TerminalKeyEvent,
   mapping: TerminalKeyMapping,
@@ -57,3 +71,5 @@ export function resetTerminal(
   }
   terminal.focus();
 }
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import type { ITerminalAddon } from "@xterm/xterm";
