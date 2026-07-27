@@ -25,6 +25,7 @@ import {
   type FileTransferProtocol,
   type SenderPreset,
 } from "../lib/types";
+import { useI18n } from "../lib/i18n";
 
 interface SenderPaneProps {
   profileId: string;
@@ -56,8 +57,9 @@ export function SenderPane({
   onReceiveYmodem,
   onReceiveZmodem,
 }: SenderPaneProps) {
+  const { locale, t } = useI18n();
   const [presets, setPresets] = useState<SenderPreset[]>(() =>
-    loadSenderPresets(profileId),
+    loadSenderPresets(profileId, localStorage, t("sender.defaultName")),
   );
   const [activeId, setActiveId] = useState(presets[0].id);
   const [running, setRunning] = useState(false);
@@ -142,7 +144,10 @@ export function SenderPane({
   };
 
   const addPreset = () => {
-    const preset = createSenderPreset(presets.length + 1);
+    const preset = createSenderPreset(
+      presets.length + 1,
+      t("sender.defaultName"),
+    );
     setPresets((current) => [...current, preset]);
     setActiveId(preset.id);
   };
@@ -164,7 +169,11 @@ export function SenderPane({
         `iTerm-commands-${date}.json`,
         serializeSenderPresets(presets),
       );
-      if (path) setTemplateNotice(`已导出 ${presets.length} 个命令模板`);
+      if (path) {
+        setTemplateNotice(
+          t("sender.exported", { count: presets.length }),
+        );
+      }
     } catch (error) {
       setLastError(error instanceof Error ? error.message : String(error));
     }
@@ -182,8 +191,11 @@ export function SenderPane({
       setActiveId(merged.firstImportedId);
       setTemplateNotice(
         merged.remappedCount > 0
-          ? `已导入 ${merged.importedCount} 个模板，${merged.remappedCount} 个重复 ID 已重建`
-          : `已导入 ${merged.importedCount} 个命令模板`,
+          ? t("sender.importedRemapped", {
+              count: merged.importedCount,
+              remapped: merged.remappedCount,
+            })
+          : t("sender.imported", { count: merged.importedCount }),
       );
     } catch (error) {
       setLastError(error instanceof Error ? error.message : String(error));
@@ -197,7 +209,9 @@ export function SenderPane({
     fileAbortRef.current = controller;
     setRunning(true);
     const transferName =
-      files.length === 1 ? files[0].name : `${files.length} 个文件`;
+      files.length === 1
+        ? files[0].name
+        : t("sender.files", { count: files.length });
     const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
     setFileTransfer({
       name: transferName,
@@ -230,7 +244,7 @@ export function SenderPane({
     fileAbortRef.current = controller;
     setRunning(true);
     setFileTransfer({
-      name: "等待 YModem 发送端…",
+      name: t("sender.waitYmodem"),
       sentBytes: 0,
       totalBytes: 1,
     });
@@ -246,7 +260,10 @@ export function SenderPane({
       );
       if (result) {
         setTemplateNotice(
-          `已接收 ${result.fileCount} 个文件，共 ${result.totalBytes.toLocaleString()} B`,
+          t("sender.received", {
+            count: result.fileCount,
+            bytes: result.totalBytes.toLocaleString(locale),
+          }),
         );
       } else {
         setFileTransfer(null);
@@ -268,7 +285,7 @@ export function SenderPane({
     fileAbortRef.current = controller;
     setRunning(true);
     setFileTransfer({
-      name: "等待远端运行 sz…",
+      name: t("sender.waitZmodem"),
       sentBytes: 0,
       totalBytes: 1,
     });
@@ -284,7 +301,10 @@ export function SenderPane({
       );
       if (result) {
         setTemplateNotice(
-          `ZModem 已接收 ${result.fileCount} 个文件，共 ${result.totalBytes.toLocaleString()} B`,
+          t("sender.receivedZmodem", {
+            count: result.fileCount,
+            bytes: result.totalBytes.toLocaleString(locale),
+          }),
         );
       } else {
         setFileTransfer(null);
@@ -300,36 +320,40 @@ export function SenderPane({
   };
 
   return (
-    <section className="sender-pane" aria-label="发送窗格">
+    <section className="sender-pane" aria-label={t("sender.pane")}>
       <header className="sender-toolbar">
         <div className="sender-actions">
           <button
             className="toolbar-button primary"
             onClick={start}
             disabled={!connected || running || !active.payload.trim()}
-            title="发送"
+            title={t("sender.send")}
           >
             <Play size={15} fill="currentColor" />
-            发送
+            {t("sender.send")}
           </button>
           <button
             className="toolbar-button danger"
             onClick={stop}
             disabled={!running}
-            title="停止"
+            title={t("sender.stop")}
           >
             <Square size={14} fill="currentColor" />
-            停止
+            {t("sender.stop")}
           </button>
           <span className="toolbar-separator" />
-          <button className="icon-button" onClick={addPreset} title="添加发送器">
+          <button
+            className="icon-button"
+            onClick={addPreset}
+            title={t("sender.add")}
+          >
             <CirclePlus size={17} />
           </button>
           <button
             className="icon-button"
             onClick={removeActive}
             disabled={presets.length === 1}
-            title="删除发送器"
+            title={t("sender.delete")}
           >
             <Trash2 size={16} />
           </button>
@@ -337,8 +361,8 @@ export function SenderPane({
             className="icon-button"
             onClick={() => void importPresets()}
             disabled={running}
-            title="导入命令模板"
-            aria-label="导入命令模板"
+            title={t("sender.import")}
+            aria-label={t("sender.import")}
           >
             <Upload size={16} />
           </button>
@@ -346,8 +370,8 @@ export function SenderPane({
             className="icon-button"
             onClick={() => void exportPresets()}
             disabled={running}
-            title="导出全部命令模板"
-            aria-label="导出全部命令模板"
+            title={t("sender.export")}
+            aria-label={t("sender.export")}
           >
             <Download size={16} />
           </button>
@@ -355,7 +379,7 @@ export function SenderPane({
             className="icon-button"
             onClick={() => updateActive({ payload: "" })}
             disabled={running || !active.payload}
-            title="清空当前发送内容"
+            title={t("sender.clear")}
           >
             <Eraser size={16} />
           </button>
@@ -365,12 +389,12 @@ export function SenderPane({
             disabled={!connected || running}
             title={
               fileProtocol === "raw"
-                ? "发送原始文件"
+                ? t("sender.file.raw")
                 : fileProtocol === "xmodemCrc"
-                  ? "使用 XModem-CRC 发送文件"
+                  ? t("sender.file.xmodem")
                   : fileProtocol === "ymodem"
-                    ? "使用 YModem 批量发送文件"
-                    : "等待远端 rz 后使用 ZModem 批量发送文件"
+                    ? t("sender.file.ymodem")
+                    : t("sender.file.zmodem")
             }
           >
             <FileUp size={16} />
@@ -379,8 +403,8 @@ export function SenderPane({
             className="icon-button"
             onClick={() => void receiveYmodem()}
             disabled={!connected || running}
-            title="接收 YModem 批量文件"
-            aria-label="接收 YModem 批量文件"
+            title={t("sender.receive.ymodem")}
+            aria-label={t("sender.receive.ymodem")}
           >
             <FileDown size={16} />
           </button>
@@ -388,8 +412,8 @@ export function SenderPane({
             className="icon-button"
             onClick={() => void receiveZmodem()}
             disabled={!connected || running}
-            title="接收 ZModem 批量文件（等待远端 sz）"
-            aria-label="接收 ZModem 批量文件"
+            title={t("sender.receive.zmodem")}
+            aria-label={t("sender.receive.zmodemLabel")}
           >
             <FolderDown size={16} />
           </button>
@@ -400,7 +424,7 @@ export function SenderPane({
             onChange={(event) =>
               setFileProtocol(event.target.value as FileTransferProtocol)
             }
-            aria-label="文件传输协议"
+            aria-label={t("sender.protocol")}
           >
             <option value="raw">Raw</option>
             <option value="xmodemCrc">XModem-CRC</option>
@@ -435,7 +459,11 @@ export function SenderPane({
             </button>
           ))}
         </div>
-        <button className="icon-button" onClick={onClose} title="关闭发送窗格">
+        <button
+          className="icon-button"
+          onClick={onClose}
+          title={t("sender.close")}
+        >
           <X size={17} />
         </button>
       </header>
@@ -447,15 +475,15 @@ export function SenderPane({
           disabled={running}
           placeholder={
             active.mode === "hex"
-              ? "输入 Hex，例如：AA 55 01 0D 0A"
-              : "输入要发送的文本…"
+              ? t("sender.placeholder.hex")
+              : t("sender.placeholder.text")
           }
           spellCheck={false}
-          aria-label="发送内容"
+          aria-label={t("sender.content")}
         />
         <div className="sender-options">
           <label>
-            名称
+            {t("sender.name")}
             <input
               className="sender-name-input"
               value={active.name}
@@ -464,7 +492,7 @@ export function SenderPane({
             />
           </label>
           <label>
-            模式
+            {t("sender.mode")}
             <select
               value={active.mode}
               disabled={running}
@@ -472,12 +500,12 @@ export function SenderPane({
                 updateActive({ mode: event.target.value as "text" | "hex" })
               }
             >
-              <option value="text">文本</option>
+              <option value="text">{t("sender.mode.text")}</option>
               <option value="hex">Hex</option>
             </select>
           </label>
           <label>
-            行尾
+            {t("sender.lineEnding")}
             <select
               value={active.lineEnding}
               disabled={running || active.mode === "hex"}
@@ -488,7 +516,7 @@ export function SenderPane({
                 })
               }
             >
-              <option value="none">无</option>
+              <option value="none">{t("sender.lineEnding.none")}</option>
               <option value="lf">LF</option>
               <option value="cr">CR</option>
               <option value="crlf">CRLF</option>
@@ -503,10 +531,10 @@ export function SenderPane({
                 updateActive({ repeat: event.target.checked })
               }
             />
-            重复执行
+            {t("sender.repeat")}
           </label>
           <label>
-            间隔
+            {t("sender.interval")}
             <span className="number-with-unit">
               <input
                 type="number"
@@ -524,7 +552,9 @@ export function SenderPane({
             </span>
           </label>
           <div className="sender-stats">
-            已发送 {sentBytes.toLocaleString()} B
+            {t("sender.sentBytes", {
+              count: sentBytes.toLocaleString(locale),
+            })}
             {templateNotice && <span>{templateNotice}</span>}
             {lastError && <strong>{lastError}</strong>}
           </div>

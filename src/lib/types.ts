@@ -396,10 +396,13 @@ export function requiresCloseConfirmation(session: RuntimeSession): boolean {
   );
 }
 
-export function createSenderPreset(index = 1): SenderPreset {
+export function createSenderPreset(
+  index = 1,
+  label = "发送",
+): SenderPreset {
   return {
     id: crypto.randomUUID(),
-    name: `发送 ${index}`,
+    name: `${label} ${index}`,
     mode: "text",
     payload: "",
     lineEnding: "crlf",

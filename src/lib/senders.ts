@@ -19,13 +19,14 @@ function readStore(storage: Pick<Storage, "getItem">): SenderStore {
 export function loadSenderPresets(
   profileId: string,
   storage: Pick<Storage, "getItem"> = localStorage,
+  defaultLabel = "发送",
 ): SenderPreset[] {
   const stored = readStore(storage)[profileId];
   if (!Array.isArray(stored) || stored.length === 0) {
-    return [createSenderPreset()];
+    return [createSenderPreset(1, defaultLabel)];
   }
   return stored.map((preset, index) => ({
-    ...createSenderPreset(index + 1),
+    ...createSenderPreset(index + 1, defaultLabel),
     ...preset,
     id: typeof preset.id === "string" ? preset.id : crypto.randomUUID(),
   }));
