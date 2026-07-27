@@ -80,14 +80,17 @@ function argumentValue(name) {
 
 function parsePnpmPackages() {
   const lockfile = readFileSync(join(repositoryRoot, "pnpm-lock.yaml"), "utf8");
-  const packagesStart = lockfile.indexOf("\npackages:\n");
-  const snapshotsStart = lockfile.indexOf("\nsnapshots:\n");
-  if (packagesStart === -1 || snapshotsStart === -1) {
+  const packagesMarker = /(?:^|\r?\n)packages:\r?\n/.exec(lockfile);
+  const snapshotsMarker = /(?:^|\r?\n)snapshots:\r?\n/.exec(lockfile);
+  if (!packagesMarker || !snapshotsMarker) {
     throw new Error("pnpm-lock.yaml does not contain packages and snapshots sections.");
   }
 
   const packageKeys = [];
-  const section = lockfile.slice(packagesStart + 11, snapshotsStart);
+  const section = lockfile.slice(
+    packagesMarker.index + packagesMarker[0].length,
+    snapshotsMarker.index,
+  );
   for (const line of section.split(/\r?\n/)) {
     const match = line.match(
       /^ {2}(?:'([^']+)'|([^\s:'"][^:]*)):\s*$/,

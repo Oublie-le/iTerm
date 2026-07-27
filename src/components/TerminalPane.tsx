@@ -5,13 +5,10 @@ import {
   Clock3,
   Command as CommandIcon,
   Copy,
-  Minus,
-  Plus,
-  Power,
-  RotateCcw,
   ScanText,
   Search,
   SendHorizontal,
+  Settings,
   Trash2,
   X,
   Zap,
@@ -33,7 +30,6 @@ import {
   MAX_TERMINAL_FONT_SIZE,
   mapTerminalSpecialKey,
   MIN_TERMINAL_FONT_SIZE,
-  resetTerminal,
   TERMINAL_CONVERT_EOL,
 } from "../lib/terminal";
 import type {
@@ -57,6 +53,7 @@ import {
   loadCommandHistory,
   recordCommand,
   type CommandHistoryEntry,
+  type CommandSuggestion,
 } from "../lib/commandHistory";
 import { loadSenderPresets } from "../lib/senders";
 import type { SenderPreset } from "../lib/types";
@@ -77,6 +74,7 @@ interface TerminalPaneProps {
   onClear: () => void;
   onInput: (value: string) => void;
   onFontSizeChange: (fontSize: number) => void;
+  onOpenSender: () => void;
 }
 
 export function TerminalPane({
@@ -91,6 +89,7 @@ export function TerminalPane({
   onClear,
   onInput,
   onFontSizeChange,
+  onOpenSender,
 }: TerminalPaneProps) {
   const { locale, t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -111,12 +110,17 @@ export function TerminalPane({
   const completionPendingRef = useRef(false);
   const completionTimerRef = useRef<number | null>(null);
   const typedCommandRef = useRef("");
+  const inlineSuggestionsRef = useRef<CommandSuggestion[]>([]);
+  const activeInlineSuggestionRef = useRef(-1);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchFound, setSearchFound] = useState<boolean | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandValue, setCommandValue] = useState("");
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const [liveCommandValue, setLiveCommandValue] = useState("");
+  const [inlineCompletionDismissed, setInlineCompletionDismissed] = useState(false);
+  const [activeInlineSuggestion, setActiveInlineSuggestion] = useState(-1);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -136,6 +140,23 @@ export function TerminalPane({
         quickCommands,
       ),
     [commandHistory, commandValue, quickCommands],
+  );
+  const inlineSuggestions = useMemo(
+    () =>
+      inlineCompletionDismissed || !liveCommandValue.trim()
+        ? []
+        : buildCommandSuggestions(
+            liveCommandValue,
+            commandHistory,
+            quickCommands,
+            7,
+          ),
+    [
+      commandHistory,
+      inlineCompletionDismissed,
+      liveCommandValue,
+      quickCommands,
+    ],
   );
   const hexDump = useMemo(
     () =>
@@ -164,15 +185,31 @@ export function TerminalPane({
   trackedInputRef.current = (value: string) => {
     const next = consumeTerminalInput(typedCommandRef.current, value);
     typedCommandRef.current = next.buffer;
+    setLiveCommandValue(next.buffer);
+    if (
+      [...value].some(
+        (character) =>
+          character === "\b" ||
+          character === "\u007f" ||
+          character >= " ",
+      )
+    ) {
+      setInlineCompletionDismissed(false);
+      setActiveInlineSuggestion(-1);
+    }
     if (next.completed.length > 0) {
       let history = commandHistory;
       for (const command of next.completed) {
         history = recordCommand(profile.id, command);
       }
       setCommandHistory(history);
+      setInlineCompletionDismissed(false);
+      setActiveInlineSuggestion(-1);
     }
     inputRef.current(value);
   };
+  inlineSuggestionsRef.current = inlineSuggestions;
+  activeInlineSuggestionRef.current = activeInlineSuggestion;
   resizeRef.current = onResize;
   fontSizeRef.current = profile.terminal.fontSize;
   fontSizeChangeRef.current = onFontSizeChange;
@@ -183,6 +220,15 @@ export function TerminalPane({
       window.clearTimeout(completionTimerRef.current);
       completionTimerRef.current = null;
     }
+  };
+
+  const startPendingCompletion = () => {
+    clearPendingCompletion();
+    completionPendingRef.current = true;
+    completionTimerRef.current = window.setTimeout(
+      clearPendingCompletion,
+      COMPLETION_RESPONSE_WINDOW_MS,
+    );
   };
 
   const changeTerminalFontSize = (requestedSize: number) => {
@@ -207,6 +253,31 @@ export function TerminalPane({
     window.setTimeout(() => commandInputRef.current?.focus(), 0);
   };
 
+  const openHistoryCommand = (command: string) => {
+    refreshCommandSources();
+    setCommandValue(command);
+    setActiveSuggestion(-1);
+    setCommandOpen(true);
+    window.setTimeout(() => commandInputRef.current?.focus(), 0);
+  };
+
+  const submitQuickCommand = (preset: SenderPreset) => {
+    if (
+      preset.mode !== "text" ||
+      !preset.payload.trim() ||
+      session.state !== "connected" ||
+      session.transferActive
+    ) {
+      return;
+    }
+    const ending = commandLineEnding(
+      preset.lineEnding,
+      profile.terminal.enterKey,
+    );
+    trackedInputRef.current(`${preset.payload}${ending}`);
+    window.setTimeout(() => terminalRef.current?.focus(), 0);
+  };
+
   const submitCommand = (
     suggestion = activeSuggestion >= 0
       ? commandSuggestions[activeSuggestion]
@@ -221,6 +292,9 @@ export function TerminalPane({
     );
     setCommandHistory(recordCommand(profile.id, command));
     typedCommandRef.current = "";
+    setLiveCommandValue("");
+    setInlineCompletionDismissed(false);
+    setActiveInlineSuggestion(-1);
     inputRef.current(`${command}${ending}`);
     setCommandValue("");
     setActiveSuggestion(-1);
@@ -308,16 +382,61 @@ export function TerminalPane({
         return false;
       }
       if (
+        event.type === "keydown" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        inlineSuggestionsRef.current.length > 0
+      ) {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          const count = inlineSuggestionsRef.current.length;
+          const current = activeInlineSuggestionRef.current;
+          const next =
+            event.key === "ArrowDown"
+              ? (current + 1 + count) % count
+              : (current - 1 + count) % count;
+          activeInlineSuggestionRef.current = next;
+          setActiveInlineSuggestion(next);
+          return false;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setInlineCompletionDismissed(true);
+          setActiveInlineSuggestion(-1);
+          return false;
+        }
+        if (event.key === "Tab") {
+          const suggestion =
+            inlineSuggestionsRef.current[
+              activeInlineSuggestionRef.current >= 0
+                ? activeInlineSuggestionRef.current
+                : 0
+            ];
+          const current = typedCommandRef.current;
+          if (
+            suggestion &&
+            suggestion.command
+              .toLocaleLowerCase()
+              .startsWith(current.toLocaleLowerCase()) &&
+            suggestion.command.length > current.length
+          ) {
+            event.preventDefault();
+            if (profile.protocol === "serial") {
+              startPendingCompletion();
+            }
+            trackedInputRef.current(suggestion.command.slice(current.length));
+            setActiveInlineSuggestion(-1);
+            return false;
+          }
+        }
+      }
+      if (
         profile.protocol === "serial" &&
         isTerminalCompletionTab(event)
       ) {
         event.preventDefault();
-        clearPendingCompletion();
-        completionPendingRef.current = true;
-        completionTimerRef.current = window.setTimeout(
-          clearPendingCompletion,
-          COMPLETION_RESPONSE_WINDOW_MS,
-        );
+        startPendingCompletion();
         trackedInputRef.current("\t");
         return false;
       }
@@ -410,6 +529,9 @@ export function TerminalPane({
 
   useEffect(() => {
     typedCommandRef.current = "";
+    setLiveCommandValue("");
+    setInlineCompletionDismissed(false);
+    setActiveInlineSuggestion(-1);
     setCommandValue("");
     setActiveSuggestion(-1);
     refreshCommandSources();
@@ -544,23 +666,6 @@ export function TerminalPane({
     terminalRef.current.focus();
   };
 
-  const softResetTerminal = () => {
-    if (!terminalRef.current) return;
-    resetTerminal(terminalRef.current, "soft");
-    setSearchFound(null);
-  };
-
-  const hardResetTerminal = () => {
-    if (!terminalRef.current) return;
-    resetTerminal(terminalRef.current, "hard");
-    decoderRef.current = new TextDecoder(profile.terminal.encoding, {
-      fatal: false,
-    });
-    startsNewLineRef.current = true;
-    onClear();
-    setSearchFound(null);
-  };
-
   return (
     <section
       className={[
@@ -571,6 +676,7 @@ export function TerminalPane({
         commandOpen && commandSuggestions.length > 0
           ? "has-command-suggestions"
           : "",
+        active ? "has-history-dock has-quickbar" : "",
       ].filter(Boolean).join(" ")}
       aria-label={t("terminal.label", { name: profile.name })}
       onMouseDown={onActivate}
@@ -616,8 +722,8 @@ export function TerminalPane({
           <pre>{hexDump.text || t("terminal.waiting")}</pre>
         </div>
       )}
-      <div className="terminal-tools">
-        {searchOpen && receiveMode === "text" && (
+      {searchOpen && receiveMode === "text" && (
+        <div className="terminal-tools">
           <div className="terminal-search">
             <Search size={14} />
             <input
@@ -667,90 +773,109 @@ export function TerminalPane({
               <X size={14} />
             </button>
           </div>
-        )}
+        </div>
+      )}
+      {active && !commandOpen && inlineSuggestions.length > 0 && (
         <div
-          className="terminal-zoom-controls"
-          aria-label={t("terminal.zoom.controls")}
+          className="terminal-inline-completion"
+          role="listbox"
+          aria-label={t("terminal.command.suggestions")}
         >
+          {inlineSuggestions.map((suggestion, index) => (
+            <button
+              key={suggestion.id}
+              className={index === activeInlineSuggestion ? "is-active" : ""}
+              role="option"
+              aria-selected={index === activeInlineSuggestion}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openHistoryCommand(suggestion.command)}
+              onDoubleClick={() => submitCommand(suggestion)}
+            >
+              {suggestion.source === "quick" ? (
+                <Zap size={13} />
+              ) : (
+                <Clock3 size={13} />
+              )}
+              <span>{suggestion.label}</span>
+              <small>
+                {suggestion.source === "quick"
+                  ? t("terminal.command.quick")
+                  : `${suggestion.useCount} uses`}
+              </small>
+            </button>
+          ))}
+          <footer>
+            <span>{liveCommandValue}</span>
+            <kbd>Up/Down</kbd>
+            <kbd>Tab</kbd>
+          </footer>
+        </div>
+      )}
+      {active && (
+        <aside
+          className="terminal-history-dock"
+          aria-label={t("terminal.history.title")}
+        >
+          <header>
+            <Clock3 size={14} />
+            <strong>{t("terminal.history.title")}</strong>
+            <span>{commandHistory.length}</span>
+          </header>
+          <div className="terminal-history-list">
+            {commandHistory.length === 0 ? (
+              <p>{t("terminal.history.empty")}</p>
+            ) : (
+              commandHistory.slice(0, 200).map((entry) => (
+                <button
+                  key={entry.command}
+                  onClick={() => openHistoryCommand(entry.command)}
+                  title={entry.command}
+                >
+                  <code>{entry.command}</code>
+                  <small>{entry.useCount} uses</small>
+                </button>
+              ))
+            )}
+          </div>
+        </aside>
+      )}
+      {active && (
+        <div
+          className="terminal-quickbar"
+          aria-label={t("terminal.quickbar.title")}
+        >
+          <span className="terminal-quickbar-title">
+            <Zap size={13} />
+            {t("terminal.quickbar.title")}
+          </span>
+          <div className="terminal-quickbar-commands">
+            {quickCommands
+              .filter(
+                (preset) => preset.mode === "text" && preset.payload.trim(),
+              )
+              .map((preset) => (
+                <button
+                  key={preset.id}
+                  disabled={
+                    session.state !== "connected" || session.transferActive
+                  }
+                  onClick={() => submitQuickCommand(preset)}
+                  title={preset.payload}
+                >
+                  {preset.name}
+                </button>
+              ))}
+          </div>
           <button
-            className="terminal-tool-button"
-            disabled={profile.terminal.fontSize <= MIN_TERMINAL_FONT_SIZE}
-            onClick={() =>
-              changeTerminalFontSize(profile.terminal.fontSize - 1)
-            }
-            title={t("terminal.zoom.out")}
-            aria-label={t("terminal.zoom.out")}
+            className="terminal-quickbar-settings"
+            onClick={onOpenSender}
+            title={t("terminal.quickbar.configure")}
+            aria-label={t("terminal.quickbar.configure")}
           >
-            <Minus size={13} />
-          </button>
-          <button
-            className="terminal-font-size"
-            onClick={() =>
-              changeTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE)
-            }
-            title={t("terminal.zoom.reset")}
-            aria-label={t("terminal.zoom.reset")}
-          >
-            {profile.terminal.fontSize}
-          </button>
-          <button
-            className="terminal-tool-button"
-            disabled={profile.terminal.fontSize >= MAX_TERMINAL_FONT_SIZE}
-            onClick={() =>
-              changeTerminalFontSize(profile.terminal.fontSize + 1)
-            }
-            title={t("terminal.zoom.in")}
-            aria-label={t("terminal.zoom.in")}
-          >
-            <Plus size={13} />
+            <Settings size={14} />
           </button>
         </div>
-        <button
-          className={`terminal-tool-button ${
-            commandOpen ? "is-active" : ""
-          }`}
-          disabled={session.state !== "connected" || session.transferActive}
-          onClick={openCommandComposer}
-          title={t("terminal.command.title")}
-          aria-label={t("terminal.command.open")}
-        >
-          <CommandIcon size={15} />
-        </button>
-        <button
-          className="terminal-tool-button"
-          disabled={receiveMode === "hex"}
-          onClick={() => {
-            setSearchOpen(true);
-            window.setTimeout(() => searchInputRef.current?.focus(), 0);
-          }}
-          title={t("terminal.search.title")}
-        >
-          <Search size={15} />
-        </button>
-        <button
-          className="terminal-tool-button"
-          onClick={clearTerminal}
-          title={t("terminal.clear")}
-        >
-          <Trash2 size={15} />
-        </button>
-        <button
-          className="terminal-tool-button"
-          onClick={softResetTerminal}
-          title={t("terminal.softReset.title")}
-          aria-label={t("terminal.softReset")}
-        >
-          <RotateCcw size={15} />
-        </button>
-        <button
-          className="terminal-tool-button"
-          onClick={hardResetTerminal}
-          title={t("terminal.hardReset.title")}
-          aria-label={t("terminal.hardReset")}
-        >
-          <Power size={15} />
-        </button>
-      </div>
+      )}
       {commandOpen && (
         <div className="command-composer">
           <div className="command-composer-input">

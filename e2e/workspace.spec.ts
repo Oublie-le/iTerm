@@ -21,7 +21,7 @@ test("切换语言并浏览完整会话设置", async ({ page }) => {
   await expect(page.getByLabel("iTerm")).toBeVisible();
   await expect(page.locator(".app-menubar")).toHaveCSS(
     "backdrop-filter",
-    /blur/,
+    "none",
   );
   await expect(page.getByText("会话管理器", { exact: true })).toBeVisible();
   await page.getByTitle("应用设置").click();
@@ -101,24 +101,20 @@ test("连接串口并操作工作区菜单", async ({ page }) => {
     page.getByRole("region", { name: "Sender pane" }),
   ).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "Open command suggestions" })
-    .click();
+  const terminal = page.getByRole("region", {
+    name: "E2E Serial terminal",
+  });
+  await terminal.click();
+  await page.keyboard.press("Control+Shift+K");
   const commandInput = page.getByLabel("Command input");
   await commandInput.fill("help");
   await commandInput.press("Enter");
-  await expect(page.getByText("History · 1×")).toBeVisible();
+  await expect(
+    page.locator(".terminal-history-list code").filter({ hasText: "help" }),
+  ).toBeVisible();
 
-  const resetFontSize = page.getByRole("button", {
-    name: "Reset terminal font size (Ctrl/⌘+0)",
-  });
-  await expect(resetFontSize).toHaveText("14");
-  await page
-    .getByRole("button", {
-      name: "Increase terminal font size (Ctrl/⌘++)",
-    })
-    .click();
-  await expect(resetFontSize).toHaveText("15");
+  await terminal.click();
+  await page.keyboard.press("Control+=");
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -130,7 +126,6 @@ test("连接串口并操作工作区菜单", async ({ page }) => {
     )
     .toBe(15);
 
-  const terminal = page.getByRole("region", { name: "E2E Serial terminal" });
   await terminal.click({ button: "right", position: { x: 220, y: 120 } });
   const contextMenu = page.getByRole("menu", { name: "Terminal actions" });
   await expect(contextMenu).toBeVisible();

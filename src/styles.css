@@ -3920,3 +3920,447 @@ progress {
   border-color: var(--separator);
   border-bottom-color: var(--content-background);
   color: var(--label);
+}
+
+/* WindTerm-density workbench ---------------------------------------------- */
+.app-shell {
+  grid-template-rows: 31px minmax(0, 1fr);
+  font-size: 12px;
+}
+
+.app-brand {
+  height: 31px;
+  margin-right: 3px;
+}
+
+.app-menubar,
+.app-shell[data-theme="dark"] .app-menubar {
+  min-height: 31px;
+  padding: 0 5px;
+}
+
+.top-menu > button,
+.menu-actions > button {
+  height: 25px;
+  padding: 0 7px;
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.menu-actions {
+  gap: 1px;
+}
+
+.session-sidebar,
+.app-shell[data-theme="dark"] .session-sidebar {
+  flex-basis: 214px;
+}
+
+.dock-title {
+  min-height: 34px;
+  padding: 0 8px;
+}
+
+.sidebar-search {
+  height: 27px;
+  border-radius: 2px;
+}
+
+.tree-session,
+.tree-port {
+  border-radius: 2px;
+}
+
+.tab-strip,
+.app-shell[data-theme="dark"] .tab-strip {
+  flex-basis: 31px;
+  gap: 2px;
+  padding: 2px 4px 0;
+}
+
+.sidebar-toggle,
+.tab-action {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 2px;
+  border-radius: 2px;
+}
+
+.tabs {
+  gap: 1px;
+}
+
+.tabs > button,
+.app-shell[data-theme="dark"] .tabs > button {
+  min-width: 112px;
+  max-width: 188px;
+  height: 29px;
+  padding: 0 7px;
+  border-radius: 3px 3px 0 0;
+  font-size: 11px;
+}
+
+.session-toolbar,
+.app-shell[data-theme="dark"] .session-toolbar {
+  min-height: 34px;
+  padding: 0 5px;
+}
+
+.icon-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+}
+
+.signal-button,
+.toolbar-button,
+.file-protocol-select,
+.app-shell[data-theme="dark"] .signal-button,
+.app-shell[data-theme="dark"] .toolbar-button,
+.app-shell[data-theme="dark"] .file-protocol-select {
+  min-height: 24px;
+  border-radius: 2px;
+}
+
+.terminal-host {
+  inset: 4px 5px 4px 6px;
+}
+
+.terminal-hex-view {
+  inset: 0;
+  padding: 7px;
+}
+
+.terminal-pane.has-history-dock .terminal-host,
+.terminal-pane.has-history-dock .terminal-hex-view {
+  right: 221px;
+}
+
+.terminal-pane.has-quickbar .terminal-host,
+.terminal-pane.has-quickbar .terminal-hex-view {
+  bottom: 32px;
+}
+
+.terminal-pane.has-command-composer.has-quickbar .terminal-host,
+.terminal-pane.has-command-composer.has-quickbar .terminal-hex-view {
+  bottom: 85px;
+}
+
+.terminal-pane.has-command-suggestions.has-quickbar .terminal-host,
+.terminal-pane.has-command-suggestions.has-quickbar .terminal-hex-view {
+  bottom: 282px;
+}
+
+.terminal-tools {
+  top: 4px;
+  right: 225px;
+  left: auto;
+  width: auto;
+  height: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.terminal-search {
+  height: 28px;
+  border-radius: 2px;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
+}
+
+.terminal-search input,
+.app-shell[data-theme="dark"] .terminal-search input {
+  border-radius: 1px;
+}
+
+.terminal-history-dock {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  bottom: 32px;
+  display: flex;
+  width: 216px;
+  min-width: 0;
+  flex-direction: column;
+  background: var(--terminal-chrome);
+  border-left: 1px solid var(--terminal-border);
+  color: var(--terminal-label);
+}
+
+.terminal-history-dock > header {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--terminal-border);
+  background: var(--toolbar-background);
+}
+
+.terminal-history-dock > header strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--label);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-history-dock > header span {
+  color: var(--terminal-muted);
+  font-size: 10px;
+}
+
+.terminal-history-list {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 3px;
+}
+
+.terminal-history-list > p {
+  margin: 18px 8px;
+  color: var(--terminal-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.terminal-history-list > button {
+  display: grid;
+  width: 100%;
+  min-height: 27px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 2px;
+  color: var(--terminal-label);
+  cursor: pointer;
+  grid-template-columns: minmax(0, 1fr) auto;
+  text-align: left;
+}
+
+.terminal-history-list > button:hover {
+  background: var(--control-hover);
+  color: var(--label);
+}
+
+.terminal-history-list code {
+  overflow: hidden;
+  font: 11px/1.35 "Cascadia Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-history-list small {
+  color: var(--terminal-muted);
+  font-size: 9px;
+}
+
+.terminal-quickbar {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  height: 32px;
+  min-width: 0;
+  align-items: stretch;
+  background: var(--toolbar-background);
+  border-top: 1px solid var(--terminal-border);
+  color: var(--secondary-label);
+}
+
+.terminal-quickbar-title {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-right: 1px solid var(--separator);
+  color: var(--label);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.terminal-quickbar-commands {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.terminal-quickbar-commands::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal-quickbar-commands > button,
+.terminal-quickbar-settings {
+  height: 25px;
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0 8px;
+  border-right: 1px solid var(--separator);
+  color: var(--secondary-label);
+  cursor: pointer;
+  font: 10px "Cascadia Mono", Consolas, monospace;
+}
+
+.terminal-quickbar-commands > button:hover:not(:disabled),
+.terminal-quickbar-settings:hover {
+  background: var(--control-hover);
+  color: var(--label);
+}
+
+.terminal-quickbar-commands > button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.terminal-quickbar-settings {
+  display: grid;
+  width: 29px;
+  place-items: center;
+  padding: 0;
+  border-right: 0;
+  border-left: 1px solid var(--separator);
+}
+
+.terminal-inline-completion {
+  position: absolute;
+  z-index: 5;
+  right: 229px;
+  bottom: 38px;
+  left: 7px;
+  display: grid;
+  max-width: 520px;
+  overflow: hidden;
+  background: var(--popover-background);
+  border: 1px solid var(--separator-strong);
+  border-radius: 3px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  color: var(--label);
+}
+
+.terminal-inline-completion > button {
+  display: grid;
+  min-height: 27px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 7px;
+  color: var(--label);
+  cursor: pointer;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  text-align: left;
+}
+
+.terminal-inline-completion > button:hover,
+.terminal-inline-completion > button.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.terminal-inline-completion > button span {
+  overflow: hidden;
+  font: 11px "Cascadia Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-inline-completion small {
+  color: var(--terminal-muted);
+  font-size: 9px;
+}
+
+.terminal-inline-completion > button.is-active small,
+.terminal-inline-completion > button:hover small {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.terminal-inline-completion > footer {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  background: var(--toolbar-background);
+  border-top: 1px solid var(--separator);
+  color: var(--terminal-muted);
+  font-size: 9px;
+}
+
+.terminal-inline-completion > footer span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-inline-completion kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--separator);
+  border-radius: 2px;
+  background: var(--control-background);
+  color: var(--secondary-label);
+}
+
+.terminal-pane.has-history-dock .command-composer {
+  right: 216px;
+  width: auto;
+}
+
+.terminal-pane.has-quickbar .command-composer {
+  bottom: 32px;
+}
+
+.statusbar {
+  min-height: 24px;
+  padding: 0 7px;
+  font-size: 10px;
+}
+
+@media (max-width: 980px) {
+  .terminal-history-dock {
+    display: none;
+  }
+
+  .terminal-pane.has-history-dock .terminal-host,
+  .terminal-pane.has-history-dock .terminal-hex-view {
+    right: 5px;
+  }
+
+  .terminal-pane.has-history-dock .command-composer {
+    right: 0;
+  }
+
+  .terminal-inline-completion {
+    right: 7px;
+  }
+}
+
+.terminal-stack:not(.split-single) .terminal-history-dock,
+.terminal-stack:not(.split-single) .terminal-quickbar {
+  display: none;
+}
+
+.terminal-stack:not(.split-single) .terminal-pane.has-history-dock .terminal-host,
+.terminal-stack:not(.split-single) .terminal-pane.has-history-dock .terminal-hex-view {
+  right: 5px;
+}
+
+.terminal-stack:not(.split-single) .terminal-pane.has-quickbar .terminal-host,
+.terminal-stack:not(.split-single) .terminal-pane.has-quickbar .terminal-hex-view {
+  bottom: 4px;
+}
+
+.terminal-stack:not(.split-single) .terminal-inline-completion {
+  right: 7px;
+  bottom: 7px;
+}
