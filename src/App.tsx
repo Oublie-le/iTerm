@@ -151,6 +151,7 @@ import {
   type TranslationKey,
   type Translator,
 } from "./lib/i18n";
+import { localizedErrorMessage } from "./lib/errorMessages";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -382,7 +383,7 @@ export default function App() {
   useEffect(() => {
     const handlePersistenceError = (event: Event) => {
       const message = (event as CustomEvent<string>).detail;
-      setPersistenceError(message);
+      setPersistenceError(localizedErrorMessage(message, resolvedLocale));
       captureDiagnostic("persistence", "sync_failed", {
         level: "error",
         message,
@@ -397,7 +398,7 @@ export default function App() {
         PERSISTENCE_ERROR_EVENT,
         handlePersistenceError,
       );
-  }, [captureDiagnostic]);
+  }, [captureDiagnostic, resolvedLocale]);
 
   const activateSession = useCallback(
     (sessionId: string) => {
@@ -424,15 +425,17 @@ export default function App() {
     } catch (error) {
       if (!silent) {
         setPortError(
-          error instanceof Error
-            ? error.message
-            : t("runtime.serialListFallback"),
+          localizedErrorMessage(
+            error,
+            resolvedLocale,
+            t("runtime.serialListFallback"),
+          ),
         );
       }
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [t]);
+  }, [resolvedLocale, t]);
 
   const refreshAdbDevices = useCallback(async (silent = false) => {
     if (!silent) setAdbError("");
@@ -443,13 +446,15 @@ export default function App() {
       setAdbDevices([]);
       if (!silent) {
         setAdbError(
-          error instanceof Error
-            ? error.message
-            : t("runtime.adbListFallback"),
+          localizedErrorMessage(
+            error,
+            resolvedLocale,
+            t("runtime.adbListFallback"),
+          ),
         );
       }
     }
-  }, [t]);
+  }, [resolvedLocale, t]);
 
   const refreshExternalTools = useCallback(async () => {
     setExternalTools(await listExternalTools());
@@ -571,6 +576,9 @@ export default function App() {
   }, [preferences.confirmActiveSessionClose, sessions]);
 
   const applyEvent = useCallback((event: SerialEvent) => {
+    const displayMessage = "message" in event && event.message
+      ? localizedErrorMessage(event.message, resolvedLocale)
+      : undefined;
     if (event.type === "state") {
       captureDiagnostic("session", "state_changed", {
         level:
@@ -631,14 +639,14 @@ export default function App() {
               notice:
                 event.state === "connected"
                   ? undefined
-                  : event.message
+                  : displayMessage
                     ? {
                         tone:
                           event.state === "error" ||
                           event.state === "deviceLost"
                             ? ("error" as const)
                             : ("info" as const),
-                        title: event.message,
+                        title: displayMessage,
                       }
                     : session.notice,
             };
@@ -715,7 +723,10 @@ export default function App() {
                 : undefined,
               notice: {
                 tone: "error",
-                title: event.message,
+                title: localizedErrorMessage(
+                  event.message,
+                  resolvedLocale,
+                ),
                 detail: willReconnect
                   ? t("runtime.reconnectAttempt", {
                       code: event.code,
@@ -736,14 +747,17 @@ export default function App() {
                   ? {
                       tone: "error" as const,
                       title: t("runtime.logWriteFailed"),
-                      detail: event.message,
+                      detail: localizedErrorMessage(
+                        event.message,
+                        resolvedLocale,
+                      ),
                     }
                   : session.notice,
             };
         }
       }),
     );
-  }, [captureDiagnostic, t]);
+  }, [captureDiagnostic, resolvedLocale, t]);
 
   const startLogging = useCallback(
     async (sessionId: string, profile: SessionProfile) => {
@@ -776,8 +790,7 @@ export default function App() {
                   notice: {
                     tone: "error",
                     title: t("runtime.logStartFailed"),
-                    detail:
-                      error instanceof Error ? error.message : String(error),
+                    detail: localizedErrorMessage(error, resolvedLocale),
                   },
                 }
               : session,
@@ -785,7 +798,7 @@ export default function App() {
         );
       }
     },
-    [t],
+    [resolvedLocale, t],
   );
 
   const connectProfile = useCallback(
@@ -989,10 +1002,10 @@ export default function App() {
                           title: t("runtime.triggerSendFailed", {
                             name: match.rule.name,
                           }),
-                          detail:
-                            error instanceof Error
-                              ? error.message
-                              : String(error),
+                          detail: localizedErrorMessage(
+                            error,
+                            resolvedLocale,
+                          ),
                         },
                       }
                     : item,
@@ -1015,7 +1028,7 @@ export default function App() {
         }
       }
     }
-  }, [profiles, sessions, startLogging, t]);
+  }, [profiles, resolvedLocale, sessions, startLogging, t]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1175,7 +1188,7 @@ export default function App() {
       setProfileTransferNotice({
         tone: "error",
         title: t("runtime.profilesExportFailed"),
-        detail: error instanceof Error ? error.message : String(error),
+        detail: localizedErrorMessage(error, resolvedLocale),
       });
     }
   };
@@ -1215,7 +1228,7 @@ export default function App() {
       setProfileTransferNotice({
         tone: "error",
         title: t("runtime.profilesImportFailed"),
-        detail: error instanceof Error ? error.message : String(error),
+        detail: localizedErrorMessage(error, resolvedLocale),
       });
     }
   };
@@ -1791,7 +1804,7 @@ export default function App() {
                 notice: {
                   tone: "error",
                   title: t("runtime.logStateFailed"),
-                  detail: error instanceof Error ? error.message : String(error),
+                  detail: localizedErrorMessage(error, resolvedLocale),
                 },
               }
             : session,
@@ -1824,7 +1837,7 @@ export default function App() {
                 notice: {
                   tone: "error",
                   title: t("runtime.logStopFailed"),
-                  detail: error instanceof Error ? error.message : String(error),
+                  detail: localizedErrorMessage(error, resolvedLocale),
                 },
               }
             : session,
@@ -1840,9 +1853,11 @@ export default function App() {
       else await openLogDirectory();
     } catch (error) {
       setUtilityError(
-        error instanceof Error
-          ? error.message
-          : t("runtime.logLocationFallback"),
+        localizedErrorMessage(
+          error,
+          resolvedLocale,
+          t("runtime.logLocationFallback"),
+        ),
       );
     }
   };
@@ -1859,7 +1874,7 @@ export default function App() {
       setProfileTransferNotice({
         tone: "error",
         title: t("runtime.diagnosticsExportFailed"),
-        detail: error instanceof Error ? error.message : String(error),
+        detail: localizedErrorMessage(error, resolvedLocale),
       });
     }
   };
@@ -2520,10 +2535,10 @@ export default function App() {
                                     notice: {
                                       tone: "warning",
                                       title: t("shell.error.remoteResize"),
-                                      detail:
-                                        error instanceof Error
-                                          ? error.message
-                                          : String(error),
+                                      detail: localizedErrorMessage(
+                                        error,
+                                        resolvedLocale,
+                                      ),
                                     },
                                   }
                                 : item,

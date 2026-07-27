@@ -26,6 +26,7 @@ import {
   type SenderPreset,
 } from "../lib/types";
 import { useI18n } from "../lib/i18n";
+import { localizedErrorMessage } from "../lib/errorMessages";
 
 interface SenderPaneProps {
   profileId: string;
@@ -114,7 +115,7 @@ export function SenderPane({
       setSentBytes((value) => value + count);
       return true;
     } catch (error) {
-      setLastError(error instanceof Error ? error.message : String(error));
+      setLastError(localizedErrorMessage(error, locale));
       return false;
     }
   };
@@ -175,7 +176,7 @@ export function SenderPane({
         );
       }
     } catch (error) {
-      setLastError(error instanceof Error ? error.message : String(error));
+      setLastError(localizedErrorMessage(error, locale));
     }
   };
 
@@ -198,7 +199,7 @@ export function SenderPane({
           : t("sender.imported", { count: merged.importedCount }),
       );
     } catch (error) {
-      setLastError(error instanceof Error ? error.message : String(error));
+      setLastError(localizedErrorMessage(error, locale));
     }
   };
 
@@ -229,7 +230,7 @@ export function SenderPane({
       setSentBytes((value) => value + count);
     } catch (error) {
       if (!controller.signal.aborted) {
-        setLastError(error instanceof Error ? error.message : String(error));
+        setLastError(localizedErrorMessage(error, locale));
       }
     } finally {
       fileAbortRef.current = null;
@@ -270,7 +271,7 @@ export function SenderPane({
       }
     } catch (error) {
       if (!controller.signal.aborted) {
-        setLastError(error instanceof Error ? error.message : String(error));
+        setLastError(localizedErrorMessage(error, locale));
       }
     } finally {
       fileAbortRef.current = null;
@@ -311,7 +312,7 @@ export function SenderPane({
       }
     } catch (error) {
       if (!controller.signal.aborted) {
-        setLastError(error instanceof Error ? error.message : String(error));
+        setLastError(localizedErrorMessage(error, locale));
       }
     } finally {
       fileAbortRef.current = null;
