@@ -11,12 +11,13 @@ use tauri::{AppHandle, Manager, State};
 const DATABASE_FILE_NAME: &str = "iterm-state.sqlite3";
 const CURRENT_SCHEMA_VERSION: i64 = 1;
 const MAX_VALUE_BYTES: usize = 10 * 1024 * 1024;
-const ALLOWED_STORAGE_KEYS: [&str; 5] = [
+const ALLOWED_STORAGE_KEYS: [&str; 6] = [
     "iterm.profiles.v1",
     "serialterm.profiles.v1",
     "iterm.preferences.v1",
     "iterm.workspace.v1",
     "iterm.senders.v1",
+    "iterm.command-history.v1",
 ];
 
 pub struct PersistentStore {
@@ -256,6 +257,10 @@ mod tests {
             .save_items(BTreeMap::from([
                 ("iterm.profiles.v1".into(), "[{\"id\":\"one\"}]".into()),
                 ("iterm.workspace.v1".into(), "{\"sidebarOpen\":true}".into()),
+                (
+                    "iterm.command-history.v1".into(),
+                    "{\"profile\":[{\"command\":\"ls\"}]}".into(),
+                ),
             ]))
             .unwrap();
         store
@@ -267,7 +272,7 @@ mod tests {
 
         let items = store.load_items().unwrap();
         assert_eq!(items["iterm.profiles.v1"], "[{\"id\":\"two\"}]");
-        assert_eq!(items.len(), 2);
+        assert_eq!(items.len(), 3);
 
         store.remove_item("iterm.workspace.v1").unwrap();
         assert!(!store

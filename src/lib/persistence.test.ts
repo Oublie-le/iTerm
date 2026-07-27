@@ -109,6 +109,7 @@ describe("persistent storage hydration", () => {
       "iterm.preferences.v1": "{\"theme\":\"dark\"}",
       "iterm.workspace.v1": "{\"sidebarOpen\":false}",
       "iterm.senders.v1": "{\"profile\":[]}",
+      "iterm.command-history.v1": "{\"profile\":[]}",
       "unrelated.key": "keep",
     });
     const driver = createDriver({});
@@ -121,6 +122,7 @@ describe("persistent storage hydration", () => {
     expect(storage.getItem("iterm.preferences.v1")).toBeNull();
     expect(storage.getItem("iterm.workspace.v1")).toBeNull();
     expect(storage.getItem("iterm.senders.v1")).toBeNull();
+    expect(storage.getItem("iterm.command-history.v1")).toBeNull();
     expect(storage.getItem("unrelated.key")).toBe("keep");
   });
 

@@ -972,6 +972,165 @@ textarea:disabled {
   border-color: #6dbb82;
 }
 
+.command-composer {
+  position: absolute;
+  z-index: 5;
+  right: 50%;
+  bottom: 15px;
+  display: grid;
+  width: min(680px, calc(100% - 32px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 13px;
+  background: rgba(28, 28, 30, 0.88);
+  box-shadow:
+    0 20px 65px rgba(0, 0, 0, 0.42),
+    0 3px 12px rgba(0, 0, 0, 0.24);
+  color: rgba(255, 255, 255, 0.82);
+  transform: translateX(50%);
+  backdrop-filter: saturate(160%) blur(30px);
+  -webkit-backdrop-filter: saturate(160%) blur(30px);
+}
+
+.command-composer-input {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px 6px 12px;
+}
+
+.command-composer-input > svg {
+  flex: 0 0 auto;
+  color: #64d2ff;
+}
+
+.command-composer-input input {
+  min-width: 0;
+  height: 31px;
+  flex: 1;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  outline: none;
+  font: 13px "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+}
+
+.command-composer-input input::placeholder {
+  color: rgba(235, 235, 245, 0.42);
+}
+
+.command-composer-input kbd {
+  padding: 3px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  background: rgba(118, 118, 128, 0.22);
+  color: rgba(235, 235, 245, 0.58);
+  font: 9px -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.command-composer-input button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+  background: rgba(118, 118, 128, 0.24);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.command-composer-input button:first-of-type {
+  background: #0a84ff;
+  color: #fff;
+}
+
+.command-composer-input button:hover:not(:disabled) {
+  filter: brightness(1.14);
+}
+
+.command-suggestions {
+  display: grid;
+  max-height: 260px;
+  overflow: auto;
+  padding: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.command-suggestions > button {
+  display: grid;
+  min-height: 43px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  grid-template-columns: 19px minmax(0, 1fr) auto;
+  text-align: left;
+}
+
+.command-suggestions > button:hover,
+.command-suggestions > button.is-active {
+  background: #0a84ff;
+  color: #fff;
+}
+
+.command-suggestion-icon {
+  display: grid;
+  place-items: center;
+  color: #64d2ff;
+}
+
+.command-suggestions > button:hover .command-suggestion-icon,
+.command-suggestions > button.is-active .command-suggestion-icon {
+  color: #fff;
+}
+
+.command-suggestion-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.command-suggestion-copy strong,
+.command-suggestion-copy code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-suggestion-copy strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.command-suggestion-copy code {
+  color: rgba(235, 235, 245, 0.56);
+  font: 10px "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+}
+
+.command-suggestions > button:hover code,
+.command-suggestions > button.is-active code {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.command-suggestions small {
+  color: rgba(235, 235, 245, 0.5);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.command-suggestions > button:hover small,
+.command-suggestions > button.is-active small {
+  color: rgba(255, 255, 255, 0.74);
+}
+
 .terminal-search button {
   width: 22px;
   height: 22px;

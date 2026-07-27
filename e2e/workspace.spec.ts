@@ -76,6 +76,14 @@ test("连接串口并操作工作区菜单", async ({ page }) => {
     page.getByRole("region", { name: "Sender pane" }),
   ).toBeVisible();
 
+  await page
+    .getByRole("button", { name: "Open command suggestions" })
+    .click();
+  const commandInput = page.getByLabel("Command input");
+  await commandInput.fill("help");
+  await commandInput.press("Enter");
+  await expect(page.getByText("History · 1×")).toBeVisible();
+
   await page.getByRole("button", { name: "Mode", exact: true }).click();
   await page
     .getByRole("menuitemcheckbox", { name: "Hex Receive" })

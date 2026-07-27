@@ -1,11 +1,15 @@
 import {
   ChevronDown,
   ChevronUp,
+  Clock3,
+  Command as CommandIcon,
   Power,
   RotateCcw,
   Search,
+  SendHorizontal,
   Trash2,
   X,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
@@ -33,6 +37,16 @@ import {
   TERMINAL_SEARCH_EVENT,
   type TerminalUiCommand,
 } from "../lib/uiCommands";
+import {
+  buildCommandSuggestions,
+  commandLineEnding,
+  consumeTerminalInput,
+  loadCommandHistory,
+  recordCommand,
+  type CommandHistoryEntry,
+} from "../lib/commandHistory";
+import { loadSenderPresets } from "../lib/senders";
+import type { SenderPreset } from "../lib/types";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -65,14 +79,35 @@ export function TerminalPane({
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const commandInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef(onInput);
+  const trackedInputRef = useRef(onInput);
   const resizeRef = useRef(onResize);
   const decoderRef = useRef<TextDecoder | null>(null);
   const lastWrittenNonceRef = useRef<number | null>(null);
   const startsNewLineRef = useRef(true);
+  const typedCommandRef = useRef("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchFound, setSearchFound] = useState<boolean | null>(null);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandValue, setCommandValue] = useState("");
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const [commandHistory, setCommandHistory] = useState<CommandHistoryEntry[]>(
+    () => loadCommandHistory(profile.id),
+  );
+  const [quickCommands, setQuickCommands] = useState<SenderPreset[]>(
+    () => loadSenderPresets(profile.id, localStorage, t("sender.defaultName")),
+  );
+  const commandSuggestions = useMemo(
+    () =>
+      buildCommandSuggestions(
+        commandValue,
+        commandHistory,
+        quickCommands,
+      ),
+    [commandHistory, commandValue, quickCommands],
+  );
   const hexDump = useMemo(
     () =>
       formatHexDump(
@@ -94,7 +129,53 @@ export function TerminalPane({
   );
 
   inputRef.current = onInput;
+  trackedInputRef.current = (value: string) => {
+    const next = consumeTerminalInput(typedCommandRef.current, value);
+    typedCommandRef.current = next.buffer;
+    if (next.completed.length > 0) {
+      let history = commandHistory;
+      for (const command of next.completed) {
+        history = recordCommand(profile.id, command);
+      }
+      setCommandHistory(history);
+    }
+    inputRef.current(value);
+  };
   resizeRef.current = onResize;
+
+  const refreshCommandSources = () => {
+    setCommandHistory(loadCommandHistory(profile.id));
+    setQuickCommands(
+      loadSenderPresets(profile.id, localStorage, t("sender.defaultName")),
+    );
+  };
+
+  const openCommandComposer = () => {
+    refreshCommandSources();
+    setCommandOpen(true);
+    setActiveSuggestion(-1);
+    window.setTimeout(() => commandInputRef.current?.focus(), 0);
+  };
+
+  const submitCommand = (
+    suggestion = activeSuggestion >= 0
+      ? commandSuggestions[activeSuggestion]
+      : undefined,
+  ) => {
+    if (session.state !== "connected" || session.transferActive) return;
+    const command = (suggestion?.command ?? commandValue).trim();
+    if (!command) return;
+    const ending = commandLineEnding(
+      suggestion?.lineEnding ?? "terminal",
+      profile.terminal.enterKey,
+    );
+    setCommandHistory(recordCommand(profile.id, command));
+    typedCommandRef.current = "";
+    inputRef.current(`${command}${ending}`);
+    setCommandValue("");
+    setActiveSuggestion(-1);
+    window.setTimeout(() => commandInputRef.current?.focus(), 0);
+  };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -184,8 +265,15 @@ export function TerminalPane({
         void executeTerminalCommand(
           copyShortcut ? "copy" : "paste",
           terminal,
-          (value) => inputRef.current(value),
+          (value) => trackedInputRef.current(value),
         ).catch(() => undefined);
+        return false;
+      }
+      const commandShortcut =
+        (event.metaKey && shortcutKey === "k") ||
+        (event.ctrlKey && event.shiftKey && shortcutKey === "k");
+      if (event.type === "keydown" && commandShortcut) {
+        openCommandComposer();
         return false;
       }
       if (
@@ -199,12 +287,14 @@ export function TerminalPane({
       }
       const mappedInput = mapTerminalSpecialKey(event, profile.terminal);
       if (mappedInput !== null) {
-        inputRef.current(mappedInput);
+        trackedInputRef.current(mappedInput);
         return false;
       }
       return true;
     });
-    const inputDisposable = terminal.onData((value) => inputRef.current(value));
+    const inputDisposable = terminal.onData((value) =>
+      trackedInputRef.current(value),
+    );
     const dimensionsDisposable = terminal.onResize(({ cols, rows }) =>
       resizeRef.current(cols, rows),
     );
@@ -265,8 +355,16 @@ export function TerminalPane({
     profile.terminal.enterKey,
     profile.terminal.scrollback,
     profile.terminal.timestamp,
+    profile.id,
     theme,
   ]);
+
+  useEffect(() => {
+    typedCommandRef.current = "";
+    setCommandValue("");
+    setActiveSuggestion(-1);
+    refreshCommandSources();
+  }, [profile.id]);
 
   useEffect(() => {
     if (!session.lastChunk || !terminalRef.current || !decoderRef.current) return;
@@ -313,7 +411,7 @@ export function TerminalPane({
       void executeTerminalCommand(
         command,
         terminalRef.current,
-        (value) => inputRef.current(value),
+        (value) => trackedInputRef.current(value),
       ).catch(() => undefined);
     };
     window.addEventListener(TERMINAL_COMMAND_EVENT, executeCommand);
@@ -447,6 +545,17 @@ export function TerminalPane({
           </div>
         )}
         <button
+          className={`terminal-tool-button ${
+            commandOpen ? "is-active" : ""
+          }`}
+          disabled={session.state !== "connected" || session.transferActive}
+          onClick={openCommandComposer}
+          title={t("terminal.command.title")}
+          aria-label={t("terminal.command.open")}
+        >
+          <CommandIcon size={15} />
+        </button>
+        <button
           className="terminal-tool-button"
           disabled={receiveMode === "hex"}
           onClick={() => {
@@ -481,6 +590,121 @@ export function TerminalPane({
           <Power size={15} />
         </button>
       </div>
+      {commandOpen && (
+        <div className="command-composer">
+          <div className="command-composer-input">
+            <CommandIcon size={16} />
+            <input
+              ref={commandInputRef}
+              value={commandValue}
+              onFocus={refreshCommandSources}
+              onChange={(event) => {
+                setCommandValue(event.target.value);
+                setActiveSuggestion(-1);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActiveSuggestion((current) =>
+                    Math.min(commandSuggestions.length - 1, current + 1),
+                  );
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActiveSuggestion((current) =>
+                    current <= 0
+                      ? Math.max(0, commandSuggestions.length - 1)
+                      : current - 1,
+                  );
+                } else if (event.key === "Tab") {
+                  const suggestion =
+                    commandSuggestions[
+                      activeSuggestion >= 0 ? activeSuggestion : 0
+                    ];
+                  if (suggestion) {
+                    event.preventDefault();
+                    setCommandValue(suggestion.command);
+                    setActiveSuggestion(-1);
+                  }
+                } else if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitCommand();
+                } else if (event.key === "Escape") {
+                  setCommandOpen(false);
+                  terminalRef.current?.focus();
+                }
+              }}
+              placeholder={t("terminal.command.placeholder")}
+              aria-label={t("terminal.command.input")}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <kbd>↑↓</kbd>
+            <kbd>Tab</kbd>
+            <button
+              onClick={() => submitCommand()}
+              disabled={!commandValue.trim() && activeSuggestion < 0}
+              title={t("terminal.command.send")}
+              aria-label={t("terminal.command.send")}
+            >
+              <SendHorizontal size={16} />
+            </button>
+            <button
+              onClick={() => {
+                setCommandOpen(false);
+                terminalRef.current?.focus();
+              }}
+              title={t("terminal.command.close")}
+              aria-label={t("terminal.command.close")}
+            >
+              <X size={15} />
+            </button>
+          </div>
+          {commandSuggestions.length > 0 && (
+            <div
+              className="command-suggestions"
+              role="listbox"
+              aria-label={t("terminal.command.suggestions")}
+            >
+              {commandSuggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion.id}
+                  className={index === activeSuggestion ? "is-active" : ""}
+                  role="option"
+                  aria-selected={index === activeSuggestion}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setCommandValue(suggestion.command);
+                    setActiveSuggestion(index);
+                    commandInputRef.current?.focus();
+                  }}
+                  onDoubleClick={() => submitCommand(suggestion)}
+                >
+                  <span className="command-suggestion-icon">
+                    {suggestion.source === "quick" ? (
+                      <Zap size={14} />
+                    ) : (
+                      <Clock3 size={14} />
+                    )}
+                  </span>
+                  <span className="command-suggestion-copy">
+                    <strong>{suggestion.label}</strong>
+                    {suggestion.label !== suggestion.command && (
+                      <code>{suggestion.command}</code>
+                    )}
+                  </span>
+                  <small>
+                    {suggestion.source === "quick"
+                      ? t("terminal.command.quick")
+                      : t("terminal.command.history", {
+                          count: suggestion.useCount,
+                        })}
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {session.state === "opening" && (
         <div className="terminal-loading">
           <span className="spinner" />
