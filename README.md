@@ -135,10 +135,19 @@ pnpm dev
 
 ```bash
 pnpm test
+pnpm bench:terminal:smoke
 pnpm build
 cargo test --manifest-path src-tauri/Cargo.toml
 pnpm tauri:build
 ```
+
+完整的 xterm.js 10 万、50 万、100 万行无渲染性能基线可单独执行：
+
+```bash
+pnpm bench:terminal
+```
+
+测试方法和基线结果见 [终端性能基线](docs/05-terminal-performance.md)。
 
 生成的安装包位于：
 

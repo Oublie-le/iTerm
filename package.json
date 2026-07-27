@@ -12,6 +12,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc -b && vite build",
+    "bench:terminal": "node scripts/benchmark-terminal.mjs --lines 100000,500000,1000000",
+    "bench:terminal:smoke": "node scripts/benchmark-terminal.mjs --lines 10000 --assert",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "test": "vitest run",
     "test:watch": "vitest",

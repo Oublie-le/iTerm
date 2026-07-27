@@ -72,6 +72,9 @@ jobs:
       - name: Test frontend
         run: pnpm test
 
+      - name: Smoke test terminal performance
+        run: pnpm bench:terminal:smoke
+
       - name: Build frontend
         run: pnpm build
 

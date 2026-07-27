@@ -49,7 +49,8 @@
 - [ ] 封装 `SerialDriver`，完成端口枚举与回环；
 - [ ] 每会话 Actor + Tauri binary Channel；
 - [ ] xterm.js 中文 IME、ANSI、搜索和 WebGL；
-- [ ] 10 万/50 万/100 万行性能测试；
+- [x] 10 万/50 万/100 万行 xterm.js 无渲染解析、回滚、搜索和 RSS 基线；
+- [ ] 10 万/50 万/100 万行 WebGL/Canvas GUI FPS 和输入延迟测试；
 - [ ] Text/Hex 原始字节双视图；
 - [ ] macOS 睡眠/唤醒、Windows 拔插、Linux 权限错误；
 - [ ] 形成 ADR-0001 选型结论与备选切换触发条件。
