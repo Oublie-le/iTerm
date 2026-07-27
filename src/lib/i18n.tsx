@@ -112,6 +112,38 @@ const zhCN = {
   "shell.welcome.discovered":
     "已发现 {serialCount} 个串口设备、{adbCount} 个 ADB 设备",
   "shell.error.remoteResize": "远程终端尺寸同步失败",
+  "runtime.workspaceRestored":
+    "会话已从上次工作区恢复，点击连接以建立连接。",
+  "runtime.serialListFallback": "无法读取本机串口设备。",
+  "runtime.adbListFallback": "无法读取 ADB 设备。",
+  "runtime.transferStopped": "会话已断开，文件传输停止。",
+  "runtime.reconnectAttempt":
+    "{code} · 将自动尝试第 {attempt}/{max} 次重连",
+  "runtime.logWriteFailed": "日志写入失败",
+  "runtime.logStartFailed": "无法开始日志",
+  "runtime.triggerDetail": "触发器：{name} · 匹配：{match}",
+  "runtime.triggerSendFailed": "触发器“{name}”发送失败",
+  "runtime.disconnected": "会话已断开，点击重连可重新建立连接。",
+  "runtime.confirmClose":
+    "“{name}”仍有活动连接或任务，确定要断开并关闭吗？",
+  "runtime.confirmDelete": "确定删除会话“{name}”吗？此操作无法撤销。",
+  "runtime.profilesExported": "已导出 {count} 个会话配置",
+  "runtime.profilesExportFailed": "导出会话配置失败",
+  "runtime.profilesImported": "已导入 {count} 个会话配置",
+  "runtime.profilesRemapped": "{file}；{count} 个重复 ID 已安全重建",
+  "runtime.profilesImportFailed": "导入会话配置失败",
+  "runtime.noActiveSession": "没有活动会话。",
+  "runtime.notConnected": "会话未连接。",
+  "runtime.transferBusy": "文件发送期间不能发送普通数据。",
+  "runtime.selectFile": "请选择要发送的文件。",
+  "runtime.transferCancelled": "用户取消文件传输",
+  "runtime.receiveCancelled": "用户取消文件接收",
+  "runtime.logStateFailed": "无法更改日志状态",
+  "runtime.logStopFailed": "无法停止日志",
+  "runtime.logLocationFallback": "无法打开日志位置。",
+  "runtime.diagnosticsExportFailed": "导出诊断失败",
+  "runtime.confirmClearDiagnostics":
+    "确定清空本机保存的全部诊断事件吗？",
   "shell.status.ready": "就绪",
   "shell.status.remote": "远程模式",
   "shell.status.local": "本地模式",
@@ -496,6 +528,43 @@ const enUS: Record<TranslationKey, string> = {
   "shell.welcome.discovered":
     "Found {serialCount} serial devices and {adbCount} ADB devices",
   "shell.error.remoteResize": "Failed to synchronize remote terminal size",
+  "runtime.workspaceRestored":
+    "Session restored from the previous workspace. Click Connect to reconnect.",
+  "runtime.serialListFallback": "Failed to read local serial devices.",
+  "runtime.adbListFallback": "Failed to read ADB devices.",
+  "runtime.transferStopped":
+    "The session disconnected and the file transfer stopped.",
+  "runtime.reconnectAttempt":
+    "{code} · Automatic reconnect attempt {attempt} of {max}",
+  "runtime.logWriteFailed": "Failed to write log",
+  "runtime.logStartFailed": "Failed to start logging",
+  "runtime.triggerDetail": "Trigger: {name} · Match: {match}",
+  "runtime.triggerSendFailed": "Trigger “{name}” failed to send",
+  "runtime.disconnected":
+    "Session disconnected. Click Reconnect to connect again.",
+  "runtime.confirmClose":
+    "“{name}” still has an active connection or task. Disconnect and close it?",
+  "runtime.confirmDelete":
+    "Delete session “{name}”? This action cannot be undone.",
+  "runtime.profilesExported": "Exported {count} session profiles",
+  "runtime.profilesExportFailed": "Failed to export session profiles",
+  "runtime.profilesImported": "Imported {count} session profiles",
+  "runtime.profilesRemapped":
+    "{file}; safely regenerated {count} duplicate IDs",
+  "runtime.profilesImportFailed": "Failed to import session profiles",
+  "runtime.noActiveSession": "There is no active session.",
+  "runtime.notConnected": "The session is not connected.",
+  "runtime.transferBusy":
+    "Normal data cannot be sent during a file transfer.",
+  "runtime.selectFile": "Select a file to send.",
+  "runtime.transferCancelled": "The user cancelled the file transfer",
+  "runtime.receiveCancelled": "The user cancelled file reception",
+  "runtime.logStateFailed": "Failed to change logging state",
+  "runtime.logStopFailed": "Failed to stop logging",
+  "runtime.logLocationFallback": "Failed to open the log location.",
+  "runtime.diagnosticsExportFailed": "Failed to export diagnostics",
+  "runtime.confirmClearDiagnostics":
+    "Clear all diagnostic events saved on this computer?",
   "shell.status.ready": "Ready",
   "shell.status.remote": "Remote mode",
   "shell.status.local": "Local mode",

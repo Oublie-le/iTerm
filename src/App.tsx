@@ -260,7 +260,9 @@ export default function App() {
           ...createRuntimeSession(profile),
           notice: {
             tone: "info" as const,
-            title: "会话已从上次工作区恢复，点击连接以建立连接。",
+            title: createTranslator(preferences.locale)(
+              "runtime.workspaceRestored",
+            ),
           },
         },
       ];
@@ -422,13 +424,15 @@ export default function App() {
     } catch (error) {
       if (!silent) {
         setPortError(
-          error instanceof Error ? error.message : "无法读取本机串口设备。",
+          error instanceof Error
+            ? error.message
+            : t("runtime.serialListFallback"),
         );
       }
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, []);
+  }, [t]);
 
   const refreshAdbDevices = useCallback(async (silent = false) => {
     if (!silent) setAdbError("");
@@ -439,11 +443,13 @@ export default function App() {
       setAdbDevices([]);
       if (!silent) {
         setAdbError(
-          error instanceof Error ? error.message : "无法读取 ADB 设备。",
+          error instanceof Error
+            ? error.message
+            : t("runtime.adbListFallback"),
         );
       }
     }
-  }, []);
+  }, [t]);
 
   const refreshExternalTools = useCallback(async () => {
     setExternalTools(await listExternalTools());
@@ -603,7 +609,7 @@ export default function App() {
             ) {
               transferByteQueuesRef.current
                 .get(event.sessionId)
-                ?.close(new Error("会话已断开，文件传输停止。"));
+                ?.close(new Error(t("runtime.transferStopped")));
               zmodemBridgesRef.current.get(event.sessionId)?.abort();
               zmodemBridgesRef.current.delete(event.sessionId);
             }
@@ -711,7 +717,11 @@ export default function App() {
                 tone: "error",
                 title: event.message,
                 detail: willReconnect
-                  ? `${event.code} · 将自动尝试第 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} 次重连`
+                  ? t("runtime.reconnectAttempt", {
+                      code: event.code,
+                      attempt: reconnectAttempts,
+                      max: MAX_RECONNECT_ATTEMPTS,
+                    })
                   : event.code,
               },
             };
@@ -725,7 +735,7 @@ export default function App() {
                 event.state === "error"
                   ? {
                       tone: "error" as const,
-                      title: "日志写入失败",
+                      title: t("runtime.logWriteFailed"),
                       detail: event.message,
                     }
                   : session.notice,
@@ -733,7 +743,7 @@ export default function App() {
         }
       }),
     );
-  }, [captureDiagnostic]);
+  }, [captureDiagnostic, t]);
 
   const startLogging = useCallback(
     async (sessionId: string, profile: SessionProfile) => {
@@ -765,7 +775,7 @@ export default function App() {
                   logState: "error",
                   notice: {
                     tone: "error",
-                    title: "无法开始日志",
+                    title: t("runtime.logStartFailed"),
                     detail:
                       error instanceof Error ? error.message : String(error),
                   },
@@ -775,7 +785,7 @@ export default function App() {
         );
       }
     },
-    [],
+    [t],
   );
 
   const connectProfile = useCallback(
@@ -936,7 +946,10 @@ export default function App() {
                     notice: {
                       tone: "info",
                       title: match.rule.payload,
-                      detail: `触发器：${match.rule.name} · 匹配：${match.matchedText}`,
+                      detail: t("runtime.triggerDetail", {
+                        name: match.rule.name,
+                        match: match.matchedText,
+                      }),
                     },
                   }
                 : item,
@@ -973,7 +986,9 @@ export default function App() {
                         ...item,
                         notice: {
                           tone: "error",
-                          title: `触发器“${match.rule.name}”发送失败`,
+                          title: t("runtime.triggerSendFailed", {
+                            name: match.rule.name,
+                          }),
                           detail:
                             error instanceof Error
                               ? error.message
@@ -1000,7 +1015,7 @@ export default function App() {
         }
       }
     }
-  }, [profiles, sessions, startLogging]);
+  }, [profiles, sessions, startLogging, t]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1046,7 +1061,7 @@ export default function App() {
                 logState: "stopped",
                 notice: {
                   tone: "info",
-                  title: "会话已断开，点击重连可重新建立连接。",
+                  title: t("runtime.disconnected"),
                 },
               }
             : item,
@@ -1070,7 +1085,7 @@ export default function App() {
       preferences.confirmActiveSessionClose &&
       requiresCloseConfirmation(target) &&
       !window.confirm(
-        `“${target.title}”仍有活动连接或任务，确定要断开并关闭吗？`,
+        t("runtime.confirmClose", { name: target.title }),
       )
     ) {
       return;
@@ -1120,7 +1135,7 @@ export default function App() {
     const runtime = sessions.find(
       (session) => session.profileId === profile.id,
     );
-    if (!window.confirm(`确定删除会话“${profile.name}”吗？此操作无法撤销。`)) {
+    if (!window.confirm(t("runtime.confirmDelete", { name: profile.name }))) {
       return;
     }
     if (runtime) {
@@ -1148,7 +1163,7 @@ export default function App() {
         });
         setProfileTransferNotice({
           tone: "info",
-          title: `已导出 ${profiles.length} 个会话配置`,
+          title: t("runtime.profilesExported", { count: profiles.length }),
           detail: path,
         });
       }
@@ -1159,7 +1174,7 @@ export default function App() {
       });
       setProfileTransferNotice({
         tone: "error",
-        title: "导出会话配置失败",
+        title: t("runtime.profilesExportFailed"),
         detail: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1181,10 +1196,15 @@ export default function App() {
       });
       setProfileTransferNotice({
         tone: "info",
-        title: `已导入 ${merged.importedCount} 个会话配置`,
+        title: t("runtime.profilesImported", {
+          count: merged.importedCount,
+        }),
         detail:
           merged.remappedCount > 0
-            ? `${document.name}；${merged.remappedCount} 个重复 ID 已安全重建`
+            ? t("runtime.profilesRemapped", {
+                file: document.name,
+                count: merged.remappedCount,
+              })
             : document.name,
       });
     } catch (error) {
@@ -1194,7 +1214,7 @@ export default function App() {
       });
       setProfileTransferNotice({
         tone: "error",
-        title: "导入会话配置失败",
+        title: t("runtime.profilesImportFailed"),
         detail: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1354,13 +1374,13 @@ export default function App() {
 
   const sendPreset = async (preset: SenderPreset): Promise<number> => {
     if (!activeSession || !activeProfile) {
-      throw new Error("没有活动会话。");
+      throw new Error(t("runtime.noActiveSession"));
     }
     if (activeSession.state !== "connected") {
-      throw new Error("会话未连接。");
+      throw new Error(t("runtime.notConnected"));
     }
     if (activeSession.transferActive) {
-      throw new Error("文件发送期间不能发送普通数据。");
+      throw new Error(t("runtime.transferBusy"));
     }
     const count =
       preset.mode === "hex"
@@ -1392,14 +1412,14 @@ export default function App() {
     signal: AbortSignal,
   ): Promise<number> => {
     const file = files[0];
-    if (!file) throw new Error("请选择要发送的文件。");
+    if (!file) throw new Error(t("runtime.selectFile"));
     if (
       !activeSession ||
       !activeProfile ||
       activeSession.state !== "connected" ||
       activeSession.transferActive
     ) {
-      throw new Error("会话未连接。");
+      throw new Error(t("runtime.notConnected"));
     }
     const sessionId = activeSession.id;
     const profile = activeProfile;
@@ -1458,7 +1478,7 @@ export default function App() {
         captureDiagnostic("transfer", "failed", {
           level: signal.aborted ? "warning" : "error",
           message: signal.aborted
-            ? "用户取消文件传输"
+            ? t("runtime.transferCancelled")
             : error instanceof Error
               ? error.message
               : String(error),
@@ -1538,7 +1558,7 @@ export default function App() {
       captureDiagnostic("transfer", "failed", {
         level: signal.aborted ? "warning" : "error",
         message: signal.aborted
-          ? "用户取消文件传输"
+          ? t("runtime.transferCancelled")
           : error instanceof Error
             ? error.message
             : String(error),
@@ -1568,7 +1588,7 @@ export default function App() {
       activeSession.state !== "connected" ||
       activeSession.transferActive
     ) {
-      throw new Error("会话未连接。");
+      throw new Error(t("runtime.notConnected"));
     }
     const outputDirectory = await selectBinaryOutputDirectory();
     if (outputDirectory === null) return null;
@@ -1625,7 +1645,7 @@ export default function App() {
       captureDiagnostic("transfer", "receive_failed", {
         level: signal.aborted ? "warning" : "error",
         message: signal.aborted
-          ? "用户取消文件接收"
+          ? t("runtime.receiveCancelled")
           : error instanceof Error
             ? error.message
             : String(error),
@@ -1655,7 +1675,7 @@ export default function App() {
       activeSession.state !== "connected" ||
       activeSession.transferActive
     ) {
-      throw new Error("会话未连接。");
+      throw new Error(t("runtime.notConnected"));
     }
     const outputDirectory = await selectBinaryOutputDirectory();
     if (outputDirectory === null) return null;
@@ -1719,7 +1739,7 @@ export default function App() {
       captureDiagnostic("transfer", "receive_failed", {
         level: signal.aborted ? "warning" : "error",
         message: signal.aborted
-          ? "用户取消文件接收"
+          ? t("runtime.receiveCancelled")
           : error instanceof Error
             ? error.message
             : String(error),
@@ -1770,7 +1790,7 @@ export default function App() {
                 ...session,
                 notice: {
                   tone: "error",
-                  title: "无法更改日志状态",
+                  title: t("runtime.logStateFailed"),
                   detail: error instanceof Error ? error.message : String(error),
                 },
               }
@@ -1803,7 +1823,7 @@ export default function App() {
                 ...session,
                 notice: {
                   tone: "error",
-                  title: "无法停止日志",
+                  title: t("runtime.logStopFailed"),
                   detail: error instanceof Error ? error.message : String(error),
                 },
               }
@@ -1820,7 +1840,9 @@ export default function App() {
       else await openLogDirectory();
     } catch (error) {
       setUtilityError(
-        error instanceof Error ? error.message : "无法打开日志位置。",
+        error instanceof Error
+          ? error.message
+          : t("runtime.logLocationFallback"),
       );
     }
   };
@@ -1836,14 +1858,14 @@ export default function App() {
     } catch (error) {
       setProfileTransferNotice({
         tone: "error",
-        title: "导出诊断失败",
+        title: t("runtime.diagnosticsExportFailed"),
         detail: error instanceof Error ? error.message : String(error),
       });
     }
   };
 
   const clearDiagnostics = () => {
-    if (!window.confirm("确定清空本机保存的全部诊断事件吗？")) return;
+    if (!window.confirm(t("runtime.confirmClearDiagnostics"))) return;
     clearDiagnosticEvents();
     setDiagnosticCount(0);
   };
