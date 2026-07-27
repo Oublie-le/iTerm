@@ -2,6 +2,7 @@ import {
   CirclePlus,
   Download,
   Eraser,
+  FileDown,
   FileUp,
   Play,
   Square,
@@ -17,6 +18,7 @@ import {
   parseSenderPresets,
   serializeSenderPresets,
 } from "../lib/senderTransfer";
+import type { YmodemReceiveProgress } from "../lib/ymodemReceive";
 import {
   createSenderPreset,
   type FileTransferProtocol,
@@ -34,6 +36,10 @@ interface SenderPaneProps {
     onProgress: (sentBytes: number, totalBytes: number) => void,
     signal: AbortSignal,
   ) => Promise<number>;
+  onReceiveYmodem: (
+    onProgress: (progress: YmodemReceiveProgress) => void,
+    signal: AbortSignal,
+  ) => Promise<{ fileCount: number; totalBytes: number } | null>;
 }
 
 export function SenderPane({
@@ -42,6 +48,7 @@ export function SenderPane({
   onClose,
   onSend,
   onSendFiles,
+  onReceiveYmodem,
 }: SenderPaneProps) {
   const [presets, setPresets] = useState<SenderPreset[]>(() =>
     loadSenderPresets(profileId),
@@ -210,6 +217,44 @@ export function SenderPane({
     }
   };
 
+  const receiveYmodem = async () => {
+    setLastError("");
+    setTemplateNotice("");
+    const controller = new AbortController();
+    fileAbortRef.current = controller;
+    setRunning(true);
+    setFileTransfer({
+      name: "等待 YModem 发送端…",
+      sentBytes: 0,
+      totalBytes: 1,
+    });
+    try {
+      const result = await onReceiveYmodem(
+        ({ fileName, receivedBytes, fileSize }) =>
+          setFileTransfer({
+            name: fileName,
+            sentBytes: receivedBytes,
+            totalBytes: fileSize,
+          }),
+        controller.signal,
+      );
+      if (result) {
+        setTemplateNotice(
+          `已接收 ${result.fileCount} 个文件，共 ${result.totalBytes.toLocaleString()} B`,
+        );
+      } else {
+        setFileTransfer(null);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setLastError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      fileAbortRef.current = null;
+      setRunning(false);
+    }
+  };
+
   return (
     <section className="sender-pane" aria-label="发送窗格">
       <header className="sender-toolbar">
@@ -283,6 +328,15 @@ export function SenderPane({
             }
           >
             <FileUp size={16} />
+          </button>
+          <button
+            className="icon-button"
+            onClick={() => void receiveYmodem()}
+            disabled={!connected || running}
+            title="接收 YModem 批量文件"
+            aria-label="接收 YModem 批量文件"
+          >
+            <FileDown size={16} />
           </button>
           <select
             className="file-protocol-select"

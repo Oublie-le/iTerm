@@ -112,6 +112,14 @@ import {
 } from "./lib/layout";
 import { AsyncByteQueue, sendXmodemCrc } from "./lib/xmodem";
 import { sendYmodemBatch } from "./lib/ymodem";
+import {
+  receiveYmodemBatch,
+  type YmodemReceiveProgress,
+} from "./lib/ymodemReceive";
+import {
+  saveReceivedBinaryFiles,
+  selectBinaryOutputDirectory,
+} from "./lib/binaryFiles";
 import { openJsonDocument, saveJsonDocument } from "./lib/jsonFiles";
 import {
   mergeImportedProfiles,
@@ -565,9 +573,17 @@ export default function App() {
                     : session.notice,
             };
           case "data": {
-            transferByteQueuesRef.current
-              .get(event.sessionId)
-              ?.push(event.bytes);
+            const transferQueue = transferByteQueuesRef.current.get(
+              event.sessionId,
+            );
+            transferQueue?.push(event.bytes);
+            if (transferQueue) {
+              return {
+                ...session,
+                sequence: event.sequence,
+                bytesRead: session.bytesRead + event.bytes.length,
+              };
+            }
             const chunk = {
               nonce: performance.now(),
               sequence: event.sequence,
@@ -1375,6 +1391,93 @@ export default function App() {
     }
   };
 
+  const receiveYmodemFiles = async (
+    onProgress: (progress: YmodemReceiveProgress) => void,
+    signal: AbortSignal,
+  ): Promise<{ fileCount: number; totalBytes: number } | null> => {
+    if (
+      !activeSession ||
+      !activeProfile ||
+      activeSession.state !== "connected" ||
+      activeSession.transferActive
+    ) {
+      throw new Error("会话未连接。");
+    }
+    const outputDirectory = await selectBinaryOutputDirectory();
+    if (outputDirectory === null) return null;
+
+    const sessionId = activeSession.id;
+    const profile = activeProfile;
+    const byteQueue = new AsyncByteQueue();
+    transferByteQueuesRef.current.set(sessionId, byteQueue);
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === sessionId
+          ? { ...session, transferActive: true }
+          : session,
+      ),
+    );
+    captureDiagnostic("transfer", "receive_started", {
+      context: { protocol: "ymodem" },
+    });
+    try {
+      const sendBytes = async (bytes: Uint8Array) => {
+        const count = await writeConfiguredBytes(sessionId, profile, bytes);
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  bytesWritten: session.bytesWritten + count,
+                }
+              : session,
+          ),
+        );
+        return count;
+      };
+      const files = await receiveYmodemBatch(
+        sendBytes,
+        byteQueue,
+        onProgress,
+        signal,
+      );
+      await saveReceivedBinaryFiles(outputDirectory, files);
+      const totalBytes = files.reduce(
+        (sum, file) => sum + file.bytes.length,
+        0,
+      );
+      captureDiagnostic("transfer", "receive_completed", {
+        context: {
+          protocol: "ymodem",
+          fileCount: files.length,
+          totalBytes,
+        },
+      });
+      return { fileCount: files.length, totalBytes };
+    } catch (error) {
+      captureDiagnostic("transfer", "receive_failed", {
+        level: signal.aborted ? "warning" : "error",
+        message: signal.aborted
+          ? "用户取消文件接收"
+          : error instanceof Error
+            ? error.message
+            : String(error),
+        context: { protocol: "ymodem" },
+      });
+      throw error;
+    } finally {
+      transferByteQueuesRef.current.delete(sessionId);
+      byteQueue.close();
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? { ...session, transferActive: false }
+            : session,
+        ),
+      );
+    }
+  };
+
   const toggleSignal = async (signal: "dtr" | "rts") => {
     if (!activeSession || activeSession.state !== "connected") return;
     const next = signal === "dtr" ? !dtr : !rts;
@@ -2139,6 +2242,7 @@ export default function App() {
               onClose={() => setSenderOpen(false)}
               onSend={sendPreset}
               onSendFiles={sendFiles}
+              onReceiveYmodem={receiveYmodemFiles}
             />
           )}
 
