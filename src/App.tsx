@@ -140,6 +140,7 @@ import {
   type DiagnosticLevel,
 } from "./lib/diagnostics";
 import {
+  clearPersistentStorage,
   getLatestPersistenceError,
   PERSISTENCE_ERROR_EVENT,
   setPersistentItem,
@@ -1984,6 +1985,29 @@ export default function App() {
     setDiagnosticCount(0);
   };
 
+  const resetAppData = async () => {
+    const closeResults = await Promise.allSettled(
+      sessions.map((session) =>
+        closeConfiguredSession(
+          session.id,
+          profiles.find((profile) => profile.id === session.profileId),
+        ),
+      ),
+    );
+    const closeFailure = closeResults.find(
+      (result): result is PromiseRejectedResult =>
+        result.status === "rejected",
+    );
+    if (closeFailure) {
+      throw new Error(
+        localizedErrorMessage(closeFailure.reason, resolvedLocale),
+      );
+    }
+    await clearPersistentStorage();
+    clearDiagnosticEvents();
+    window.location.reload();
+  };
+
   const setSyncChannel = (channel: SyncChannel) => {
     if (!activeSession) return;
     setSessions((current) =>
@@ -3172,6 +3196,7 @@ export default function App() {
         diagnosticCount={diagnosticCount}
         onExportDiagnostics={() => void exportDiagnostics()}
         onClearDiagnostics={clearDiagnostics}
+        onResetAppData={resetAppData}
         onCancel={() => setAppSettingsOpen(false)}
         onSave={(nextPreferences) => {
           setPreferences(nextPreferences);

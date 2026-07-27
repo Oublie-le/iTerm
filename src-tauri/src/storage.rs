@@ -118,6 +118,17 @@ impl PersistentStore {
             .map_err(|error| format!("无法删除配置项：{error}"))?;
         Ok(())
     }
+
+    fn clear_items(&self) -> Result<(), String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "配置数据库锁已损坏。".to_string())?;
+        connection
+            .execute("DELETE FROM persistent_items", [])
+            .map_err(|error| format!("无法清空配置数据库：{error}"))?;
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -141,6 +152,11 @@ pub fn remove_persistent_item(
     store: State<'_, PersistentStore>,
 ) -> Result<(), String> {
     store.remove_item(&key)
+}
+
+#[tauri::command]
+pub fn clear_persistent_items(store: State<'_, PersistentStore>) -> Result<(), String> {
+    store.clear_items()
 }
 
 fn configure_connection(connection: &Connection) -> Result<(), String> {
@@ -258,6 +274,9 @@ mod tests {
             .load_items()
             .unwrap()
             .contains_key("iterm.workspace.v1"));
+
+        store.clear_items().unwrap();
+        assert!(store.load_items().unwrap().is_empty());
     }
 
     #[test]

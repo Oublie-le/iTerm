@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  clearPersistentStorage,
   flushPersistentOperations,
   hydratePersistentStorage,
   setPersistentItem,
@@ -28,6 +29,7 @@ function createDriver(
     loadItems: vi.fn(async () => databaseItems),
     saveItems: vi.fn(async () => undefined),
     removeItem: vi.fn(async () => undefined),
+    clearItems: vi.fn(async () => undefined),
   };
 }
 
@@ -98,5 +100,40 @@ describe("persistent storage hydration", () => {
     expect(storage.getItem("iterm.preferences.v1")).toBe("two");
     await flushPersistentOperations();
     expect(calls).toEqual(["one", "two"]);
+  });
+
+  it("clears every known browser and SQLite item without touching unrelated data", async () => {
+    const storage = createStorage({
+      "iterm.profiles.v1": "[profile]",
+      "serialterm.profiles.v1": "[legacy]",
+      "iterm.preferences.v1": "{\"theme\":\"dark\"}",
+      "iterm.workspace.v1": "{\"sidebarOpen\":false}",
+      "iterm.senders.v1": "{\"profile\":[]}",
+      "unrelated.key": "keep",
+    });
+    const driver = createDriver({});
+
+    await clearPersistentStorage(storage, driver);
+
+    expect(driver.clearItems).toHaveBeenCalledOnce();
+    expect(storage.getItem("iterm.profiles.v1")).toBeNull();
+    expect(storage.getItem("serialterm.profiles.v1")).toBeNull();
+    expect(storage.getItem("iterm.preferences.v1")).toBeNull();
+    expect(storage.getItem("iterm.workspace.v1")).toBeNull();
+    expect(storage.getItem("iterm.senders.v1")).toBeNull();
+    expect(storage.getItem("unrelated.key")).toBe("keep");
+  });
+
+  it("keeps browser data when clearing SQLite fails", async () => {
+    const storage = createStorage({ "iterm.profiles.v1": "[profile]" });
+    const driver = createDriver({});
+    driver.clearItems = vi.fn(async () => {
+      throw new Error("database is busy");
+    });
+
+    await expect(clearPersistentStorage(storage, driver)).rejects.toThrow(
+      "database is busy",
+    );
+    expect(storage.getItem("iterm.profiles.v1")).toBe("[profile]");
   });
 });

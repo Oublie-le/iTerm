@@ -20,6 +20,7 @@ export interface PersistentStorageDriver {
   loadItems(): Promise<Record<string, string>>;
   saveItems(items: Record<string, string>): Promise<void>;
   removeItem(key: string): Promise<void>;
+  clearItems(): Promise<void>;
 }
 
 export interface PersistenceHydrationResult {
@@ -37,6 +38,7 @@ const tauriDriver: PersistentStorageDriver = {
   loadItems: () => invoke("load_persistent_items"),
   saveItems: (items) => invoke("save_persistent_items", { items }),
   removeItem: (key) => invoke("remove_persistent_item", { key }),
+  clearItems: () => invoke("clear_persistent_items"),
 };
 
 export async function hydratePersistentStorage(
@@ -95,6 +97,25 @@ export function removePersistentItem(
   storage.removeItem(key);
   if (!driver) return;
   enqueueOperation(() => driver.removeItem(key));
+}
+
+export async function clearPersistentStorage(
+  storage: Pick<Storage, "removeItem"> = localStorage,
+  driver: PersistentStorageDriver | null = driverForStorage(storage),
+): Promise<void> {
+  if (driver) {
+    await operationQueue;
+    try {
+      await driver.clearItems();
+    } catch (error) {
+      const message = errorMessage(error, "无法清空 SQLite 配置存储。");
+      reportPersistenceError(message);
+      throw new Error(message);
+    }
+  }
+  for (const key of PERSISTENT_STORAGE_KEYS) {
+    storage.removeItem(key);
+  }
 }
 
 export function flushPersistentOperations(): Promise<void> {

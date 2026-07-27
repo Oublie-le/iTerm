@@ -1343,6 +1343,15 @@ textarea:disabled {
   background: #e6e9e9;
 }
 
+.secondary-button.danger {
+  border-color: #d4a3a0;
+  color: #a23a3a;
+}
+
+.secondary-button.danger:hover:not(:disabled) {
+  background: #f8e9e8;
+}
+
 .modal-backdrop {
   position: fixed;
   z-index: 50;
@@ -1644,6 +1653,10 @@ textarea:disabled {
 
 .diagnostic-actions > span {
   margin-right: auto;
+}
+
+.settings-danger-zone .page-heading {
+  border-top: 1px solid #e1c5c3;
 }
 
 .tool-status {
@@ -2106,6 +2119,11 @@ textarea:disabled {
   background: #363d3a;
   border-color: #555d5a;
   color: #d0d7d3;
+}
+
+.app-shell[data-theme="dark"] .secondary-button.danger {
+  border-color: #8d5551;
+  color: #f0a39d;
 }
 
 .app-shell[data-theme="dark"] .settings-note,

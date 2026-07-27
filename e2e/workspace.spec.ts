@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function openFreshApp(page: Page, locale: "zh-CN" | "en-US" = "zh-CN") {
   await page.addInitScript((initialLocale) => {
+    if (sessionStorage.getItem("iterm.e2e.initialized") === "true") return;
+    sessionStorage.setItem("iterm.e2e.initialized", "true");
     localStorage.clear();
     if (initialLocale === "en-US") {
       localStorage.setItem(
@@ -97,4 +99,37 @@ test("连接串口并操作工作区菜单", async ({ page }) => {
     .click();
   await page.locator('.menu-actions button[title="Search"]').click();
   await expect(page.getByLabel("Find terminal content")).toBeVisible();
+});
+
+test("清除本地应用数据并恢复默认设置", async ({ page }) => {
+  await openFreshApp(page, "en-US");
+  await expect(
+    page.getByText("CP2102 USB to UART", { exact: true }),
+  ).toBeVisible();
+  await page.getByTitle("New session (Ctrl/⌘+N)").first().click();
+  await page
+    .getByRole("dialog", { name: "Serial Session Settings" })
+    .getByRole("button", { name: "Save & Connect" })
+    .click();
+  await expect(page.locator(".statusbar strong")).toHaveText("Connected");
+
+  await page.getByTitle("Application settings").click();
+
+  const settings = page.getByRole("dialog", {
+    name: "Application Settings",
+  });
+  page.once("dialog", (dialog) => dialog.accept());
+  await settings
+    .getByRole("button", { name: "Clear local application data" })
+    .click();
+
+  await expect(page.getByText("会话管理器", { exact: true })).toBeVisible();
+  await expect(page.locator(".session-tab")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => localStorage.getItem("iterm.preferences.v1") ?? "",
+      ),
+    )
+    .not.toContain('"locale":"en-US"');
 });

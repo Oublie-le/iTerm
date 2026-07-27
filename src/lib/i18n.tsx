@@ -50,6 +50,15 @@ const zhCN = {
   "settings.diagnostics.count": "当前保留 {count} / 500 条结构化事件",
   "settings.diagnostics.export": "导出诊断",
   "settings.diagnostics.clear": "清空诊断",
+  "settings.reset.title": "重置本地数据",
+  "settings.reset.subtitle":
+    "清除会话、偏好、工作区、发送器模板和诊断，然后恢复默认设置。",
+  "settings.reset.retained": "日志、接收文件和手动导出文件不会删除。",
+  "settings.reset.action": "清除本地应用数据",
+  "settings.reset.working": "正在清除…",
+  "settings.reset.confirm":
+    "确定清除全部本地应用数据吗？活动会话将断开，且此操作无法撤销。日志和接收文件不会删除。",
+  "settings.reset.error": "无法清除本地应用数据：{reason}",
   "settings.cancel": "取消",
   "settings.save": "保存应用设置",
   "settings.error.fontSize": "默认字号必须是 8–40 的整数。",
@@ -505,6 +514,16 @@ const enUS: Record<TranslationKey, string> = {
     "{count} / 500 structured events currently retained",
   "settings.diagnostics.export": "Export diagnostics",
   "settings.diagnostics.clear": "Clear diagnostics",
+  "settings.reset.title": "Reset Local Data",
+  "settings.reset.subtitle":
+    "Clear sessions, preferences, workspace state, sender templates, and diagnostics, then restore defaults.",
+  "settings.reset.retained":
+    "Logs, received files, and manually exported files are not deleted.",
+  "settings.reset.action": "Clear local application data",
+  "settings.reset.working": "Clearing…",
+  "settings.reset.confirm":
+    "Clear all local application data? Active sessions will disconnect and this cannot be undone. Logs and received files are not deleted.",
+  "settings.reset.error": "Could not clear local application data: {reason}",
   "settings.cancel": "Cancel",
   "settings.save": "Save application settings",
   "settings.error.fontSize": "Default font size must be an integer from 8 to 40.",

@@ -48,6 +48,7 @@ pub fn run() {
             storage::load_persistent_items,
             storage::save_persistent_items,
             storage::remove_persistent_item,
+            storage::clear_persistent_items,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run iTerm");

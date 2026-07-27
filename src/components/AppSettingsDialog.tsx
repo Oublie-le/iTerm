@@ -16,6 +16,7 @@ interface AppSettingsDialogProps {
   diagnosticCount: number;
   onExportDiagnostics: () => void;
   onClearDiagnostics: () => void;
+  onResetAppData: () => Promise<void>;
 }
 
 export function AppSettingsDialog({
@@ -26,14 +27,17 @@ export function AppSettingsDialog({
   diagnosticCount,
   onExportDiagnostics,
   onClearDiagnostics,
+  onResetAppData,
 }: AppSettingsDialogProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState(preferences);
   const [error, setError] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     setDraft(preferences);
     setError("");
+    setResetting(false);
   }, [open, preferences]);
 
   if (!open) return null;
@@ -76,6 +80,25 @@ export function AppSettingsDialog({
       return;
     }
     onSave(draft);
+  };
+
+  const resetAppData = async () => {
+    if (!window.confirm(t("settings.reset.confirm"))) return;
+    setError("");
+    setResetting(true);
+    try {
+      await onResetAppData();
+    } catch (resetError) {
+      setError(
+        t("settings.reset.error", {
+          reason:
+            resetError instanceof Error
+              ? resetError.message
+              : String(resetError),
+        }),
+      );
+      setResetting(false);
+    }
   };
 
   return (
@@ -317,6 +340,25 @@ export function AppSettingsDialog({
               >
                 <Trash2 size={14} />
                 {t("settings.diagnostics.clear")}
+              </button>
+            </div>
+          </section>
+          <section className="settings-danger-zone">
+            <div className="page-heading">
+              <h3>{t("settings.reset.title")}</h3>
+              <p>{t("settings.reset.subtitle")}</p>
+            </div>
+            <div className="diagnostic-actions">
+              <span>{t("settings.reset.retained")}</span>
+              <button
+                className="secondary-button danger"
+                onClick={() => void resetAppData()}
+                disabled={resetting}
+              >
+                <Trash2 size={14} />
+                {resetting
+                  ? t("settings.reset.working")
+                  : t("settings.reset.action")}
               </button>
             </div>
           </section>
