@@ -2387,6 +2387,12 @@ export default function App() {
         data-theme={resolvedTheme}
       >
       <header className="app-menubar">
+        <div className="app-brand" aria-label="iTerm">
+          <span className="app-brand-symbol" aria-hidden="true">
+            <Cable size={16} />
+          </span>
+          <strong>iTerm</strong>
+        </div>
         <div className="menu-items" ref={topMenuBarRef}>
           {topMenus.map((menu) => (
             <div className="top-menu" key={menu.id}>

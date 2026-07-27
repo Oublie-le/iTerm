@@ -18,6 +18,11 @@ async function openFreshApp(page: Page, locale: "zh-CN" | "en-US" = "zh-CN") {
 test("切换语言并浏览完整会话设置", async ({ page }) => {
   await openFreshApp(page);
 
+  await expect(page.getByLabel("iTerm")).toBeVisible();
+  await expect(page.locator(".app-menubar")).toHaveCSS(
+    "backdrop-filter",
+    /blur/,
+  );
   await expect(page.getByText("会话管理器", { exact: true })).toBeVisible();
   await page.getByTitle("应用设置").click();
 
