@@ -56,6 +56,31 @@ test("切换语言并浏览完整会话设置", async ({ page }) => {
   }
 });
 
+test("发现本机 SSH 配置并填入连接别名", async ({ page }) => {
+  await openFreshApp(page, "en-US");
+  await page.getByTitle("New session (Ctrl/⌘+N)").first().click();
+
+  const session = page.locator(".session-dialog");
+  await session.getByLabel("Protocol").selectOption("ssh");
+  await session
+    .getByRole("navigation", { name: "Settings categories" })
+    .getByRole("button", { name: "SSH", exact: true })
+    .click();
+
+  await expect(session.getByText("Local SSH Hosts")).toBeVisible();
+  await expect(session.getByText("apple-lab", { exact: true })).toBeVisible();
+  await expect(session.getByText("Key configured").first()).toBeVisible();
+  await session.getByRole("button", { name: "Fill" }).first().click();
+
+  await expect(
+    session.getByRole("textbox", { name: "Host", exact: true }),
+  ).toHaveValue("apple-lab");
+  await expect(
+    session.getByRole("textbox", { name: "Username", exact: true }),
+  ).toHaveValue("developer");
+  await session.getByRole("button", { name: "Cancel" }).click();
+});
+
 test("连接串口并操作工作区菜单", async ({ page }) => {
   await openFreshApp(page, "en-US");
 
@@ -83,6 +108,40 @@ test("连接串口并操作工作区菜单", async ({ page }) => {
   await commandInput.fill("help");
   await commandInput.press("Enter");
   await expect(page.getByText("History · 1×")).toBeVisible();
+
+  const resetFontSize = page.getByRole("button", {
+    name: "Reset terminal font size (Ctrl/⌘+0)",
+  });
+  await expect(resetFontSize).toHaveText("14");
+  await page
+    .getByRole("button", {
+      name: "Increase terminal font size (Ctrl/⌘++)",
+    })
+    .click();
+  await expect(resetFontSize).toHaveText("15");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const profiles = JSON.parse(
+          localStorage.getItem("iterm.profiles.v1") ?? "[]",
+        ) as Array<{ terminal?: { fontSize?: number } }>;
+        return profiles[0]?.terminal?.fontSize;
+      }),
+    )
+    .toBe(15);
+
+  const terminal = page.getByRole("region", { name: "E2E Serial terminal" });
+  await terminal.click({ button: "right", position: { x: 220, y: 120 } });
+  const contextMenu = page.getByRole("menu", { name: "Terminal actions" });
+  await expect(contextMenu).toBeVisible();
+  await expect(
+    contextMenu.getByRole("menuitem", { name: /Paste/ }),
+  ).toBeEnabled();
+  await expect(
+    contextMenu.getByRole("menuitem", { name: /Copy/ }),
+  ).toBeDisabled();
+  await contextMenu.getByRole("menuitem", { name: /Select All/ }).click();
+  await expect(contextMenu).toBeHidden();
 
   await page.getByRole("button", { name: "Mode", exact: true }).click();
   await page
