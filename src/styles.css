@@ -3216,6 +3216,116 @@ progress {
   gap: 4px;
 }
 
+.terminal-palette-editor {
+  margin-top: 16px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--control-background) 82%, transparent);
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+}
+
+.terminal-palette-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.terminal-palette-editor > header > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.terminal-palette-editor > header strong {
+  color: var(--label);
+  font-size: 11px;
+}
+
+.terminal-palette-editor > header span {
+  color: var(--secondary-label);
+  font-size: 9px;
+}
+
+.terminal-palette-editor > header > div:last-child {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.terminal-palette-editor .secondary-button {
+  min-height: 27px;
+  padding: 0 9px;
+  font-size: 9px;
+}
+
+.terminal-palette-foundation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.terminal-palette-foundation label {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 3px 7px;
+  color: var(--secondary-label);
+  font-size: 9px;
+}
+
+.terminal-palette-foundation input,
+.terminal-palette-grid input {
+  width: 26px;
+  height: 24px;
+  padding: 2px;
+  background: var(--content-background);
+  border: 1px solid var(--separator);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.terminal-palette-foundation span {
+  color: var(--label);
+  font-weight: 600;
+}
+
+.terminal-palette-foundation code {
+  grid-column: 2;
+  color: var(--tertiary-label);
+  font-size: 8px;
+}
+
+.terminal-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 7px;
+  padding: 12px;
+}
+
+.terminal-palette-grid label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.terminal-palette-grid span {
+  width: 100%;
+  overflow: hidden;
+  color: var(--secondary-label);
+  font-size: 8px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .app-menubar,
   .session-sidebar,

@@ -23,6 +23,9 @@ describe("duplicateSessionProfile", () => {
     expect(duplicate.ssh).not.toBe(source.ssh);
     expect(duplicate.adb).not.toBe(source.adb);
     expect(duplicate.terminal).not.toBe(source.terminal);
+    expect(duplicate.terminal.customPalette).not.toBe(
+      source.terminal.customPalette,
+    );
     expect(duplicate.serial.baudRate).toBe(115_200);
   });
 });
@@ -71,6 +74,8 @@ describe("normalizeSessionProfile", () => {
         ...source.terminal,
         enterKey: undefined,
         backspaceKey: undefined,
+        paletteMode: undefined,
+        customPalette: undefined,
         semanticColors: undefined,
       },
     } as unknown as typeof source;
@@ -78,6 +83,11 @@ describe("normalizeSessionProfile", () => {
     expect(normalizeSessionProfile(legacy).terminal).toMatchObject({
       enterKey: "cr",
       backspaceKey: "del",
+      paletteMode: "theme",
+      customPalette: expect.objectContaining({
+        background: "#0d0f12",
+        brightBlue: "#409cff",
+      }),
       semanticColors: true,
     });
   });

@@ -27,6 +27,8 @@ import type {
   SessionProfile,
   SshConfigHost,
   StopBits,
+  TerminalPalette,
+  TerminalPaletteColor,
   TriggerRule,
 } from "../lib/types";
 import {
@@ -37,6 +39,11 @@ import {
   useI18n,
   type TranslationKey,
 } from "../lib/i18n";
+import {
+  APPLE_DARK_TERMINAL_PALETTE,
+  APPLE_LIGHT_TERMINAL_PALETTE,
+  TERMINAL_PALETTE_COLORS,
+} from "../lib/terminalTheme";
 
 type DialogPage =
   | "session"
@@ -76,6 +83,25 @@ const pages: Array<{
   { id: "logging", labelKey: "dialog.page.logging", icon: FileClock },
   { id: "triggers", labelKey: "dialog.page.triggers", icon: Zap },
 ];
+
+const terminalPaletteLabels: Record<TerminalPaletteColor, TranslationKey> = {
+  black: "dialog.terminal.palette.black",
+  red: "dialog.terminal.palette.red",
+  green: "dialog.terminal.palette.green",
+  yellow: "dialog.terminal.palette.yellow",
+  blue: "dialog.terminal.palette.blue",
+  magenta: "dialog.terminal.palette.magenta",
+  cyan: "dialog.terminal.palette.cyan",
+  white: "dialog.terminal.palette.white",
+  brightBlack: "dialog.terminal.palette.brightBlack",
+  brightRed: "dialog.terminal.palette.brightRed",
+  brightGreen: "dialog.terminal.palette.brightGreen",
+  brightYellow: "dialog.terminal.palette.brightYellow",
+  brightBlue: "dialog.terminal.palette.brightBlue",
+  brightMagenta: "dialog.terminal.palette.brightMagenta",
+  brightCyan: "dialog.terminal.palette.brightCyan",
+  brightWhite: "dialog.terminal.palette.brightWhite",
+};
 
 export function SessionDialog({
   open,
@@ -153,6 +179,17 @@ export function SessionDialog({
         ? { ...current, terminal: { ...current.terminal, ...patch } }
         : current,
     );
+
+  const updateTerminalPalette = (
+    key: keyof TerminalPalette,
+    value: string,
+  ) =>
+    updateTerminal({
+      customPalette: {
+        ...draft.terminal.customPalette,
+        [key]: value,
+      },
+    });
 
   const updateLogging = (patch: Partial<SessionProfile["logging"]>) =>
     setDraft((current) =>
@@ -1097,7 +1134,105 @@ export function SessionDialog({
                       </option>
                     </select>
                   </label>
+                  <label className="field-row">
+                    <span>{t("dialog.terminal.palette")}</span>
+                    <select
+                      value={draft.terminal.paletteMode}
+                      onChange={(event) =>
+                        updateTerminal({
+                          paletteMode: event.target
+                            .value as SessionProfile["terminal"]["paletteMode"],
+                        })
+                      }
+                    >
+                      <option value="theme">
+                        {t("dialog.terminal.palette.theme")}
+                      </option>
+                      <option value="custom">
+                        {t("dialog.terminal.palette.custom")}
+                      </option>
+                    </select>
+                  </label>
                 </div>
+                {draft.terminal.paletteMode === "custom" && (
+                  <section
+                    className="terminal-palette-editor"
+                    aria-label={t("dialog.terminal.palette.custom")}
+                  >
+                    <header>
+                      <div>
+                        <strong>{t("dialog.terminal.palette.custom")}</strong>
+                        <span>{t("dialog.terminal.palette.detail")}</span>
+                      </div>
+                      <div>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() =>
+                            updateTerminal({
+                              customPalette: {
+                                ...APPLE_DARK_TERMINAL_PALETTE,
+                              },
+                            })
+                          }
+                        >
+                          {t("dialog.terminal.palette.appleDark")}
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() =>
+                            updateTerminal({
+                              customPalette: {
+                                ...APPLE_LIGHT_TERMINAL_PALETTE,
+                              },
+                            })
+                          }
+                        >
+                          {t("dialog.terminal.palette.appleLight")}
+                        </button>
+                      </div>
+                    </header>
+                    <div className="terminal-palette-foundation">
+                      {(
+                        [
+                          ["background", "dialog.terminal.palette.background"],
+                          ["foreground", "dialog.terminal.palette.foreground"],
+                          ["cursor", "dialog.terminal.palette.cursor"],
+                        ] as const
+                      ).map(([key, labelKey]) => (
+                        <label key={key}>
+                          <span>{t(labelKey)}</span>
+                          <input
+                            type="color"
+                            value={draft.terminal.customPalette[key]}
+                            onChange={(event) =>
+                              updateTerminalPalette(key, event.target.value)
+                            }
+                          />
+                          <code>
+                            {draft.terminal.customPalette[key].toUpperCase()}
+                          </code>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="terminal-palette-grid">
+                      {TERMINAL_PALETTE_COLORS.map((key) => (
+                        <label key={key} title={t(terminalPaletteLabels[key])}>
+                          <input
+                            type="color"
+                            value={draft.terminal.customPalette[key]}
+                            aria-label={t(terminalPaletteLabels[key])}
+                            onChange={(event) =>
+                              updateTerminalPalette(key, event.target.value)
+                            }
+                          />
+                          <span>{t(terminalPaletteLabels[key])}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </>
             )}
 

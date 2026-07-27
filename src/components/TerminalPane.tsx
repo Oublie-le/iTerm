@@ -58,6 +58,7 @@ import {
 import { loadSenderPresets } from "../lib/senders";
 import type { SenderPreset } from "../lib/types";
 import { colorizeSerialText } from "../lib/serialColors";
+import { resolveTerminalTheme } from "../lib/terminalTheme";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -222,54 +223,11 @@ export function TerminalPane({
       lineHeight: profile.terminal.lineHeight,
       scrollback: profile.terminal.scrollback,
       tabStopWidth: 8,
-      theme:
-        theme === "dark"
-          ? {
-              background: "#0d0f12",
-              foreground: "#f5f5f7",
-              cursor: "#0a84ff",
-              cursorAccent: "#ffffff",
-              selectionBackground: "#0a84ff66",
-              black: "#1c1c1e",
-              red: "#ff453a",
-              green: "#32d74b",
-              yellow: "#ffd60a",
-              blue: "#0a84ff",
-              magenta: "#bf5af2",
-              cyan: "#64d2ff",
-              white: "#f2f2f7",
-              brightBlack: "#8e8e93",
-              brightRed: "#ff6961",
-              brightGreen: "#4cdb68",
-              brightYellow: "#ffdf3f",
-              brightBlue: "#409cff",
-              brightMagenta: "#da8fff",
-              brightCyan: "#70d7ff",
-              brightWhite: "#ffffff",
-            }
-          : {
-              background: "#fbfbfd",
-              foreground: "#1d1d1f",
-              cursor: "#007aff",
-              cursorAccent: "#ffffff",
-              selectionBackground: "#007aff4d",
-              black: "#1d1d1f",
-              red: "#d70015",
-              green: "#248a3d",
-              yellow: "#a05a00",
-              blue: "#0066cc",
-              magenta: "#8944ab",
-              cyan: "#0071a4",
-              white: "#e5e5ea",
-              brightBlack: "#6e6e73",
-              brightRed: "#ff3b30",
-              brightGreen: "#34c759",
-              brightYellow: "#ff9f0a",
-              brightBlue: "#007aff",
-              brightMagenta: "#af52de",
-              brightCyan: "#32ade6",
-              brightWhite: "#ffffff",
-            },
+      theme: resolveTerminalTheme(
+        theme,
+        profile.terminal.paletteMode,
+        profile.terminal.customPalette,
+      ),
     });
     const fit = new FitAddon();
     const search = new SearchAddon();
@@ -401,6 +359,8 @@ export function TerminalPane({
     profile.terminal.fontFamily,
     profile.terminal.fontSize,
     profile.terminal.lineHeight,
+    profile.terminal.paletteMode,
+    profile.terminal.customPalette,
     profile.terminal.backspaceKey,
     profile.terminal.enterKey,
     profile.terminal.scrollback,

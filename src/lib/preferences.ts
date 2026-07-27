@@ -33,7 +33,10 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   confirmActiveSessionClose: true,
   defaultProtocol: "serial",
   sessionDefaults: {
-    terminal: { ...DEFAULT_TERMINAL_CONFIG },
+    terminal: {
+      ...DEFAULT_TERMINAL_CONFIG,
+      customPalette: { ...DEFAULT_TERMINAL_CONFIG.customPalette },
+    },
     logging: { ...DEFAULT_LOGGING_CONFIG },
   },
 };
@@ -73,6 +76,14 @@ export function loadAppPreferences(
         terminal: {
           ...DEFAULT_TERMINAL_CONFIG,
           ...parsed?.sessionDefaults?.terminal,
+          paletteMode:
+            parsed?.sessionDefaults?.terminal?.paletteMode === "custom"
+              ? "custom"
+              : "theme",
+          customPalette: {
+            ...DEFAULT_TERMINAL_CONFIG.customPalette,
+            ...parsed?.sessionDefaults?.terminal?.customPalette,
+          },
           enterKey:
             enterKey === "cr" || enterKey === "lf" || enterKey === "crlf"
               ? enterKey
@@ -89,7 +100,16 @@ export function loadAppPreferences(
       },
     };
   } catch {
-    return { ...DEFAULT_APP_PREFERENCES };
+    return {
+      ...DEFAULT_APP_PREFERENCES,
+      sessionDefaults: {
+        terminal: {
+          ...DEFAULT_TERMINAL_CONFIG,
+          customPalette: { ...DEFAULT_TERMINAL_CONFIG.customPalette },
+        },
+        logging: { ...DEFAULT_LOGGING_CONFIG },
+      },
+    };
   }
 }
 
@@ -132,7 +152,12 @@ export function createSessionProfileWithPreferences(
   });
   return {
     ...profile,
-    terminal: { ...preferences.sessionDefaults.terminal },
+    terminal: {
+      ...preferences.sessionDefaults.terminal,
+      customPalette: {
+        ...preferences.sessionDefaults.terminal.customPalette,
+      },
+    },
     logging: { ...preferences.sessionDefaults.logging },
   };
 }

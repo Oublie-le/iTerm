@@ -34,6 +34,29 @@ const adbSchema = z.object({
   shell: z.string(),
 });
 
+const colorSchema = z.string().regex(/^#[\da-f]{6}$/i);
+const terminalPaletteSchema = z.object({
+  background: colorSchema,
+  foreground: colorSchema,
+  cursor: colorSchema,
+  black: colorSchema,
+  red: colorSchema,
+  green: colorSchema,
+  yellow: colorSchema,
+  blue: colorSchema,
+  magenta: colorSchema,
+  cyan: colorSchema,
+  white: colorSchema,
+  brightBlack: colorSchema,
+  brightRed: colorSchema,
+  brightGreen: colorSchema,
+  brightYellow: colorSchema,
+  brightBlue: colorSchema,
+  brightMagenta: colorSchema,
+  brightCyan: colorSchema,
+  brightWhite: colorSchema,
+});
+
 const terminalSchema = z.object({
   encoding: z.string().min(1),
   termType: z.string().min(1),
@@ -44,6 +67,28 @@ const terminalSchema = z.object({
   fontSize: z.number().int().min(8).max(40),
   lineHeight: z.number().min(0.5).max(4),
   cursorStyle: z.enum(["block", "bar", "underline"]),
+  paletteMode: z.enum(["theme", "custom"]).default("theme"),
+  customPalette: terminalPaletteSchema.default({
+    background: "#0d0f12",
+    foreground: "#f5f5f7",
+    cursor: "#0a84ff",
+    black: "#1c1c1e",
+    red: "#ff453a",
+    green: "#32d74b",
+    yellow: "#ffd60a",
+    blue: "#0a84ff",
+    magenta: "#bf5af2",
+    cyan: "#64d2ff",
+    white: "#f2f2f7",
+    brightBlack: "#8e8e93",
+    brightRed: "#ff6961",
+    brightGreen: "#4cdb68",
+    brightYellow: "#ffdf3f",
+    brightBlue: "#409cff",
+    brightMagenta: "#da8fff",
+    brightCyan: "#70d7ff",
+    brightWhite: "#ffffff",
+  }),
   timestamp: z.boolean(),
   semanticColors: z.boolean().default(true),
   hexColumns: z.union([

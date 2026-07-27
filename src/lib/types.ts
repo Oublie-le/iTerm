@@ -93,6 +93,30 @@ export interface SshConfigHost {
   source: string;
 }
 
+export type TerminalPaletteColor =
+  | "black"
+  | "red"
+  | "green"
+  | "yellow"
+  | "blue"
+  | "magenta"
+  | "cyan"
+  | "white"
+  | "brightBlack"
+  | "brightRed"
+  | "brightGreen"
+  | "brightYellow"
+  | "brightBlue"
+  | "brightMagenta"
+  | "brightCyan"
+  | "brightWhite";
+
+export type TerminalPalette = Record<TerminalPaletteColor, string> & {
+  background: string;
+  foreground: string;
+  cursor: string;
+};
+
 export interface TerminalConfig {
   encoding: string;
   termType: string;
@@ -103,6 +127,8 @@ export interface TerminalConfig {
   fontSize: number;
   lineHeight: number;
   cursorStyle: "block" | "bar" | "underline";
+  paletteMode: "theme" | "custom";
+  customPalette: TerminalPalette;
   timestamp: boolean;
   semanticColors: boolean;
   hexColumns: HexColumns;
@@ -271,6 +297,28 @@ export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   fontSize: 14,
   lineHeight: 1.12,
   cursorStyle: "block",
+  paletteMode: "theme",
+  customPalette: {
+    background: "#0d0f12",
+    foreground: "#f5f5f7",
+    cursor: "#0a84ff",
+    black: "#1c1c1e",
+    red: "#ff453a",
+    green: "#32d74b",
+    yellow: "#ffd60a",
+    blue: "#0a84ff",
+    magenta: "#bf5af2",
+    cyan: "#64d2ff",
+    white: "#f2f2f7",
+    brightBlack: "#8e8e93",
+    brightRed: "#ff6961",
+    brightGreen: "#4cdb68",
+    brightYellow: "#ffdf3f",
+    brightBlue: "#409cff",
+    brightMagenta: "#da8fff",
+    brightCyan: "#70d7ff",
+    brightWhite: "#ffffff",
+  },
   timestamp: false,
   semanticColors: true,
   hexColumns: 16,
@@ -335,7 +383,10 @@ export function createSessionProfile(
     },
     ssh: { ...DEFAULT_SSH_CONFIG },
     adb: { ...DEFAULT_ADB_CONFIG },
-    terminal: { ...DEFAULT_TERMINAL_CONFIG },
+    terminal: {
+      ...DEFAULT_TERMINAL_CONFIG,
+      customPalette: { ...DEFAULT_TERMINAL_CONFIG.customPalette },
+    },
     logging: { ...DEFAULT_LOGGING_CONFIG },
     triggers: [],
     createdAt: timestamp,
@@ -355,7 +406,10 @@ export function duplicateSessionProfile(
     serial: { ...profile.serial },
     ssh: { ...profile.ssh },
     adb: { ...profile.adb },
-    terminal: { ...profile.terminal },
+    terminal: {
+      ...profile.terminal,
+      customPalette: { ...profile.terminal.customPalette },
+    },
     logging: { ...profile.logging },
     triggers: profile.triggers.map((trigger) => ({ ...trigger })),
     createdAt: timestamp,
@@ -377,6 +431,12 @@ export function normalizeSessionProfile(
     terminal: {
       ...DEFAULT_TERMINAL_CONFIG,
       ...profile.terminal,
+      paletteMode:
+        profile.terminal?.paletteMode === "custom" ? "custom" : "theme",
+      customPalette: {
+        ...DEFAULT_TERMINAL_CONFIG.customPalette,
+        ...profile.terminal?.customPalette,
+      },
       enterKey:
         enterKey === "cr" || enterKey === "lf" || enterKey === "crlf"
           ? enterKey
