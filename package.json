@@ -15,6 +15,7 @@
     "bench:terminal": "node scripts/benchmark-terminal.mjs --lines 100000,500000,1000000",
     "bench:terminal:smoke": "node scripts/benchmark-terminal.mjs --lines 10000 --assert",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "sbom:generate": "node scripts/generate-sbom.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:watch": "vitest",

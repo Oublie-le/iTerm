@@ -84,6 +84,9 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      - name: Generate software bill of materials
+        run: pnpm sbom:generate --output dist/iTerm.cdx.json
+
   desktop-build:
     name: Desktop build (${{ matrix.os }})
     needs: quality

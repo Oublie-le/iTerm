@@ -138,6 +138,7 @@ pnpm dev
 pnpm test
 pnpm test:e2e
 pnpm bench:terminal:smoke
+pnpm sbom:generate
 pnpm build
 cargo test --manifest-path src-tauri/Cargo.toml
 pnpm tauri:build
@@ -208,7 +209,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 - `CI`：每次推送和 Pull Request 执行 TypeScript 检查、Vitest、Rust 格式检查、
   Rust 测试，并在 Linux、macOS、Windows 编译桌面程序；
 - `Release`：推送 `v*` 标签或手动运行工作流时，构建三平台安装包并发布到
-  GitHub Releases；
+  GitHub Releases，同时上传 npm 与 Cargo 依赖的 CycloneDX SBOM；
 - `Dependabot`：每周检查 npm、Cargo 和 GitHub Actions 依赖更新。
 
 发布新版本前需同步修改 `package.json`、`src-tauri/Cargo.toml` 和

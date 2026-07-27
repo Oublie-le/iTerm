@@ -38,6 +38,7 @@
 - 增加本地数据、凭据、网络访问、保留和删除方式的隐私说明。
 - 增加安装、串口、SSH、ADB、日志、文件传输和诊断故障排查手册。
 - 生产构建按终端、React、Tauri、文件协议和通用依赖拆分缓存块。
+- CI 和 Release 生成 npm/Cargo CycloneDX SBOM，并随 GitHub Release 上传。
 
 ### Fixed
 
