@@ -152,11 +152,41 @@ import {
   type Translator,
 } from "./lib/i18n";
 import { localizedErrorMessage } from "./lib/errorMessages";
-import { requestTerminalSearch } from "./lib/uiCommands";
+import {
+  requestTerminalCommand,
+  requestTerminalSearch,
+} from "./lib/uiCommands";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
 const MAX_RECONNECT_ATTEMPTS = 8;
+
+type TopMenuId =
+  | "session"
+  | "edit"
+  | "search"
+  | "select"
+  | "go"
+  | "view"
+  | "mode"
+  | "tools"
+  | "window"
+  | "help";
+
+interface TopMenuItem {
+  label: string;
+  shortcut?: string;
+  disabled?: boolean;
+  checked?: boolean;
+  separatorBefore?: boolean;
+  onSelect: () => void;
+}
+
+interface TopMenuDefinition {
+  id: TopMenuId;
+  labelKey: TranslationKey;
+  items: TopMenuItem[];
+}
 
 function loadProfiles(): SessionProfile[] {
   try {
@@ -301,6 +331,7 @@ export default function App() {
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [tabListOpen, setTabListOpen] = useState(false);
+  const [activeTopMenu, setActiveTopMenu] = useState<TopMenuId | null>(null);
   const [editingProfile, setEditingProfile] =
     useState<SessionProfile | null>(null);
   const [sidebarFilter, setSidebarFilter] = useState("");
@@ -322,6 +353,7 @@ export default function App() {
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
   const tabListRef = useRef<HTMLDivElement>(null);
+  const topMenuBarRef = useRef<HTMLDivElement>(null);
   const triggerEvaluatorsRef = useRef(
     new Map<
       string,
@@ -400,6 +432,24 @@ export default function App() {
       window.removeEventListener("keydown", dismissOnEscape);
     };
   }, [tabListOpen]);
+
+  useEffect(() => {
+    if (!activeTopMenu) return;
+    const dismissOnPointerDown = (event: PointerEvent) => {
+      if (!topMenuBarRef.current?.contains(event.target as Node)) {
+        setActiveTopMenu(null);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActiveTopMenu(null);
+    };
+    window.addEventListener("pointerdown", dismissOnPointerDown);
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", dismissOnPointerDown);
+      window.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [activeTopMenu]);
 
   useEffect(() => {
     const restoredMessages = new Set([
@@ -1934,6 +1984,17 @@ export default function App() {
     setDiagnosticCount(0);
   };
 
+  const setSyncChannel = (channel: SyncChannel) => {
+    if (!activeSession) return;
+    setSessions((current) =>
+      current.map((session) =>
+        session.id === activeSession.id
+          ? { ...session, syncChannel: channel }
+          : session,
+      ),
+    );
+  };
+
   const cycleSyncChannel = () => {
     if (!activeSession) return;
     const channels: SyncChannel[] = ["off", "A", "B", "C", "D"];
@@ -1941,13 +2002,29 @@ export default function App() {
       channels[
         (channels.indexOf(activeSession.syncChannel) + 1) % channels.length
       ];
+    setSyncChannel(next);
+  };
+
+  const setReceiveMode = (receiveMode: RuntimeSession["receiveMode"]) => {
+    if (!activeSession) return;
     setSessions((current) =>
       current.map((session) =>
         session.id === activeSession.id
-          ? { ...session, syncChannel: next }
+          ? { ...session, receiveMode }
           : session,
       ),
     );
+  };
+
+  const goToRelativeSession = (offset: -1 | 1) => {
+    if (sessions.length < 2) return;
+    const currentIndex = Math.max(
+      0,
+      sessions.findIndex((session) => session.id === activeSessionId),
+    );
+    const nextIndex =
+      (currentIndex + offset + sessions.length) % sessions.length;
+    activateSession(sessions[nextIndex].id);
   };
 
   const changeSplitMode = (mode: Exclude<SplitMode, "single">) => {
@@ -1975,6 +2052,310 @@ export default function App() {
     [profiles],
   );
 
+  const topMenus: TopMenuDefinition[] = [
+    {
+      id: "session",
+      labelKey: "shell.menu.session",
+      items: [
+        {
+          label: t("menu.session.new"),
+          shortcut: "Ctrl/⌘+N",
+          onSelect: openNewDialog,
+        },
+        {
+          label:
+            activeSession?.state === "connected"
+              ? t("menu.session.disconnect")
+              : t("menu.session.connect"),
+          shortcut: "Ctrl/⌘+Enter",
+          disabled: !activeProfile,
+          separatorBefore: true,
+          onSelect: () => {
+            if (!activeSession || !activeProfile) return;
+            if (activeSession.state === "connected") {
+              void disconnectSession(activeSession);
+            } else {
+              void connectProfile(activeProfile, activeSession.id);
+            }
+          },
+        },
+        {
+          label: t("menu.session.reconnect"),
+          disabled: !activeProfile || activeSession?.state === "opening",
+          onSelect: () => {
+            if (activeProfile) {
+              void connectProfile(activeProfile, activeSession?.id);
+            }
+          },
+        },
+        {
+          label: t("menu.session.settings"),
+          shortcut: "Ctrl/⌘+,",
+          disabled: !activeProfile,
+          onSelect: () => {
+            if (!activeProfile) return;
+            setEditingProfile(activeProfile);
+            setSessionDialogOpen(true);
+          },
+        },
+        {
+          label: t("menu.session.close"),
+          shortcut: "Ctrl/⌘+W",
+          disabled: !activeSession,
+          separatorBefore: true,
+          onSelect: () => {
+            if (activeSession) void closeTab(activeSession.id);
+          },
+        },
+      ],
+    },
+    {
+      id: "edit",
+      labelKey: "shell.menu.edit",
+      items: [
+        {
+          label: t("menu.edit.copy"),
+          shortcut: "⌘C / Ctrl+Shift+C",
+          disabled: !activeSession,
+          onSelect: () => requestTerminalCommand("copy"),
+        },
+        {
+          label: t("menu.edit.paste"),
+          shortcut: "⌘V / Ctrl+Shift+V",
+          disabled: activeSession?.state !== "connected",
+          onSelect: () => requestTerminalCommand("paste"),
+        },
+      ],
+    },
+    {
+      id: "search",
+      labelKey: "shell.menu.search",
+      items: [
+        {
+          label: t("menu.search.find"),
+          shortcut: "Ctrl/⌘+F",
+          disabled: !activeSession,
+          onSelect: requestTerminalSearch,
+        },
+      ],
+    },
+    {
+      id: "select",
+      labelKey: "shell.menu.select",
+      items: [
+        {
+          label: t("menu.select.all"),
+          disabled: !activeSession,
+          onSelect: () => requestTerminalCommand("selectAll"),
+        },
+      ],
+    },
+    {
+      id: "go",
+      labelKey: "shell.menu.go",
+      items: [
+        {
+          label: t("menu.go.next"),
+          shortcut: "Ctrl/⌘+Tab",
+          disabled: sessions.length < 2,
+          onSelect: () => goToRelativeSession(1),
+        },
+        {
+          label: t("menu.go.previous"),
+          shortcut: "Ctrl/⌘+Shift+Tab",
+          disabled: sessions.length < 2,
+          onSelect: () => goToRelativeSession(-1),
+        },
+      ],
+    },
+    {
+      id: "view",
+      labelKey: "shell.menu.view",
+      items: [
+        {
+          label: t("menu.view.sidebar"),
+          shortcut: "Ctrl/⌘+B",
+          checked: sidebarOpen,
+          onSelect: () => setSidebarOpen((current) => !current),
+        },
+        {
+          label: t("menu.view.sender"),
+          shortcut: "Ctrl/⌘+J",
+          checked: senderOpen,
+          onSelect: () => setSenderOpen((current) => !current),
+        },
+        {
+          label: t("menu.view.focus"),
+          shortcut: "Ctrl/⌘+Shift+F",
+          checked: focusMode,
+          onSelect: () => setFocusMode((current) => !current),
+        },
+        {
+          label: t("menu.view.splitHorizontal"),
+          checked: splitMode === "horizontal",
+          disabled: sessions.length < 2,
+          separatorBefore: true,
+          onSelect: () => changeSplitMode("horizontal"),
+        },
+        {
+          label: t("menu.view.splitVertical"),
+          checked: splitMode === "vertical",
+          disabled: sessions.length < 2,
+          onSelect: () => changeSplitMode("vertical"),
+        },
+        {
+          label: t("menu.view.closeSplit"),
+          disabled: splitMode === "single",
+          onSelect: closeSplit,
+        },
+      ],
+    },
+    {
+      id: "mode",
+      labelKey: "shell.menu.mode",
+      items: [
+        {
+          label: t("menu.mode.text"),
+          checked: activeSession?.receiveMode === "text",
+          disabled: !activeSession,
+          onSelect: () => setReceiveMode("text"),
+        },
+        {
+          label: t("menu.mode.hex"),
+          checked: activeSession?.receiveMode === "hex",
+          disabled: !activeSession,
+          onSelect: () => setReceiveMode("hex"),
+        },
+        ...(["off", "A", "B", "C", "D"] as SyncChannel[]).map(
+          (channel, index): TopMenuItem => ({
+            label:
+              channel === "off"
+                ? t("menu.mode.syncOff")
+                : t("menu.mode.syncChannel", { channel }),
+            checked: activeSession?.syncChannel === channel,
+            disabled: !activeSession,
+            separatorBefore: index === 0,
+            onSelect: () => setSyncChannel(channel),
+          }),
+        ),
+      ],
+    },
+    {
+      id: "tools",
+      labelKey: "shell.menu.tools",
+      items: [
+        {
+          label:
+            activeSession?.logState === "recording"
+              ? t("menu.tools.pauseLog")
+              : activeSession?.logState === "paused"
+                ? t("menu.tools.resumeLog")
+                : t("menu.tools.startLog"),
+          disabled:
+            !activeSession ||
+            !activeProfile ||
+            activeSession.state !== "connected",
+          onSelect: () => {
+            if (!activeSession || !activeProfile) return;
+            if (
+              activeSession.logState === "recording" ||
+              activeSession.logState === "paused"
+            ) {
+              void toggleLogPaused();
+            } else {
+              void startLogging(activeSession.id, activeProfile);
+            }
+          },
+        },
+        {
+          label: t("menu.tools.stopLog"),
+          disabled:
+            activeSession?.logState !== "recording" &&
+            activeSession?.logState !== "paused",
+          onSelect: () => void stopLogging(),
+        },
+        {
+          label: t("menu.tools.openLog"),
+          disabled: !activeSession?.logPath,
+          onSelect: () => {
+            if (activeSession?.logPath) void openLogs(activeSession.logPath);
+          },
+        },
+        {
+          label: t("menu.tools.openLogDirectory"),
+          onSelect: () => void openLogs(),
+        },
+        {
+          label: t("menu.tools.clearBuffers"),
+          disabled:
+            activeProfile?.protocol !== "serial" ||
+            activeSession?.state !== "connected",
+          separatorBefore: true,
+          onSelect: () => {
+            if (activeSession) void clearSerialBuffers(activeSession.id, "all");
+          },
+        },
+        {
+          label: t("menu.tools.sendBreak"),
+          disabled:
+            activeProfile?.protocol !== "serial" ||
+            activeSession?.state !== "connected",
+          onSelect: () => {
+            if (activeSession) void sendSerialBreak(activeSession.id);
+          },
+        },
+        {
+          label: t("menu.tools.refresh"),
+          separatorBefore: true,
+          onSelect: () => {
+            void refreshPorts();
+            void refreshAdbDevices();
+          },
+        },
+      ],
+    },
+    {
+      id: "window",
+      labelKey: "shell.menu.window",
+      items: [
+        {
+          label: t("menu.window.themeLight"),
+          checked: preferences.theme === "light",
+          onSelect: () =>
+            setPreferences((current) => ({ ...current, theme: "light" })),
+        },
+        {
+          label: t("menu.window.themeDark"),
+          checked: preferences.theme === "dark",
+          onSelect: () =>
+            setPreferences((current) => ({ ...current, theme: "dark" })),
+        },
+        {
+          label: t("menu.window.themeSystem"),
+          checked: preferences.theme === "system",
+          onSelect: () =>
+            setPreferences((current) => ({ ...current, theme: "system" })),
+        },
+        {
+          label: t("menu.window.settings"),
+          separatorBefore: true,
+          onSelect: () => setAppSettingsOpen(true),
+        },
+      ],
+    },
+    {
+      id: "help",
+      labelKey: "shell.menu.help",
+      items: [
+        {
+          label: t("menu.help.shortcuts"),
+          shortcut: "Ctrl/⌘+/",
+          onSelect: () => setShortcutHelpOpen(true),
+        },
+      ],
+    },
+  ];
+
   return (
     <I18nProvider locale={resolvedLocale}>
       <div
@@ -1982,32 +2363,66 @@ export default function App() {
         data-theme={resolvedTheme}
       >
       <header className="app-menubar">
-        <div className="menu-items">
-          {(
-            [
-              ["shell.menu.session", false],
-              ["shell.menu.edit", false],
-              ["shell.menu.search", false],
-              ["shell.menu.select", false],
-              ["shell.menu.go", false],
-              ["shell.menu.view", false],
-              ["shell.menu.mode", false],
-              ["shell.menu.tools", false],
-              ["shell.menu.window", false],
-              ["shell.menu.help", true],
-            ] as const
-          ).map(([key, isHelp]) => (
+        <div className="menu-items" ref={topMenuBarRef}>
+          {topMenus.map((menu) => (
+            <div className="top-menu" key={menu.id}>
               <button
-                key={key}
+                className={activeTopMenu === menu.id ? "is-open" : ""}
+                aria-haspopup="menu"
+                aria-expanded={activeTopMenu === menu.id}
                 onClick={() => {
-                  if (isHelp) setShortcutHelpOpen(true);
-                  if (key === "shell.menu.search") requestTerminalSearch();
+                  setTabListOpen(false);
+                  setActiveTopMenu((current) =>
+                    current === menu.id ? null : menu.id,
+                  );
                 }}
-                title={isHelp ? t("shell.shortcuts.openTitle") : t(key)}
+                onMouseEnter={() => {
+                  if (activeTopMenu) setActiveTopMenu(menu.id);
+                }}
+                title={t(menu.labelKey)}
               >
-                {t(key)}
+                {t(menu.labelKey)}
               </button>
-            ))}
+              {activeTopMenu === menu.id && (
+                <div className="top-menu-panel" role="menu">
+                  {menu.items.map((item, index) => (
+                    <button
+                      key={`${item.label}-${index}`}
+                      className={[
+                        item.checked ? "is-checked" : "",
+                        item.separatorBefore ? "has-separator" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      role={
+                        item.checked === undefined
+                          ? "menuitem"
+                          : "menuitemcheckbox"
+                      }
+                      aria-checked={
+                        item.checked === undefined ? undefined : item.checked
+                      }
+                      disabled={item.disabled}
+                      onClick={() => {
+                        setActiveTopMenu(null);
+                        item.onSelect();
+                      }}
+                    >
+                      <span className="top-menu-check">
+                        {item.checked ? "✓" : ""}
+                      </span>
+                      <span className="top-menu-label">{item.label}</span>
+                      {item.shortcut && (
+                        <kbd className="top-menu-shortcut">
+                          {item.shortcut}
+                        </kbd>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
         <div className="menu-actions">
           <button

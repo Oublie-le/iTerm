@@ -140,7 +140,7 @@ textarea:disabled {
   align-items: center;
 }
 
-.menu-items > button,
+.top-menu > button,
 .menu-actions > button {
   height: 100%;
   min-width: 43px;
@@ -149,9 +149,82 @@ textarea:disabled {
   cursor: default;
 }
 
-.menu-items > button:hover,
+.top-menu > button:hover,
+.top-menu > button.is-open,
 .menu-actions > button:hover {
   background: #dfe4e4;
+}
+
+.top-menu {
+  position: relative;
+  height: 100%;
+}
+
+.top-menu-panel {
+  position: absolute;
+  z-index: 40;
+  top: 100%;
+  left: 0;
+  width: max-content;
+  min-width: 210px;
+  padding: 4px;
+  background: #f8f9f9;
+  border: 1px solid #adb5b4;
+  border-radius: 0 0 3px 3px;
+  box-shadow: 0 7px 20px rgba(18, 26, 23, 0.22);
+}
+
+.top-menu-panel > button {
+  display: grid;
+  width: 100%;
+  min-height: 27px;
+  grid-template-columns: 17px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px 3px 5px;
+  background: transparent;
+  border-radius: 2px;
+  color: #343a38;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.top-menu-panel > button:hover,
+.top-menu-panel > button:focus-visible {
+  background: #dce8df;
+  color: var(--green-dark);
+}
+
+.top-menu-panel > button:disabled {
+  background: transparent;
+  color: #9da4a2;
+  cursor: default;
+}
+
+.top-menu-panel > button.has-separator {
+  margin-top: 4px;
+  border-top: 1px solid #d4d9d8;
+  border-radius: 0 0 2px 2px;
+  padding-top: 6px;
+}
+
+.top-menu-check {
+  color: var(--green-dark);
+  font-weight: 700;
+  text-align: center;
+}
+
+.top-menu-label {
+  white-space: nowrap;
+}
+
+.top-menu-shortcut {
+  margin-left: 14px;
+  background: transparent;
+  color: #7b8380;
+  font-family: inherit;
+  font-size: 9px;
 }
 
 .menu-actions > button.is-active {
@@ -1872,6 +1945,35 @@ textarea:disabled {
   background: #353b39;
   border-color: #4c5351;
   color: #d5dbd7;
+}
+
+.app-shell[data-theme="dark"] .top-menu > button:hover,
+.app-shell[data-theme="dark"] .top-menu > button.is-open {
+  background: #414846;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel {
+  background: #292f2d;
+  border-color: #59615e;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button {
+  color: #d5dcd8;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button:hover,
+.app-shell[data-theme="dark"] .top-menu-panel > button:focus-visible {
+  background: #414846;
+  color: #f0f4f1;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button:disabled {
+  background: transparent;
+  color: #727b77;
+}
+
+.app-shell[data-theme="dark"] .top-menu-panel > button.has-separator {
+  border-color: #4e5653;
 }
 
 .app-shell[data-theme="dark"] .sidebar-search,
