@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SenderPane } from "./components/SenderPane";
+import { AppSettingsDialog } from "./components/AppSettingsDialog";
 import { SessionDialog } from "./components/SessionDialog";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { TerminalPane } from "./components/TerminalPane";
@@ -69,7 +70,6 @@ import { sendFileInChunks } from "./lib/fileTransfer";
 import { openLogDirectory, openLogFile } from "./lib/logging";
 import {
   createRuntimeSession,
-  createSessionProfile,
   duplicateSessionProfile,
   normalizeSessionProfile,
   reconnectDelayMs,
@@ -89,6 +89,7 @@ import {
   saveWorkspaceSnapshot,
 } from "./lib/workspace";
 import {
+  createSessionProfileWithPreferences,
   loadAppPreferences,
   nextThemeMode,
   resolveTheme,
@@ -225,6 +226,7 @@ export default function App() {
   const [senderOpen, setSenderOpen] = useState(initialWorkspace.senderOpen);
   const [focusMode, setFocusMode] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [editingProfile, setEditingProfile] =
     useState<SessionProfile | null>(null);
@@ -349,13 +351,14 @@ export default function App() {
 
   useEffect(() => {
     const confirmWindowClose = (event: BeforeUnloadEvent) => {
+      if (!preferences.confirmActiveSessionClose) return;
       if (!sessions.some(requiresCloseConfirmation)) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", confirmWindowClose);
     return () => window.removeEventListener("beforeunload", confirmWindowClose);
-  }, [sessions]);
+  }, [preferences.confirmActiveSessionClose, sessions]);
 
   const applyEvent = useCallback((event: SerialEvent) => {
     setSessions((current) =>
@@ -656,6 +659,7 @@ export default function App() {
     const target = sessions.find((session) => session.id === sessionId);
     if (
       target &&
+      preferences.confirmActiveSessionClose &&
       requiresCloseConfirmation(target) &&
       !window.confirm(
         `“${target.title}”仍有活动连接或任务，确定要断开并关闭吗？`,
@@ -676,7 +680,7 @@ export default function App() {
   };
 
   const openNewDialog = () => {
-    setEditingProfile(createSessionProfile(ports[0]));
+    setEditingProfile(createSessionProfileWithPreferences(preferences, ports[0]));
     setSessionDialogOpen(true);
   };
 
@@ -731,6 +735,8 @@ export default function App() {
       if (action === "escape") {
         if (shortcutHelpOpen) {
           setShortcutHelpOpen(false);
+        } else if (appSettingsOpen) {
+          setAppSettingsOpen(false);
         } else if (sessionDialogOpen) {
           setSessionDialogOpen(false);
           setEditingProfile(null);
@@ -801,7 +807,10 @@ export default function App() {
     activeProfile,
     activeSession,
     activeSessionId,
+    appSettingsOpen,
     focusMode,
+    ports,
+    preferences,
     sessionDialogOpen,
     sessions,
     shortcutHelpOpen,
@@ -1128,7 +1137,10 @@ export default function App() {
                 ? "深色"
                 : "系统"}
           </button>
-          <button title="更多">
+          <button
+            title="应用设置"
+            onClick={() => setAppSettingsOpen(true)}
+          >
             <Menu size={18} />
           </button>
         </div>
@@ -1686,6 +1698,15 @@ export default function App() {
         onRefreshAdbDevices={() => void refreshAdbDevices()}
         onRefreshExternalTools={() => void refreshExternalTools()}
         onSave={saveProfile}
+      />
+      <AppSettingsDialog
+        open={appSettingsOpen}
+        preferences={preferences}
+        onCancel={() => setAppSettingsOpen(false)}
+        onSave={(nextPreferences) => {
+          setPreferences(nextPreferences);
+          setAppSettingsOpen(false);
+        }}
       />
       {shortcutHelpOpen && (
         <div className="modal-backdrop" role="presentation">

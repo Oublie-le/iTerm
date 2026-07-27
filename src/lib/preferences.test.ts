@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_APP_PREFERENCES,
+  createSessionProfileWithPreferences,
   loadAppPreferences,
   nextThemeMode,
   resolveTheme,
@@ -11,7 +12,10 @@ import {
 describe("application preferences", () => {
   it("round-trips a valid theme preference", () => {
     let stored = "";
-    const preferences: AppPreferences = { theme: "dark" };
+    const preferences: AppPreferences = {
+      ...DEFAULT_APP_PREFERENCES,
+      theme: "dark",
+    };
     saveAppPreferences(preferences, {
       setItem: (_key, value) => {
         stored = value;
@@ -36,5 +40,27 @@ describe("application preferences", () => {
     expect(nextThemeMode("light")).toBe("dark");
     expect(nextThemeMode("dark")).toBe("system");
     expect(nextThemeMode("system")).toBe("light");
+  });
+
+  it("applies application defaults only when creating a new session", () => {
+    const preferences: AppPreferences = {
+      ...DEFAULT_APP_PREFERENCES,
+      defaultProtocol: "ssh",
+      sessionDefaults: {
+        terminal: {
+          ...DEFAULT_APP_PREFERENCES.sessionDefaults.terminal,
+          fontSize: 17,
+        },
+        logging: {
+          ...DEFAULT_APP_PREFERENCES.sessionDefaults.logging,
+          autoStart: true,
+        },
+      },
+    };
+
+    const profile = createSessionProfileWithPreferences(preferences);
+    expect(profile.protocol).toBe("ssh");
+    expect(profile.terminal.fontSize).toBe(17);
+    expect(profile.logging.autoStart).toBe(true);
   });
 });

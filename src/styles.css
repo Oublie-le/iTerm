@@ -1527,6 +1527,31 @@ textarea:disabled {
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
 }
 
+.app-settings-dialog {
+  display: grid;
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: hidden;
+  background: #f7f8f8;
+  border: 1px solid #899190;
+  border-radius: 5px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  grid-template-rows: 62px minmax(0, 1fr) 51px;
+}
+
+.app-settings-body {
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 28px 28px;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.app-settings-body .toggle-row {
+  margin-left: 0;
+}
+
 .shortcut-dialog > header {
   display: flex;
   min-height: 58px;
@@ -1701,6 +1726,11 @@ textarea:disabled {
   border-color: #626a67;
 }
 
+.app-shell[data-theme="dark"] .app-settings-dialog {
+  background: #292e2c;
+  border-color: #626a67;
+}
+
 .app-shell[data-theme="dark"] .shortcut-dialog > header {
   background: #353b39;
   border-color: #4c5351;
@@ -1782,6 +1812,10 @@ textarea:disabled {
 
   .status-items span:nth-child(n + 4) {
     display: none;
+  }
+
+  .app-settings-body {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -1,14 +1,37 @@
+import {
+  createSessionProfile,
+  DEFAULT_LOGGING_CONFIG,
+  DEFAULT_TERMINAL_CONFIG,
+  type LoggingConfig,
+  type SerialPortDescriptor,
+  type SessionProfile,
+  type SessionProtocol,
+  type TerminalConfig,
+} from "./types";
+
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 export interface AppPreferences {
   theme: ThemeMode;
+  confirmActiveSessionClose: boolean;
+  defaultProtocol: SessionProtocol;
+  sessionDefaults: {
+    terminal: TerminalConfig;
+    logging: LoggingConfig;
+  };
 }
 
 const PREFERENCES_STORAGE_KEY = "iterm.preferences.v1";
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   theme: "light",
+  confirmActiveSessionClose: true,
+  defaultProtocol: "serial",
+  sessionDefaults: {
+    terminal: { ...DEFAULT_TERMINAL_CONFIG },
+    logging: { ...DEFAULT_LOGGING_CONFIG },
+  },
 };
 
 export function loadAppPreferences(
@@ -19,11 +42,32 @@ export function loadAppPreferences(
       storage.getItem(PREFERENCES_STORAGE_KEY) ?? "null",
     ) as Partial<AppPreferences> | null;
     const theme = parsed?.theme;
+    const defaultProtocol = parsed?.defaultProtocol;
     return {
       theme:
         theme === "light" || theme === "dark" || theme === "system"
           ? theme
           : DEFAULT_APP_PREFERENCES.theme,
+      confirmActiveSessionClose:
+        typeof parsed?.confirmActiveSessionClose === "boolean"
+          ? parsed.confirmActiveSessionClose
+          : DEFAULT_APP_PREFERENCES.confirmActiveSessionClose,
+      defaultProtocol:
+        defaultProtocol === "serial" ||
+        defaultProtocol === "ssh" ||
+        defaultProtocol === "adb"
+          ? defaultProtocol
+          : DEFAULT_APP_PREFERENCES.defaultProtocol,
+      sessionDefaults: {
+        terminal: {
+          ...DEFAULT_TERMINAL_CONFIG,
+          ...parsed?.sessionDefaults?.terminal,
+        },
+        logging: {
+          ...DEFAULT_LOGGING_CONFIG,
+          ...parsed?.sessionDefaults?.logging,
+        },
+      },
     };
   } catch {
     return { ...DEFAULT_APP_PREFERENCES };
@@ -48,4 +92,16 @@ export function nextThemeMode(theme: ThemeMode): ThemeMode {
   if (theme === "light") return "dark";
   if (theme === "dark") return "system";
   return "light";
+}
+
+export function createSessionProfileWithPreferences(
+  preferences: AppPreferences,
+  port?: SerialPortDescriptor,
+): SessionProfile {
+  const profile = createSessionProfile(port, preferences.defaultProtocol);
+  return {
+    ...profile,
+    terminal: { ...preferences.sessionDefaults.terminal },
+    logging: { ...preferences.sessionDefaults.logging },
+  };
 }
