@@ -14,6 +14,8 @@ describe("workspace persistence", () => {
       senderOpen: true,
       openProfileIds: ["one", "two"],
       activeProfileId: "two",
+      splitMode: "horizontal",
+      splitProfileIds: ["one", "two"],
     };
     saveWorkspaceSnapshot(snapshot, {
       setItem: (_key, value) => {

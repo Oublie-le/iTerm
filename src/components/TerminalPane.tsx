@@ -24,8 +24,10 @@ interface TerminalPaneProps {
   session: RuntimeSession;
   profile: SessionProfile;
   active: boolean;
+  visible: boolean;
   receiveMode: ReceiveMode;
   theme: ResolvedTheme;
+  onActivate: () => void;
   onResize: (cols: number, rows: number) => void;
   onClear: () => void;
   onInput: (value: string) => void;
@@ -35,8 +37,10 @@ export function TerminalPane({
   session,
   profile,
   active,
+  visible,
   receiveMode,
   theme,
+  onActivate,
   onResize,
   onClear,
   onInput,
@@ -245,12 +249,12 @@ export function TerminalPane({
   }, [session.lastChunk]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!visible) return;
     window.requestAnimationFrame(() => {
       fitRef.current?.fit();
-      terminalRef.current?.focus();
+      if (active) terminalRef.current?.focus();
     });
-  }, [active]);
+  }, [active, visible]);
 
   useEffect(() => {
     if (session.state !== "connected" || !terminalRef.current) return;
@@ -285,8 +289,11 @@ export function TerminalPane({
 
   return (
     <section
-      className={`terminal-pane ${active ? "is-active" : ""}`}
+      className={`terminal-pane ${visible ? "is-visible" : ""} ${
+        active ? "is-active" : ""
+      }`}
       aria-label={`${profile.name} 终端`}
+      onMouseDown={onActivate}
     >
       <div
         ref={hostRef}

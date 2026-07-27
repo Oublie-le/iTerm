@@ -4,6 +4,7 @@ import {
   ChevronDown,
   CirclePlus,
   CircleStop,
+  Columns2,
   Eraser,
   FileClock,
   FileText,
@@ -16,11 +17,13 @@ import {
   PanelBottom,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelTopClose,
   Pause,
   Play,
   PlugZap,
   RefreshCw,
   RotateCw,
+  Rows2,
   Search,
   Send,
   Settings,
@@ -100,6 +103,12 @@ import {
   resolveShortcut,
 } from "./lib/shortcuts";
 import { SessionTriggerEvaluator } from "./lib/triggers";
+import {
+  createSplitSessionIds,
+  selectSplitSession,
+  type SplitMode,
+  type SplitSessionIds,
+} from "./lib/layout";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -221,6 +230,19 @@ export default function App() {
       sessions[0]?.id ??
       null,
   );
+  const [splitSessionIds, setSplitSessionIds] =
+    useState<SplitSessionIds | null>(() => {
+      const restored = initialWorkspace.splitProfileIds?.flatMap((profileId) => {
+        const session = sessions.find((item) => item.profileId === profileId);
+        return session ? [session.id] : [];
+      });
+      return restored?.length === 2
+        ? [restored[0], restored[1]]
+        : null;
+    });
+  const [splitMode, setSplitMode] = useState<SplitMode>(() =>
+    splitSessionIds ? initialWorkspace.splitMode : "single",
+  );
   const [sidebarOpen, setSidebarOpen] = useState(
     initialWorkspace.sidebarOpen,
   );
@@ -254,6 +276,18 @@ export default function App() {
     (profile) => profile.id === activeSession?.profileId,
   );
   const resolvedTheme = resolveTheme(preferences.theme, systemPrefersDark);
+
+  const activateSession = useCallback(
+    (sessionId: string) => {
+      setSplitSessionIds((current) =>
+        current
+          ? selectSplitSession(current, activeSessionId, sessionId)
+          : current,
+      );
+      setActiveSessionId(sessionId);
+    },
+    [activeSessionId],
+  );
 
   const refreshPorts = useCallback(async (silent = false) => {
     if (refreshInFlightRef.current) return;
@@ -348,6 +382,10 @@ export default function App() {
   }, [ports]);
 
   useEffect(() => {
+    const splitProfileIds = splitSessionIds?.flatMap((sessionId) => {
+      const session = sessions.find((item) => item.id === sessionId);
+      return session ? [session.profileId] : [];
+    });
     saveWorkspaceSnapshot({
       sidebarOpen,
       senderOpen,
@@ -355,8 +393,45 @@ export default function App() {
       activeProfileId:
         sessions.find((session) => session.id === activeSessionId)?.profileId ??
         null,
+      splitMode,
+      splitProfileIds:
+        splitProfileIds?.length === 2
+          ? [splitProfileIds[0], splitProfileIds[1]]
+          : null,
     });
-  }, [activeSessionId, senderOpen, sessions, sidebarOpen]);
+  }, [
+    activeSessionId,
+    senderOpen,
+    sessions,
+    sidebarOpen,
+    splitMode,
+    splitSessionIds,
+  ]);
+
+  useEffect(() => {
+    if (splitMode === "single" || !splitSessionIds) return;
+    const availableSessionIds = sessions.map((session) => session.id);
+    if (
+      splitSessionIds.every((sessionId) =>
+        availableSessionIds.includes(sessionId),
+      )
+    ) {
+      return;
+    }
+    const replacement = createSplitSessionIds(
+      availableSessionIds,
+      activeSessionId,
+    );
+    if (!replacement) {
+      setSplitMode("single");
+      setSplitSessionIds(null);
+      return;
+    }
+    setSplitSessionIds(replacement);
+    if (!replacement.includes(activeSessionId ?? "")) {
+      setActiveSessionId(replacement[0]);
+    }
+  }, [activeSessionId, sessions, splitMode, splitSessionIds]);
 
   useEffect(() => {
     const confirmWindowClose = (event: BeforeUnloadEvent) => {
@@ -520,7 +595,7 @@ export default function App() {
         (session) => session.profileId === profile.id,
       );
       if (alreadyOpen && !existingId) {
-        setActiveSessionId(alreadyOpen.id);
+        activateSession(alreadyOpen.id);
         if (
           alreadyOpen.state === "disconnected" ||
           alreadyOpen.state === "error" ||
@@ -578,7 +653,7 @@ export default function App() {
           ),
         );
       }
-      setActiveSessionId(sessionId);
+      activateSession(sessionId);
       if (profile.protocol === "serial") {
         setDtr(profile.serial.dtrOnOpen);
         setRts(profile.serial.rtsOnOpen);
@@ -600,7 +675,7 @@ export default function App() {
         });
       }
     },
-    [applyEvent, sessions, startLogging],
+    [activateSession, applyEvent, sessions, startLogging],
   );
 
   useEffect(() => {
@@ -891,7 +966,7 @@ export default function App() {
         const offset = action === "nextSession" ? 1 : -1;
         const nextIndex =
           (currentIndex + offset + sessions.length) % sessions.length;
-        setActiveSessionId(sessions[nextIndex].id);
+        activateSession(sessions[nextIndex].id);
         return;
       }
       if (action === "toggleSidebar") {
@@ -934,6 +1009,7 @@ export default function App() {
     activeProfile,
     activeSession,
     activeSessionId,
+    activateSession,
     appSettingsOpen,
     focusMode,
     ports,
@@ -1192,6 +1268,26 @@ export default function App() {
     );
   };
 
+  const changeSplitMode = (mode: Exclude<SplitMode, "single">) => {
+    const pair =
+      splitSessionIds ??
+      createSplitSessionIds(
+        sessions.map((session) => session.id),
+        activeSessionId,
+      );
+    if (!pair) return;
+    setSplitSessionIds(pair);
+    setSplitMode(mode);
+    if (!pair.includes(activeSessionId ?? "")) {
+      setActiveSessionId(pair[0]);
+    }
+  };
+
+  const closeSplit = () => {
+    setSplitMode("single");
+    setSplitSessionIds(null);
+  };
+
   const profileById = useMemo(
     () => new Map(profiles.map((profile) => [profile.id, profile])),
     [profiles],
@@ -1317,7 +1413,7 @@ export default function App() {
                   className={`session-tab ${
                     session.id === activeSessionId ? "is-active" : ""
                   }`}
-                  onClick={() => setActiveSessionId(session.id)}
+                  onClick={() => activateSession(session.id)}
                 >
                   <span
                     className={`tab-state state-${session.state}`}
@@ -1346,6 +1442,35 @@ export default function App() {
                 </button>
               ))}
             </div>
+            <button
+              className={`tab-action ${
+                splitMode === "horizontal" ? "is-active" : ""
+              }`}
+              disabled={sessions.length < 2}
+              onClick={() => changeSplitMode("horizontal")}
+              title="左右分屏"
+            >
+              <Columns2 size={17} />
+            </button>
+            <button
+              className={`tab-action ${
+                splitMode === "vertical" ? "is-active" : ""
+              }`}
+              disabled={sessions.length < 2}
+              onClick={() => changeSplitMode("vertical")}
+              title="上下分屏"
+            >
+              <Rows2 size={17} />
+            </button>
+            {splitMode !== "single" && (
+              <button
+                className="tab-action"
+                onClick={closeSplit}
+                title="关闭分屏"
+              >
+                <PanelTopClose size={17} />
+              </button>
+            )}
             <button
               className="tab-action"
               onClick={openNewDialog}
@@ -1651,7 +1776,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="terminal-stack">
+          <div className={`terminal-stack split-${splitMode}`}>
             {sessions.length === 0 && (
               <div className="welcome-panel">
                 <div className="welcome-mark">
@@ -1691,8 +1816,14 @@ export default function App() {
                   session={session}
                   profile={profile}
                   active={session.id === activeSessionId}
+                  visible={
+                    splitMode === "single"
+                      ? session.id === activeSessionId
+                      : Boolean(splitSessionIds?.includes(session.id))
+                  }
                   receiveMode={session.receiveMode}
                   theme={resolvedTheme}
+                  onActivate={() => activateSession(session.id)}
                   onResize={(cols, rows) => {
                     setSessions((current) =>
                       current.map((item) =>
