@@ -111,17 +111,38 @@ export function clearDiagnosticEvents(
 export function serializeDiagnosticEvents(
   events: DiagnosticEvent[],
   exportedAt = new Date().toISOString(),
+  locale: AppLocale = "zh-CN",
 ): string {
+  const redacted = locale === "en-US" ? "[redacted]" : "[已省略]";
+  const complexValue =
+    locale === "en-US" ? "[complex value omitted]" : "[复杂值已省略]";
+  const localizedEvents = events.map((event) => ({
+    ...event,
+    context: Object.fromEntries(
+      Object.entries(event.context).map(([key, value]) => [
+        key,
+        value === "[已省略]" || value === "[redacted]"
+          ? redacted
+          : value === "[复杂值已省略]" ||
+              value === "[complex value omitted]"
+            ? complexValue
+            : value,
+      ]),
+    ),
+  }));
   return `${JSON.stringify(
     {
       schema: "iterm.diagnostics",
       version: 1,
       exportedAt,
       privacy:
-        "诊断记录不包含终端收发内容、密码、令牌、私钥路径或文件内容。",
-      events,
+        locale === "en-US"
+          ? "Diagnostics exclude terminal input/output, passwords, tokens, private-key paths, and file contents."
+          : "诊断记录不包含终端收发内容、密码、令牌、私钥路径或文件内容。",
+      events: localizedEvents,
     },
     null,
     2,
   )}\n`;
 }
+import type { AppLocale } from "./i18n";

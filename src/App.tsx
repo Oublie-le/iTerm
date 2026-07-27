@@ -1623,7 +1623,9 @@ export default function App() {
     ) {
       throw new Error(t("runtime.notConnected"));
     }
-    const outputDirectory = await selectBinaryOutputDirectory();
+    const outputDirectory = await selectBinaryOutputDirectory(
+      t("runtime.selectReceiveDirectory"),
+    );
     if (outputDirectory === null) return null;
 
     const sessionId = activeSession.id;
@@ -1710,7 +1712,9 @@ export default function App() {
     ) {
       throw new Error(t("runtime.notConnected"));
     }
-    const outputDirectory = await selectBinaryOutputDirectory();
+    const outputDirectory = await selectBinaryOutputDirectory(
+      t("runtime.selectReceiveDirectory"),
+    );
     if (outputDirectory === null) return null;
     const sessionId = activeSession.id;
     const profile = activeProfile;
@@ -1888,7 +1892,11 @@ export default function App() {
       const date = new Date().toISOString().slice(0, 10);
       await saveJsonDocument(
         `iTerm-diagnostics-${date}.json`,
-        serializeDiagnosticEvents(events),
+        serializeDiagnosticEvents(
+          events,
+          new Date().toISOString(),
+          resolvedLocale,
+        ),
       );
     } catch (error) {
       setProfileTransferNotice({

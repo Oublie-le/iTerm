@@ -85,4 +85,30 @@ describe("local diagnostics", () => {
       "不包含终端收发内容",
     );
   });
+
+  it("exports privacy and redaction markers in English", () => {
+    const events = [
+      {
+        id: "event-1",
+        timestamp: "2026-07-27T00:00:00.000Z",
+        level: "info" as const,
+        area: "test",
+        event: "redacted",
+        context: {
+          secret: "[已省略]",
+          nested: "[复杂值已省略]",
+        },
+      },
+    ];
+    const output = serializeDiagnosticEvents(
+      events,
+      "2026-07-27T00:00:00.000Z",
+      "en-US",
+    );
+
+    expect(output).toContain("Diagnostics exclude terminal input/output");
+    expect(output).toContain("[redacted]");
+    expect(output).toContain("[complex value omitted]");
+    expect(output).not.toContain("[已省略]");
+  });
 });

@@ -4,12 +4,14 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 import { isTauriRuntime } from "./serial";
 import type { ReceivedYmodemFile } from "./ymodemReceive";
 
-export async function selectBinaryOutputDirectory(): Promise<string | null> {
+export async function selectBinaryOutputDirectory(
+  title = "选择文件接收目录",
+): Promise<string | null> {
   if (!isTauriRuntime()) return "";
   return open({
     directory: true,
     multiple: false,
-    title: "选择 YModem 接收目录",
+    title,
   });
 }
 
