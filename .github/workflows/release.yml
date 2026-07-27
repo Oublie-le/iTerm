@@ -19,8 +19,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare_release:
+    name: Prepare GitHub release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+
+    steps:
+      - name: Create or locate release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.id' 2>/dev/null || true)"
+
+          if [[ -z "${release_id}" ]]; then
+            gh release create "${RELEASE_TAG}" \
+              --verify-tag \
+              --title "iTerm ${RELEASE_TAG}" \
+              --notes "iTerm 跨平台串口终端预览版。
+
+          此版本由 GitHub Actions 自动构建，尚未进行 Apple 公证或 Windows 商业代码签名。
+          安装说明和已知限制请参阅仓库 README。" \
+              --generate-notes
+            release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.id')"
+          fi
+
+          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
+
   publish:
     name: Publish (${{ matrix.name }})
+    needs: prepare_release
     strategy:
       fail-fast: false
       matrix:
@@ -96,21 +128,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: pnpm tauri
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: iTerm ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseBody: |
-            iTerm 跨平台串口终端预览版。
-
-            此版本由 GitHub Actions 自动构建，尚未进行 Apple 公证或 Windows 商业代码签名。
-            安装说明和已知限制请参阅仓库 README。
-          generateReleaseNotes: true
-          releaseDraft: false
-          prerelease: false
+          releaseId: ${{ needs.prepare_release.outputs.release_id }}
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
   sbom:
     name: Publish software bill of materials
-    needs: publish
+    needs:
+      - prepare_release
+      - publish
     runs-on: ubuntu-22.04
     timeout-minutes: 15
 
