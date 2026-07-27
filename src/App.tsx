@@ -2804,6 +2804,8 @@ export default function App() {
                 [t("shell.shortcuts.focus"), "Ctrl/⌘ + Shift + F"],
                 [t("shell.shortcuts.help"), "Ctrl/⌘ + /"],
                 [t("shell.shortcuts.dismiss"), "Esc"],
+                [t("shell.shortcuts.copy"), "⌘C / Ctrl+Shift+C"],
+                [t("shell.shortcuts.paste"), "⌘V / Ctrl+Shift+V"],
               ].map(([label, keys]) => (
                 <div key={label}>
                   <span>{label}</span>

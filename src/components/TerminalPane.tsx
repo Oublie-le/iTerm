@@ -27,7 +27,12 @@ import type {
 } from "../lib/types";
 import { sessionTargetLabel } from "../lib/types";
 import { useI18n } from "../lib/i18n";
-import { TERMINAL_SEARCH_EVENT } from "../lib/uiCommands";
+import {
+  executeTerminalCommand,
+  TERMINAL_COMMAND_EVENT,
+  TERMINAL_SEARCH_EVENT,
+  type TerminalUiCommand,
+} from "../lib/uiCommands";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -168,10 +173,25 @@ export function TerminalPane({
     }
 
     terminal.attachCustomKeyEventHandler((event) => {
+      const shortcutKey = event.key.toLocaleLowerCase();
+      const copyShortcut =
+        (event.metaKey && shortcutKey === "c" && terminal.hasSelection()) ||
+        (event.ctrlKey && event.shiftKey && shortcutKey === "c");
+      const pasteShortcut =
+        (event.metaKey && shortcutKey === "v") ||
+        (event.ctrlKey && event.shiftKey && shortcutKey === "v");
+      if (event.type === "keydown" && (copyShortcut || pasteShortcut)) {
+        void executeTerminalCommand(
+          copyShortcut ? "copy" : "paste",
+          terminal,
+          (value) => inputRef.current(value),
+        ).catch(() => undefined);
+        return false;
+      }
       if (
         event.type === "keydown" &&
         (event.ctrlKey || event.metaKey) &&
-        event.key.toLocaleLowerCase() === "f"
+        shortcutKey === "f"
       ) {
         setSearchOpen(true);
         window.setTimeout(() => searchInputRef.current?.focus(), 0);
@@ -286,8 +306,22 @@ export function TerminalPane({
       window.setTimeout(() => searchInputRef.current?.focus(), 0);
     };
     window.addEventListener(TERMINAL_SEARCH_EVENT, openSearch);
-    return () => window.removeEventListener(TERMINAL_SEARCH_EVENT, openSearch);
-  }, [active, visible]);
+    const executeCommand = (event: Event) => {
+      if (!terminalRef.current) return;
+      const command = (event as CustomEvent<TerminalUiCommand>).detail;
+      if (command === "paste" && session.state !== "connected") return;
+      void executeTerminalCommand(
+        command,
+        terminalRef.current,
+        (value) => inputRef.current(value),
+      ).catch(() => undefined);
+    };
+    window.addEventListener(TERMINAL_COMMAND_EVENT, executeCommand);
+    return () => {
+      window.removeEventListener(TERMINAL_SEARCH_EVENT, openSearch);
+      window.removeEventListener(TERMINAL_COMMAND_EVENT, executeCommand);
+    };
+  }, [active, session.state, visible]);
 
   const find = (
     direction: "next" | "previous",
