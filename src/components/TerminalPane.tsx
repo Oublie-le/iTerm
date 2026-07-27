@@ -12,6 +12,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { formatHexDump, timestampReceivedText } from "../lib/receive";
+import type { ResolvedTheme } from "../lib/preferences";
 import type {
   ReceiveMode,
   RuntimeSession,
@@ -24,6 +25,7 @@ interface TerminalPaneProps {
   profile: SessionProfile;
   active: boolean;
   receiveMode: ReceiveMode;
+  theme: ResolvedTheme;
   onResize: (cols: number, rows: number) => void;
   onClear: () => void;
   onInput: (value: string) => void;
@@ -34,6 +36,7 @@ export function TerminalPane({
   profile,
   active,
   receiveMode,
+  theme,
   onResize,
   onClear,
   onInput,
@@ -88,29 +91,54 @@ export function TerminalPane({
       lineHeight: profile.terminal.lineHeight,
       scrollback: profile.terminal.scrollback,
       tabStopWidth: 8,
-      theme: {
-        background: "#22231f",
-        foreground: "#e5e5df",
-        cursor: "#ff9d00",
-        cursorAccent: "#22231f",
-        selectionBackground: "#445569",
-        black: "#333333",
-        red: "#c4265e",
-        green: "#86b42b",
-        yellow: "#d0a500",
-        blue: "#3465a4",
-        magenta: "#8c6bc8",
-        cyan: "#56adbc",
-        white: "#e3e3dd",
-        brightBlack: "#666666",
-        brightRed: "#f92672",
-        brightGreen: "#a6e22e",
-        brightYellow: "#f4bf75",
-        brightBlue: "#66d9ef",
-        brightMagenta: "#ae81ff",
-        brightCyan: "#a1efe4",
-        brightWhite: "#f8f8f2",
-      },
+      theme:
+        theme === "dark"
+          ? {
+              background: "#22231f",
+              foreground: "#e5e5df",
+              cursor: "#ff9d00",
+              cursorAccent: "#22231f",
+              selectionBackground: "#445569",
+              black: "#333333",
+              red: "#c4265e",
+              green: "#86b42b",
+              yellow: "#d0a500",
+              blue: "#3465a4",
+              magenta: "#8c6bc8",
+              cyan: "#56adbc",
+              white: "#e3e3dd",
+              brightBlack: "#666666",
+              brightRed: "#f92672",
+              brightGreen: "#a6e22e",
+              brightYellow: "#f4bf75",
+              brightBlue: "#66d9ef",
+              brightMagenta: "#ae81ff",
+              brightCyan: "#a1efe4",
+              brightWhite: "#f8f8f2",
+            }
+          : {
+              background: "#fbfcfb",
+              foreground: "#252a28",
+              cursor: "#168441",
+              cursorAccent: "#fbfcfb",
+              selectionBackground: "#b9dfc5",
+              black: "#242826",
+              red: "#b51d4d",
+              green: "#397c20",
+              yellow: "#8b6700",
+              blue: "#255f9c",
+              magenta: "#7045a5",
+              cyan: "#267583",
+              white: "#dfe3df",
+              brightBlack: "#68706d",
+              brightRed: "#d42f5f",
+              brightGreen: "#4d982e",
+              brightYellow: "#a87e0a",
+              brightBlue: "#3479b8",
+              brightMagenta: "#8c5bc0",
+              brightCyan: "#368d9b",
+              brightWhite: "#ffffff",
+            },
     });
     const fit = new FitAddon();
     const search = new SearchAddon();
@@ -195,6 +223,7 @@ export function TerminalPane({
     profile.terminal.lineHeight,
     profile.terminal.scrollback,
     profile.terminal.timestamp,
+    theme,
   ]);
 
   useEffect(() => {

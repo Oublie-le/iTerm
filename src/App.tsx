@@ -23,6 +23,7 @@ import {
   Search,
   Send,
   Settings,
+  SunMoon,
   Unplug,
   X,
   Zap,
@@ -86,6 +87,12 @@ import {
   loadWorkspaceSnapshot,
   saveWorkspaceSnapshot,
 } from "./lib/workspace";
+import {
+  loadAppPreferences,
+  nextThemeMode,
+  resolveTheme,
+  saveAppPreferences,
+} from "./lib/preferences";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -175,6 +182,10 @@ async function writeConfiguredBytes(
 
 export default function App() {
   const [initialWorkspace] = useState(loadWorkspaceSnapshot);
+  const [preferences, setPreferences] = useState(loadAppPreferences);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(
+    () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
+  );
   const [profiles, setProfiles] = useState<SessionProfile[]>(loadProfiles);
   const [ports, setPorts] = useState<SerialPortDescriptor[]>([]);
   const [adbDevices, setAdbDevices] = useState<AdbDeviceDescriptor[]>([]);
@@ -225,6 +236,7 @@ export default function App() {
   const activeProfile = profiles.find(
     (profile) => profile.id === activeSession?.profileId,
   );
+  const resolvedTheme = resolveTheme(preferences.theme, systemPrefersDark);
 
   const refreshPorts = useCallback(async (silent = false) => {
     if (refreshInFlightRef.current) return;
@@ -288,6 +300,19 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
   }, [profiles]);
+
+  useEffect(() => {
+    saveAppPreferences(preferences);
+  }, [preferences]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mediaQuery) return;
+    const handleChange = (event: MediaQueryListEvent) =>
+      setSystemPrefersDark(event.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
 
   useEffect(() => {
     if (ports.length === 0) return;
@@ -961,7 +986,10 @@ export default function App() {
   );
 
   return (
-    <div className={`app-shell ${focusMode ? "is-focus-mode" : ""}`}>
+    <div
+      className={`app-shell ${focusMode ? "is-focus-mode" : ""}`}
+      data-theme={resolvedTheme}
+    >
       <header className="app-menubar">
         <div className="menu-items">
           {["会话", "编辑", "搜索", "选择", "转到", "查看", "模式", "工具", "窗口", "帮助"].map(
@@ -995,6 +1023,28 @@ export default function App() {
           >
             <Zap size={16} />
             专注模式
+          </button>
+          <button
+            title={`主题：${
+              preferences.theme === "light"
+                ? "浅色"
+                : preferences.theme === "dark"
+                  ? "深色"
+                  : "跟随系统"
+            }（点击切换）`}
+            onClick={() =>
+              setPreferences((current) => ({
+                ...current,
+                theme: nextThemeMode(current.theme),
+              }))
+            }
+          >
+            <SunMoon size={16} />
+            {preferences.theme === "light"
+              ? "浅色"
+              : preferences.theme === "dark"
+                ? "深色"
+                : "系统"}
           </button>
           <button title="更多">
             <Menu size={18} />
@@ -1413,6 +1463,7 @@ export default function App() {
                   profile={profile}
                   active={session.id === activeSessionId}
                   receiveMode={session.receiveMode}
+                  theme={resolvedTheme}
                   onResize={(cols, rows) => {
                     setSessions((current) =>
                       current.map((item) =>

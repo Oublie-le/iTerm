@@ -68,6 +68,24 @@ textarea:disabled {
   background: var(--surface);
 }
 
+.app-shell[data-theme="light"] {
+  --terminal: #fbfcfb;
+}
+
+.app-shell[data-theme="dark"] {
+  color-scheme: dark;
+  --border: #4a5150;
+  --border-light: #3d4442;
+  --green-dark: #68d78d;
+  --green-soft: #204f32;
+  --surface: #252a28;
+  --surface-muted: #303634;
+  --text: #e3e8e4;
+  --muted: #9aa39f;
+  --terminal: #22231f;
+  color: var(--text);
+}
+
 .app-shell.is-focus-mode {
   grid-template-rows: minmax(0, 1fr);
 }
@@ -1498,6 +1516,174 @@ textarea:disabled {
   margin-right: auto;
   color: #a73535;
   font-size: 10px;
+}
+
+.app-shell[data-theme="light"] .welcome-panel {
+  color: #59625e;
+}
+
+.app-shell[data-theme="light"] .welcome-mark {
+  background: #e9f4ec;
+  border-color: #b7cfbe;
+  color: #168441;
+}
+
+.app-shell[data-theme="light"] .welcome-panel h1 {
+  color: #252a28;
+}
+
+.app-shell[data-theme="light"] .welcome-panel p,
+.app-shell[data-theme="light"] .available-port-summary {
+  color: #737c78;
+}
+
+.app-shell[data-theme="light"] .terminal-host .xterm-viewport {
+  background: #fbfcfb !important;
+  scrollbar-color: #b9bfbc #fbfcfb;
+}
+
+.app-shell[data-theme="light"] .terminal-hex-view {
+  color: #252a28;
+  scrollbar-color: #b9bfbc #fbfcfb;
+}
+
+.app-shell[data-theme="dark"] .app-menubar,
+.app-shell[data-theme="dark"] .session-toolbar,
+.app-shell[data-theme="dark"] .sender-pane,
+.app-shell[data-theme="dark"] .statusbar {
+  background: #2e3432;
+  border-color: #49504e;
+  color: #cbd2ce;
+}
+
+.app-shell[data-theme="dark"] .terminal-host .xterm-viewport {
+  background: #22231f !important;
+}
+
+.app-shell[data-theme="dark"] .menu-items > button:hover,
+.app-shell[data-theme="dark"] .menu-actions > button:hover,
+.app-shell[data-theme="dark"] .icon-button:hover:not(:disabled),
+.app-shell[data-theme="dark"] .tree-session:hover,
+.app-shell[data-theme="dark"] .tree-port:hover {
+  background: #414846;
+}
+
+.app-shell[data-theme="dark"] .session-sidebar,
+.app-shell[data-theme="dark"] .sender-body {
+  background: #292f2d;
+  border-color: #48504d;
+}
+
+.app-shell[data-theme="dark"] .dock-title,
+.app-shell[data-theme="dark"] .sender-toolbar,
+.app-shell[data-theme="dark"] .tab-strip,
+.app-shell[data-theme="dark"] .dialog-header,
+.app-shell[data-theme="dark"] .dialog-footer {
+  background: #353b39;
+  border-color: #4c5351;
+  color: #d5dbd7;
+}
+
+.app-shell[data-theme="dark"] .sidebar-search,
+.app-shell[data-theme="dark"] .sender-body > textarea,
+.app-shell[data-theme="dark"] .sender-options select,
+.app-shell[data-theme="dark"] .sender-options input,
+.app-shell[data-theme="dark"] .terminal-search input,
+.app-shell[data-theme="dark"]
+  .field-row
+  input:not([type="checkbox"]):not([type="color"]),
+.app-shell[data-theme="dark"] .field-row select,
+.app-shell[data-theme="dark"] .field-row textarea {
+  background: #202523;
+  border-color: #535b58;
+  color: #e3e8e4;
+}
+
+.app-shell[data-theme="dark"] .tree-group-label,
+.app-shell[data-theme="dark"] .tree-session,
+.app-shell[data-theme="dark"] .tree-port,
+.app-shell[data-theme="dark"] .sidebar-footer,
+.app-shell[data-theme="dark"] .sender-options,
+.app-shell[data-theme="dark"] .sender-stats,
+.app-shell[data-theme="dark"] .field-row,
+.app-shell[data-theme="dark"] .field-row > span:first-child,
+.app-shell[data-theme="dark"] .page-heading p,
+.app-shell[data-theme="dark"] .dialog-header p {
+  color: #aab3af;
+}
+
+.app-shell[data-theme="dark"] .tabs > button {
+  background: #343a38;
+  border-color: #4b5250;
+  color: #aeb7b3;
+}
+
+.app-shell[data-theme="dark"] .tabs > button:hover,
+.app-shell[data-theme="dark"] .sender-tabs button.is-active {
+  background: #414745;
+  color: #edf1ee;
+}
+
+.app-shell[data-theme="dark"] .tabs > button.is-active {
+  background: #272c2a;
+  color: #f1f4f2;
+}
+
+.app-shell[data-theme="dark"] .session-dialog {
+  background: #292e2c;
+  border-color: #626a67;
+  color: #dce2de;
+}
+
+.app-shell[data-theme="dark"] .dialog-nav {
+  background: #333936;
+  border-color: #4d5552;
+}
+
+.app-shell[data-theme="dark"] .dialog-nav > button {
+  color: #c0c8c4;
+}
+
+.app-shell[data-theme="dark"] .dialog-nav > button:hover {
+  background: #414845;
+}
+
+.app-shell[data-theme="dark"] .dialog-nav > button.is-active {
+  background: #26563a;
+  color: #9ae0b1;
+}
+
+.app-shell[data-theme="dark"] .page-heading,
+.app-shell[data-theme="dark"] .dialog-nav-summary {
+  border-color: #484f4c;
+}
+
+.app-shell[data-theme="dark"] .page-heading h3,
+.app-shell[data-theme="dark"] .dialog-header h2 {
+  color: #edf1ee;
+}
+
+.app-shell[data-theme="dark"] .secondary-button,
+.app-shell[data-theme="dark"] .toolbar-button,
+.app-shell[data-theme="dark"] .signal-button {
+  background: #363d3a;
+  border-color: #555d5a;
+  color: #d0d7d3;
+}
+
+.app-shell[data-theme="dark"] .settings-note,
+.app-shell[data-theme="dark"] .coming-soon-card,
+.app-shell[data-theme="dark"] .device-summary,
+.app-shell[data-theme="dark"] .protocol-field {
+  background: #303835;
+  border-color: #4e5c56;
+  color: #b8c3be;
+}
+
+.app-shell[data-theme="dark"] .settings-note strong,
+.app-shell[data-theme="dark"] .coming-soon-card strong,
+.app-shell[data-theme="dark"] .device-summary strong {
+  color: #e0e6e2;
 }
 
 @media (max-width: 930px) {
