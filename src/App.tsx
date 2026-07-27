@@ -152,6 +152,7 @@ import {
   type Translator,
 } from "./lib/i18n";
 import { localizedErrorMessage } from "./lib/errorMessages";
+import { requestTerminalSearch } from "./lib/uiCommands";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -1978,7 +1979,10 @@ export default function App() {
           ).map(([key, isHelp]) => (
               <button
                 key={key}
-                onClick={() => isHelp && setShortcutHelpOpen(true)}
+                onClick={() => {
+                  if (isHelp) setShortcutHelpOpen(true);
+                  if (key === "shell.menu.search") requestTerminalSearch();
+                }}
                 title={isHelp ? t("shell.shortcuts.openTitle") : t(key)}
               >
                 {t(key)}
@@ -1986,7 +1990,11 @@ export default function App() {
             ))}
         </div>
         <div className="menu-actions">
-          <button title={t("shell.search")}>
+          <button
+            title={t("shell.search")}
+            onClick={() => requestTerminalSearch()}
+            disabled={!activeSession}
+          >
             <Search size={17} />
           </button>
           <button

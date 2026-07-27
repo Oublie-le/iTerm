@@ -27,6 +27,7 @@ import type {
 } from "../lib/types";
 import { sessionTargetLabel } from "../lib/types";
 import { useI18n } from "../lib/i18n";
+import { TERMINAL_SEARCH_EVENT } from "../lib/uiCommands";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -277,6 +278,16 @@ export function TerminalPane({
     if (session.state !== "connected" || !terminalRef.current) return;
     resizeRef.current(terminalRef.current.cols, terminalRef.current.rows);
   }, [session.state]);
+
+  useEffect(() => {
+    if (!active || !visible) return;
+    const openSearch = () => {
+      setSearchOpen(true);
+      window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    };
+    window.addEventListener(TERMINAL_SEARCH_EVENT, openSearch);
+    return () => window.removeEventListener(TERMINAL_SEARCH_EVENT, openSearch);
+  }, [active, visible]);
 
   const find = (
     direction: "next" | "previous",
