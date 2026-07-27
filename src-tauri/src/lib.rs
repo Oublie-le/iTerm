@@ -17,6 +17,7 @@ pub fn run() {
             process::list_adb_devices,
             process::open_adb_session,
             process::close_process_session,
+            process::resize_process_session,
             process::write_process_bytes,
             process::start_process_log,
             process::set_process_log_paused,

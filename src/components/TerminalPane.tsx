@@ -223,6 +223,11 @@ export function TerminalPane({
     });
   }, [active]);
 
+  useEffect(() => {
+    if (session.state !== "connected" || !terminalRef.current) return;
+    resizeRef.current(terminalRef.current.cols, terminalRef.current.rows);
+  }, [session.state]);
+
   const find = (
     direction: "next" | "previous",
     query = searchTerm,

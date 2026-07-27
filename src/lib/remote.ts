@@ -159,6 +159,16 @@ export async function writeProcessBytes(
   return bytes.length;
 }
 
+export async function resizeProcessSession(
+  sessionId: string,
+  cols: number,
+  rows: number,
+): Promise<void> {
+  if (isTauriRuntime()) {
+    await invoke("resize_process_session", { sessionId, cols, rows });
+  }
+}
+
 export async function writeProcessText(
   sessionId: string,
   text: string,

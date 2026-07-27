@@ -93,7 +93,7 @@
 - [x] ADB 设备发现、状态解析和交互式 Shell；
 - [x] 三协议统一标签、会话树、发送和状态提示；
 - [ ] SSH 密码/键盘交互认证；
-- [ ] SSH/ADB PTY 尺寸同步；
+- [x] SSH/ADB PTY 尺寸同步；
 - [x] SSH/ADB 会话日志；
 - [ ] OpenSSH 与 Platform Tools 安装引导。
 

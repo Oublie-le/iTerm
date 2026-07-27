@@ -30,6 +30,7 @@ struct ProcessHandle {
 
 enum ProcessCommand {
     Write(Vec<u8>, Sender<Result<usize, String>>),
+    Resize(PtySize, Sender<Result<(), String>>),
     StartLog(LogStartSpec, Sender<Result<String, String>>),
     SetLogPaused(bool, Sender<Result<(), String>>),
     StopLog(Sender<Result<(), String>>),
@@ -204,6 +205,22 @@ pub fn write_process_bytes(
 }
 
 #[tauri::command]
+pub fn resize_process_session(
+    session_id: String,
+    cols: u16,
+    rows: u16,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = mpsc::channel();
+    send_process_command(
+        &registry,
+        &session_id,
+        ProcessCommand::Resize(terminal_size(cols, rows), reply_tx),
+    )?;
+    receive_process_reply(reply_rx, "调整 SSH/ADB 终端尺寸")
+}
+
+#[tauri::command]
 pub fn start_process_log(
     request: StartLogRequest,
     app: AppHandle,
@@ -337,6 +354,15 @@ fn adb_arguments(request: &OpenAdbRequest) -> Vec<String> {
     arguments
 }
 
+fn terminal_size(cols: u16, rows: u16) -> PtySize {
+    PtySize {
+        rows: rows.clamp(1, 1_000),
+        cols: cols.clamp(1, 1_000),
+        pixel_width: 0,
+        pixel_height: 0,
+    }
+}
+
 fn parse_adb_devices(output: &str) -> Vec<AdbDeviceDescriptor> {
     output
         .lines()
@@ -460,7 +486,7 @@ fn process_worker(
     mut child: Box<dyn Child + Send + Sync>,
     mut writer: Box<dyn Write + Send>,
     reader: Box<dyn Read + Send>,
-    _master: Box<dyn MasterPty + Send>,
+    master: Box<dyn MasterPty + Send>,
     commands: Receiver<ProcessCommand>,
     on_event: Channel<SerialEvent>,
     sessions: Arc<Mutex<HashMap<String, ProcessHandle>>>,
@@ -487,6 +513,12 @@ fn process_worker(
                         .and_then(|_| writer.flush())
                         .map(|_| bytes.len())
                         .map_err(|error| format!("写入 {label} 失败：{error}"));
+                    let _ = reply.send(result);
+                }
+                Ok(ProcessCommand::Resize(size, reply)) => {
+                    let result = master
+                        .resize(size)
+                        .map_err(|error| format!("调整 {label} 终端尺寸失败：{error}"));
                     let _ = reply.send(result);
                 }
                 Ok(ProcessCommand::StartLog(spec, reply)) => {
@@ -737,6 +769,15 @@ mod tests {
         let arguments = ssh_arguments(&value);
         assert!(arguments.contains(&"/tmp/test-key".to_string()));
         assert!(arguments.contains(&"StrictHostKeyChecking=no".to_string()));
+    }
+
+    #[test]
+    fn clamps_terminal_size_to_supported_range() {
+        let minimum = terminal_size(0, 0);
+        assert_eq!((minimum.cols, minimum.rows), (1, 1));
+
+        let maximum = terminal_size(u16::MAX, u16::MAX);
+        assert_eq!((maximum.cols, maximum.rows), (1_000, 1_000));
     }
 
     #[test]

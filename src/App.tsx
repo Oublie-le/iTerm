@@ -54,6 +54,7 @@ import {
   listAdbDevices,
   openAdbSession,
   openSshSession,
+  resizeProcessSession,
   setProcessLogPaused,
   startProcessLog,
   stopProcessLog,
@@ -1401,7 +1402,7 @@ export default function App() {
                   profile={profile}
                   active={session.id === activeSessionId}
                   receiveMode={session.receiveMode}
-                  onResize={(cols, rows) =>
+                  onResize={(cols, rows) => {
                     setSessions((current) =>
                       current.map((item) =>
                         item.id === session.id &&
@@ -1409,8 +1410,33 @@ export default function App() {
                           ? { ...item, terminalCols: cols, terminalRows: rows }
                           : item,
                       ),
-                    )
-                  }
+                    );
+                    if (
+                      profile.protocol !== "serial" &&
+                      session.state === "connected"
+                    ) {
+                      void resizeProcessSession(session.id, cols, rows).catch(
+                        (error) =>
+                          setSessions((current) =>
+                            current.map((item) =>
+                              item.id === session.id
+                                ? {
+                                    ...item,
+                                    notice: {
+                                      tone: "warning",
+                                      title: "远程终端尺寸同步失败",
+                                      detail:
+                                        error instanceof Error
+                                          ? error.message
+                                          : String(error),
+                                    },
+                                  }
+                                : item,
+                            ),
+                          ),
+                      );
+                    }
+                  }}
                   onClear={() =>
                     setSessions((current) =>
                       current.map((item) =>

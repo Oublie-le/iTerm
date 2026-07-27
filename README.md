@@ -188,7 +188,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 
 当前 MVP 尚未实现：
 
-- SSH 密码认证和远程 PTY 尺寸同步；
+- SSH 密码认证；
 - 横向/纵向分屏；
 - 会话触发器；
 - XModem、YModem、ZModem；

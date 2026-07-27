@@ -3,6 +3,7 @@ import {
   listAdbDevices,
   openAdbSession,
   openSshSession,
+  resizeProcessSession,
   setProcessLogPaused,
   startProcessLog,
   stopProcessLog,
@@ -62,6 +63,12 @@ describe("remote session browser mocks", () => {
     await expect(writeProcessText("session", "你好", "crlf")).resolves.toBe(
       new TextEncoder().encode("你好\r\n").length,
     );
+  });
+
+  it("accepts remote terminal resize events in browser mock mode", async () => {
+    await expect(
+      resizeProcessSession("ssh-1", 132, 43),
+    ).resolves.toBeUndefined();
   });
 
   it("supports the remote logging lifecycle", async () => {
