@@ -3,6 +3,7 @@ import {
   ChevronDown,
   CirclePlus,
   Copy,
+  Download,
   Folder,
   Network,
   Pencil,
@@ -10,6 +11,7 @@ import {
   Search,
   Smartphone,
   Trash2,
+  Upload,
   Usb,
 } from "lucide-react";
 import type {
@@ -33,6 +35,8 @@ interface SessionSidebarProps {
   onDuplicate: (profile: SessionProfile) => void;
   onDelete: (profile: SessionProfile) => void;
   onRefresh: () => void;
+  onExport: () => void;
+  onImport: () => void;
 }
 
 export function SessionSidebar({
@@ -48,6 +52,8 @@ export function SessionSidebar({
   onDuplicate,
   onDelete,
   onRefresh,
+  onExport,
+  onImport,
 }: SessionSidebarProps) {
   const visibleProfiles = profiles.filter((profile) =>
     `${profile.name} ${profile.group} ${profile.protocol} ${sessionTargetLabel(profile)}`
@@ -66,9 +72,28 @@ export function SessionSidebar({
       <header className="dock-title">
         <span className="dock-title-mark" />
         <span>会话管理器</span>
-        <button className="icon-button" title="新建会话" onClick={onNew}>
-          <CirclePlus size={17} />
-        </button>
+        <div className="dock-actions">
+          <button
+            className="icon-button"
+            title="导入会话配置"
+            aria-label="导入会话配置"
+            onClick={onImport}
+          >
+            <Upload size={15} />
+          </button>
+          <button
+            className="icon-button"
+            title="导出全部会话配置"
+            aria-label="导出全部会话配置"
+            onClick={onExport}
+            disabled={profiles.length === 0}
+          >
+            <Download size={15} />
+          </button>
+          <button className="icon-button" title="新建会话" onClick={onNew}>
+            <CirclePlus size={17} />
+          </button>
+        </div>
       </header>
 
       <div className="sidebar-search">

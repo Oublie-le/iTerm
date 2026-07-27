@@ -20,3 +20,5 @@ portable-pty = "0.9"
 serde = { version = "1", features = ["derive"] }
 serialport = "4.9"
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"

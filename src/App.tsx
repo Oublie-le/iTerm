@@ -112,6 +112,12 @@ import {
 } from "./lib/layout";
 import { AsyncByteQueue, sendXmodemCrc } from "./lib/xmodem";
 import { sendYmodemBatch } from "./lib/ymodem";
+import { openJsonDocument, saveJsonDocument } from "./lib/jsonFiles";
+import {
+  mergeImportedProfiles,
+  parseSessionProfiles,
+  serializeSessionProfiles,
+} from "./lib/profileTransfer";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -260,6 +266,11 @@ export default function App() {
   const [portError, setPortError] = useState("");
   const [adbError, setAdbError] = useState("");
   const [utilityError, setUtilityError] = useState("");
+  const [profileTransferNotice, setProfileTransferNotice] = useState<{
+    tone: "info" | "error";
+    title: string;
+    detail?: string;
+  } | null>(null);
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
@@ -942,6 +953,55 @@ export default function App() {
     setProfiles((current) => current.filter((item) => item.id !== profile.id));
   };
 
+  const exportProfiles = async () => {
+    setProfileTransferNotice(null);
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      const path = await saveJsonDocument(
+        `iTerm-sessions-${date}.json`,
+        serializeSessionProfiles(profiles),
+      );
+      if (path) {
+        setProfileTransferNotice({
+          tone: "info",
+          title: `已导出 ${profiles.length} 个会话配置`,
+          detail: path,
+        });
+      }
+    } catch (error) {
+      setProfileTransferNotice({
+        tone: "error",
+        title: "导出会话配置失败",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const importProfiles = async () => {
+    setProfileTransferNotice(null);
+    try {
+      const document = await openJsonDocument();
+      if (!document) return;
+      const imported = parseSessionProfiles(document.contents);
+      const merged = mergeImportedProfiles(profiles, imported);
+      setProfiles(merged.profiles);
+      setProfileTransferNotice({
+        tone: "info",
+        title: `已导入 ${merged.importedCount} 个会话配置`,
+        detail:
+          merged.remappedCount > 0
+            ? `${document.name}；${merged.remappedCount} 个重复 ID 已安全重建`
+            : document.name,
+      });
+    } catch (error) {
+      setProfileTransferNotice({
+        tone: "error",
+        title: "导入会话配置失败",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       const action = resolveShortcut(
@@ -1432,6 +1492,8 @@ export default function App() {
               void refreshPorts();
               void refreshAdbDevices();
             }}
+            onExport={() => void exportProfiles()}
+            onImport={() => void importProfiles()}
           />
         )}
 
@@ -1775,6 +1837,21 @@ export default function App() {
                 <span>{utilityError}</span>
               </div>
               <button onClick={() => setUtilityError("")}>
+                <X size={17} />
+              </button>
+            </div>
+          )}
+
+          {profileTransferNotice && (
+            <div className={`notice-bar ${profileTransferNotice.tone}`}>
+              <Info size={18} />
+              <div>
+                <strong>{profileTransferNotice.title}</strong>
+                {profileTransferNotice.detail && (
+                  <span>{profileTransferNotice.detail}</span>
+                )}
+              </div>
+              <button onClick={() => setProfileTransferNotice(null)}>
                 <X size={17} />
               </button>
             </div>

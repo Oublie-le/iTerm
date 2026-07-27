@@ -199,7 +199,14 @@ textarea:disabled {
   font-weight: 600;
 }
 
-.dock-title .icon-button {
+.dock-title > .icon-button {
+  margin-left: auto;
+}
+
+.dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   margin-left: auto;
 }
 
