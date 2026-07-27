@@ -21,6 +21,47 @@ export default defineConfig({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "terminal-core",
+              test: /node_modules[\\/]@xterm[\\/]xterm[\\/]/,
+              priority: 30,
+            },
+            {
+              name: "terminal-addons",
+              test: /node_modules[\\/]@xterm[\\/]addon-[^\\/]+[\\/]/,
+              priority: 25,
+            },
+            {
+              name: "react",
+              test: /node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+              priority: 20,
+            },
+            {
+              name: "tauri",
+              test: /node_modules[\\/]@tauri-apps[\\/]/,
+              priority: 20,
+            },
+            {
+              name: "file-protocols",
+              test: /node_modules[\\/](?:zmodem\.js|crc-32)[\\/]/,
+              priority: 20,
+            },
+            {
+              name: "vendor",
+              test: /node_modules[\\/]/,
+              maxSize: 350 * 1024,
+              priority: 10,
+            },
+          ],
+        },
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
