@@ -80,7 +80,7 @@
 - [ ] xterm.js adapter、Fit/Search/Unicode/WebGL addon；
 - [x] 键盘、IME、复制、粘贴、清屏；
 - [x] 文本/Hex 单次发送；
-- [ ] SQLite schema、迁移和会话持久化；
+- [x] SQLite schema、事务迁移、会话/偏好/工作区/发送器持久化和浏览器回退；
 - [ ] 中英文框架；
 - [ ] 首轮截图 Golden。
 

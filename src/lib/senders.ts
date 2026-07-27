@@ -1,4 +1,5 @@
 import { createSenderPreset, type SenderPreset } from "./types";
+import { setPersistentItem } from "./persistence";
 
 const SENDERS_STORAGE_KEY = "iterm.senders.v1";
 
@@ -37,5 +38,5 @@ export function saveSenderPresets(
 ): void {
   const store = readStore(storage);
   store[profileId] = presets;
-  storage.setItem(SENDERS_STORAGE_KEY, JSON.stringify(store));
+  setPersistentItem(SENDERS_STORAGE_KEY, JSON.stringify(store), storage);
 }

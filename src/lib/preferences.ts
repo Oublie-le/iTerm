@@ -8,6 +8,7 @@ import {
   type SessionProtocol,
   type TerminalConfig,
 } from "./types";
+import { setPersistentItem } from "./persistence";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
@@ -88,7 +89,11 @@ export function saveAppPreferences(
   preferences: AppPreferences,
   storage: Pick<Storage, "setItem"> = localStorage,
 ): void {
-  storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+  setPersistentItem(
+    PREFERENCES_STORAGE_KEY,
+    JSON.stringify(preferences),
+    storage,
+  );
 }
 
 export function resolveTheme(

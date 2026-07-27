@@ -139,6 +139,11 @@ import {
   serializeDiagnosticEvents,
   type DiagnosticLevel,
 } from "./lib/diagnostics";
+import {
+  getLatestPersistenceError,
+  PERSISTENCE_ERROR_EVENT,
+  setPersistentItem,
+} from "./lib/persistence";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -287,6 +292,9 @@ export default function App() {
   const [portError, setPortError] = useState("");
   const [adbError, setAdbError] = useState("");
   const [utilityError, setUtilityError] = useState("");
+  const [persistenceError, setPersistenceError] = useState(
+    getLatestPersistenceError,
+  );
   const [profileTransferNotice, setProfileTransferNotice] = useState<{
     tone: "info" | "error";
     title: string;
@@ -333,6 +341,9 @@ export default function App() {
     (profile) => profile.id === activeSession?.profileId,
   );
   const resolvedTheme = resolveTheme(preferences.theme, systemPrefersDark);
+  const workspaceSessionIdentity = sessions
+    .map((session) => `${session.id}:${session.profileId}`)
+    .join("|");
 
   useEffect(() => {
     captureDiagnostic("app", "started", {
@@ -342,6 +353,26 @@ export default function App() {
       },
     });
     // Startup is recorded once; later profile/session changes are separate events.
+  }, [captureDiagnostic]);
+
+  useEffect(() => {
+    const handlePersistenceError = (event: Event) => {
+      const message = (event as CustomEvent<string>).detail;
+      setPersistenceError(message);
+      captureDiagnostic("persistence", "sync_failed", {
+        level: "error",
+        message,
+      });
+    };
+    window.addEventListener(
+      PERSISTENCE_ERROR_EVENT,
+      handlePersistenceError,
+    );
+    return () =>
+      window.removeEventListener(
+        PERSISTENCE_ERROR_EVENT,
+        handlePersistenceError,
+      );
   }, [captureDiagnostic]);
 
   const activateSession = useCallback(
@@ -416,7 +447,7 @@ export default function App() {
   }, [refreshExternalTools]);
 
   useEffect(() => {
-    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
+    setPersistentItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
   }, [profiles]);
 
   useEffect(() => {
@@ -469,10 +500,10 @@ export default function App() {
   }, [
     activeSessionId,
     senderOpen,
-    sessions,
     sidebarOpen,
     splitMode,
     splitSessionIds,
+    workspaceSessionIdentity,
   ]);
 
   useEffect(() => {
@@ -2275,6 +2306,19 @@ export default function App() {
                 <span>{utilityError}</span>
               </div>
               <button onClick={() => setUtilityError("")}>
+                <X size={17} />
+              </button>
+            </div>
+          )}
+
+          {persistenceError && (
+            <div className="notice-bar error">
+              <Info size={18} />
+              <div>
+                <strong>配置数据库不可用</strong>
+                <span>{persistenceError} 当前继续使用浏览器存储。</span>
+              </div>
+              <button onClick={() => setPersistenceError("")}>
                 <X size={17} />
               </button>
             </div>
