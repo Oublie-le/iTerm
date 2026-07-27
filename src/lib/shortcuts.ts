@@ -9,6 +9,9 @@ export type ShortcutAction =
   | "toggleConnection"
   | "sessionSettings"
   | "showHelp"
+  | "zoomIn"
+  | "zoomOut"
+  | "zoomReset"
   | "escape";
 
 export interface ShortcutInput {
@@ -24,7 +27,7 @@ export function resolveShortcut(
   input: ShortcutInput,
   editableTarget: boolean,
 ): ShortcutAction | undefined {
-  if (input.repeat || input.altKey) return undefined;
+  if (input.altKey) return undefined;
   if (
     input.key === "Escape" &&
     !input.ctrlKey &&
@@ -37,6 +40,10 @@ export function resolveShortcut(
   const primary = input.ctrlKey || input.metaKey;
   if (!primary || editableTarget) return undefined;
   const key = input.key.toLocaleLowerCase();
+  if (key === "+" || key === "=") return "zoomIn";
+  if (key === "-" || key === "_") return "zoomOut";
+  if (key === "0") return "zoomReset";
+  if (input.repeat) return undefined;
 
   if (input.shiftKey) {
     if (key === "f") return "toggleFocus";

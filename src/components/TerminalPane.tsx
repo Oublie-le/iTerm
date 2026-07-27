@@ -3,6 +3,8 @@ import {
   ChevronUp,
   Clock3,
   Command as CommandIcon,
+  Minus,
+  Plus,
   Power,
   RotateCcw,
   Search,
@@ -21,7 +23,11 @@ import { formatHexDump, timestampReceivedText } from "../lib/receive";
 import type { ResolvedTheme } from "../lib/preferences";
 import {
   installUnicode11,
+  clampTerminalFontSize,
+  DEFAULT_TERMINAL_FONT_SIZE,
+  MAX_TERMINAL_FONT_SIZE,
   mapTerminalSpecialKey,
+  MIN_TERMINAL_FONT_SIZE,
   resetTerminal,
 } from "../lib/terminal";
 import type {
@@ -60,6 +66,7 @@ interface TerminalPaneProps {
   onResize: (cols: number, rows: number) => void;
   onClear: () => void;
   onInput: (value: string) => void;
+  onFontSizeChange: (fontSize: number) => void;
 }
 
 export function TerminalPane({
@@ -73,6 +80,7 @@ export function TerminalPane({
   onResize,
   onClear,
   onInput,
+  onFontSizeChange,
 }: TerminalPaneProps) {
   const { locale, t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -84,6 +92,8 @@ export function TerminalPane({
   const inputRef = useRef(onInput);
   const trackedInputRef = useRef(onInput);
   const resizeRef = useRef(onResize);
+  const fontSizeRef = useRef(profile.terminal.fontSize);
+  const fontSizeChangeRef = useRef(onFontSizeChange);
   const decoderRef = useRef<TextDecoder | null>(null);
   const lastWrittenNonceRef = useRef<number | null>(null);
   const startsNewLineRef = useRef(true);
@@ -143,6 +153,16 @@ export function TerminalPane({
     inputRef.current(value);
   };
   resizeRef.current = onResize;
+  fontSizeRef.current = profile.terminal.fontSize;
+  fontSizeChangeRef.current = onFontSizeChange;
+
+  const changeTerminalFontSize = (requestedSize: number) => {
+    const fontSize = clampTerminalFontSize(requestedSize);
+    if (fontSize === fontSizeRef.current) return;
+    fontSizeRef.current = fontSize;
+    fontSizeChangeRef.current(fontSize);
+    window.setTimeout(() => terminalRef.current?.focus(), 0);
+  };
 
   const refreshCommandSources = () => {
     setCommandHistory(loadCommandHistory(profile.id));
@@ -256,6 +276,21 @@ export function TerminalPane({
 
     terminal.attachCustomKeyEventHandler((event) => {
       const shortcutKey = event.key.toLocaleLowerCase();
+      const zoomShortcut =
+        event.type === "keydown" &&
+        (event.metaKey || event.ctrlKey) &&
+        ["+", "=", "-", "_", "0"].includes(shortcutKey);
+      if (zoomShortcut) {
+        event.preventDefault();
+        event.stopPropagation();
+        changeTerminalFontSize(
+          shortcutKey === "0"
+            ? DEFAULT_TERMINAL_FONT_SIZE
+            : fontSizeRef.current +
+                (shortcutKey === "+" || shortcutKey === "=" ? 1 : -1),
+        );
+        return false;
+      }
       const copyShortcut =
         (event.metaKey && shortcutKey === "c" && terminal.hasSelection()) ||
         (event.ctrlKey && event.shiftKey && shortcutKey === "c");
@@ -481,6 +516,13 @@ export function TerminalPane({
       }`}
       aria-label={t("terminal.label", { name: profile.name })}
       onMouseDown={onActivate}
+      onWheel={(event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        changeTerminalFontSize(
+          fontSizeRef.current + (event.deltaY < 0 ? 1 : -1),
+        );
+      }}
     >
       <div
         ref={hostRef}
@@ -554,6 +596,43 @@ export function TerminalPane({
             </button>
           </div>
         )}
+        <div
+          className="terminal-zoom-controls"
+          aria-label={t("terminal.zoom.controls")}
+        >
+          <button
+            className="terminal-tool-button"
+            disabled={profile.terminal.fontSize <= MIN_TERMINAL_FONT_SIZE}
+            onClick={() =>
+              changeTerminalFontSize(profile.terminal.fontSize - 1)
+            }
+            title={t("terminal.zoom.out")}
+            aria-label={t("terminal.zoom.out")}
+          >
+            <Minus size={13} />
+          </button>
+          <button
+            className="terminal-font-size"
+            onClick={() =>
+              changeTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE)
+            }
+            title={t("terminal.zoom.reset")}
+            aria-label={t("terminal.zoom.reset")}
+          >
+            {profile.terminal.fontSize}
+          </button>
+          <button
+            className="terminal-tool-button"
+            disabled={profile.terminal.fontSize >= MAX_TERMINAL_FONT_SIZE}
+            onClick={() =>
+              changeTerminalFontSize(profile.terminal.fontSize + 1)
+            }
+            title={t("terminal.zoom.in")}
+            aria-label={t("terminal.zoom.in")}
+          >
+            <Plus size={13} />
+          </button>
+        </div>
         <button
           className={`terminal-tool-button ${
             commandOpen ? "is-active" : ""

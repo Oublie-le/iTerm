@@ -25,6 +25,11 @@ describe("keyboard shortcuts", () => {
       "previousSession",
     );
     expect(resolveShortcut(shortcut("Enter"), false)).toBe("toggleConnection");
+    expect(resolveShortcut(shortcut("+", { shiftKey: true }), false)).toBe(
+      "zoomIn",
+    );
+    expect(resolveShortcut(shortcut("-"), false)).toBe("zoomOut");
+    expect(resolveShortcut(shortcut("0"), false)).toBe("zoomReset");
   });
 
   it("does not intercept shortcuts while editing form fields", () => {
@@ -36,6 +41,9 @@ describe("keyboard shortcuts", () => {
 
   it("ignores repeats, Alt combinations and unknown shortcuts", () => {
     expect(resolveShortcut(shortcut("n", { repeat: true }), false)).toBeUndefined();
+    expect(resolveShortcut(shortcut("+", { repeat: true }), false)).toBe(
+      "zoomIn",
+    );
     expect(resolveShortcut(shortcut("n", { altKey: true }), false)).toBeUndefined();
     expect(resolveShortcut(shortcut("q"), false)).toBeUndefined();
   });

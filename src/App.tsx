@@ -159,6 +159,10 @@ import {
   requestTerminalCommand,
   requestTerminalSearch,
 } from "./lib/uiCommands";
+import {
+  clampTerminalFontSize,
+  DEFAULT_TERMINAL_FONT_SIZE,
+} from "./lib/terminal";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -391,6 +395,24 @@ export default function App() {
   );
   const activeProfile = profiles.find(
     (profile) => profile.id === activeSession?.profileId,
+  );
+  const changeProfileFontSize = useCallback(
+    (profileId: string, requestedSize: number) => {
+      const fontSize = clampTerminalFontSize(requestedSize);
+      setProfiles((current) =>
+        current.map((profile) =>
+          profile.id === profileId &&
+          profile.terminal.fontSize !== fontSize
+            ? {
+                ...profile,
+                terminal: { ...profile.terminal, fontSize },
+                updatedAt: new Date().toISOString(),
+              }
+            : profile,
+        ),
+      );
+    },
+    [],
   );
   const resolvedTheme = resolveTheme(preferences.theme, systemPrefersDark);
   const resolvedLocale = resolveLocale(
@@ -1389,6 +1411,21 @@ export default function App() {
         setFocusMode((current) => !current);
         return;
       }
+      if (
+        action === "zoomIn" ||
+        action === "zoomOut" ||
+        action === "zoomReset"
+      ) {
+        if (!activeProfile) return;
+        changeProfileFontSize(
+          activeProfile.id,
+          action === "zoomReset"
+            ? DEFAULT_TERMINAL_FONT_SIZE
+            : activeProfile.terminal.fontSize +
+                (action === "zoomIn" ? 1 : -1),
+        );
+        return;
+      }
       if (action === "sessionSettings" && activeProfile) {
         setEditingProfile(activeProfile);
         setSessionDialogOpen(true);
@@ -1419,6 +1456,7 @@ export default function App() {
     activeSessionId,
     activateSession,
     appSettingsOpen,
+    changeProfileFontSize,
     focusMode,
     ports,
     preferences,
@@ -2221,6 +2259,46 @@ export default function App() {
           shortcut: "Ctrl/⌘+Shift+F",
           checked: focusMode,
           onSelect: () => setFocusMode((current) => !current),
+        },
+        {
+          label: t("menu.view.zoomIn"),
+          shortcut: "Ctrl/⌘++",
+          disabled: !activeProfile,
+          separatorBefore: true,
+          onSelect: () => {
+            if (activeProfile) {
+              changeProfileFontSize(
+                activeProfile.id,
+                activeProfile.terminal.fontSize + 1,
+              );
+            }
+          },
+        },
+        {
+          label: t("menu.view.zoomOut"),
+          shortcut: "Ctrl/⌘+-",
+          disabled: !activeProfile,
+          onSelect: () => {
+            if (activeProfile) {
+              changeProfileFontSize(
+                activeProfile.id,
+                activeProfile.terminal.fontSize - 1,
+              );
+            }
+          },
+        },
+        {
+          label: t("menu.view.zoomReset"),
+          shortcut: "Ctrl/⌘+0",
+          disabled: !activeProfile,
+          onSelect: () => {
+            if (activeProfile) {
+              changeProfileFontSize(
+                activeProfile.id,
+                DEFAULT_TERMINAL_FONT_SIZE,
+              );
+            }
+          },
         },
         {
           label: t("menu.view.splitHorizontal"),
@@ -3115,6 +3193,9 @@ export default function App() {
                   onInput={(value) =>
                     void writeTerminalInput(session, profile, value)
                   }
+                  onFontSizeChange={(fontSize) =>
+                    changeProfileFontSize(profile.id, fontSize)
+                  }
                 />
               );
             })}
@@ -3261,6 +3342,7 @@ export default function App() {
                 [t("shell.shortcuts.dismiss"), "Esc"],
                 [t("shell.shortcuts.copy"), "⌘C / Ctrl+Shift+C"],
                 [t("shell.shortcuts.paste"), "⌘V / Ctrl+Shift+V"],
+                [t("shell.shortcuts.zoom"), "Ctrl/⌘ + / - / 0"],
               ].map(([label, keys]) => (
                 <div key={label}>
                   <span>{label}</span>

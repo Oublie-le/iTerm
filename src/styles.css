@@ -2804,6 +2804,42 @@ textarea:disabled {
   background: rgba(72, 72, 74, 0.9);
 }
 
+.terminal-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  background: rgba(28, 28, 30, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.terminal-zoom-controls .terminal-tool-button {
+  width: 21px;
+  height: 21px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.terminal-font-size {
+  min-width: 25px;
+  height: 21px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.7);
+  font: 10px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
+.terminal-font-size:hover {
+  background: rgba(72, 72, 74, 0.9);
+  color: #fff;
+}
+
 .terminal-search {
   height: 34px;
   border: 1px solid rgba(255, 255, 255, 0.18);

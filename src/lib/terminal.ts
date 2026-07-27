@@ -1,6 +1,16 @@
 export type TerminalResetMode = "soft" | "hard";
 
 export const DEC_SOFT_RESET_SEQUENCE = "\u001b[!p";
+export const DEFAULT_TERMINAL_FONT_SIZE = 14;
+export const MIN_TERMINAL_FONT_SIZE = 8;
+export const MAX_TERMINAL_FONT_SIZE = 40;
+
+export function clampTerminalFontSize(fontSize: number): number {
+  return Math.min(
+    MAX_TERMINAL_FONT_SIZE,
+    Math.max(MIN_TERMINAL_FONT_SIZE, Math.round(fontSize)),
+  );
+}
 
 export interface TerminalKeyMapping {
   enterKey: "cr" | "lf" | "crlf";

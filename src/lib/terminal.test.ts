@@ -2,10 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import {
   DEC_SOFT_RESET_SEQUENCE,
+  clampTerminalFontSize,
   installUnicode11,
   mapTerminalSpecialKey,
   resetTerminal,
 } from "./terminal";
+
+describe("terminal font size", () => {
+  it("rounds and clamps interactive zoom values", () => {
+    expect(clampTerminalFontSize(7)).toBe(8);
+    expect(clampTerminalFontSize(14.4)).toBe(14);
+    expect(clampTerminalFontSize(99)).toBe(40);
+  });
+});
 
 function createTerminalDouble() {
   return {
