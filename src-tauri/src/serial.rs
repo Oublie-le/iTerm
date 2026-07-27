@@ -1,14 +1,12 @@
-use chrono::{DateTime, Local};
-use encoding_rs::{Decoder, Encoding};
+use crate::logging::{build_log_spec, LogStartSpec, SessionLogger, StartLogRequest};
+use encoding_rs::Encoding;
 use serde::{Deserialize, Serialize};
 use serialport::{
     ClearBuffer, DataBits, FlowControl, Parity, SerialPort, SerialPortType, StopBits,
 };
 use std::{
     collections::HashMap,
-    fs::{self, File, OpenOptions},
-    io::{self, BufWriter, Read, Write},
-    path::PathBuf,
+    io::{self, Read},
     sync::{
         mpsc::{self, Receiver, Sender, TryRecvError},
         Mutex,
@@ -16,7 +14,7 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{ipc::Channel, AppHandle, Manager, State};
+use tauri::{ipc::Channel, AppHandle, State};
 
 const WRITE_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -40,28 +38,6 @@ enum SessionCommand {
     SetLogPaused(bool, Sender<Result<(), String>>),
     StopLog(Sender<Result<(), String>>),
     Close,
-}
-
-struct LogStartSpec {
-    path: PathBuf,
-    mode: LogMode,
-    encoding: &'static Encoding,
-    append: bool,
-}
-
-#[derive(Clone, Copy)]
-enum LogMode {
-    Raw,
-    Text,
-}
-
-struct SessionLogger {
-    writer: BufWriter<File>,
-    mode: LogMode,
-    decoder: Decoder,
-    paused: bool,
-    starts_new_line: bool,
-    path: PathBuf,
 }
 
 #[derive(Debug, Serialize)]
@@ -127,16 +103,6 @@ pub struct WriteResult {
 pub struct WriteBytesRequest {
     session_id: String,
     bytes: Vec<u8>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StartLogRequest {
-    session_id: String,
-    session_name: String,
-    mode: String,
-    encoding: String,
-    append: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -442,34 +408,13 @@ pub fn start_serial_log(
     app: AppHandle,
     registry: State<'_, SerialRegistry>,
 ) -> Result<String, String> {
-    let mode = match request.mode.as_str() {
-        "raw" => LogMode::Raw,
-        "text" => LogMode::Text,
-        _ => return Err(format!("未知的日志模式：{}", request.mode)),
-    };
-    let label = request.encoding.trim().to_ascii_lowercase();
-    let encoding = Encoding::for_label(label.as_bytes())
-        .ok_or_else(|| format!("不支持字符编码：{}", request.encoding))?;
-    let directory = app
-        .path()
-        .app_log_dir()
-        .map_err(|error| format!("无法确定日志目录：{error}"))?;
-    fs::create_dir_all(&directory).map_err(|error| format!("无法创建日志目录：{error}"))?;
-    let path = directory.join(default_log_file_name(&request.session_name));
+    let spec = build_log_spec(&app, &request)?;
 
     let (reply_tx, reply_rx) = mpsc::channel();
     send_command(
         &registry,
         &request.session_id,
-        SessionCommand::StartLog(
-            LogStartSpec {
-                path,
-                mode,
-                encoding,
-                append: request.append,
-            },
-            reply_tx,
-        ),
+        SessionCommand::StartLog(spec, reply_tx),
     )?;
     receive_reply(reply_rx, "开始日志")
 }
@@ -539,8 +484,8 @@ fn serial_worker(
                                 message: Some("串口会话已关闭。".into()),
                             },
                         );
-                        if let Some(mut active_logger) = logger.take() {
-                            let _ = active_logger.writer.flush();
+                        if let Some(active_logger) = logger.take() {
+                            let _ = active_logger.finish();
                         }
                         let _ = port.clear(ClearBuffer::All);
                         return;
@@ -557,7 +502,7 @@ fn serial_worker(
                 sequence += 1;
                 if let Some(active_logger) = logger.as_mut() {
                     if let Err(error) = active_logger.write(&buffer[..count]) {
-                        let path = active_logger.path.display().to_string();
+                        let path = active_logger.path_string();
                         logger = None;
                         send_event(
                             &on_event,
@@ -675,7 +620,7 @@ fn handle_command(
         }
         SessionCommand::StartLog(spec, reply) => {
             let result = SessionLogger::open(spec).map(|new_logger| {
-                let path = new_logger.path.display().to_string();
+                let path = new_logger.path_string();
                 *logger = Some(new_logger);
                 send_event(
                     on_event,
@@ -696,7 +641,7 @@ fn handle_command(
                 .as_mut()
                 .ok_or_else(|| "当前会话没有活动日志。".to_string())
                 .map(|active_logger| {
-                    active_logger.paused = paused;
+                    active_logger.set_paused(paused);
                     send_event(
                         on_event,
                         SerialEvent::Log {
@@ -706,7 +651,7 @@ fn handle_command(
                             } else {
                                 LogState::Recording
                             },
-                            path: Some(active_logger.path.display().to_string()),
+                            path: Some(active_logger.path_string()),
                             message: None,
                         },
                     );
@@ -715,11 +660,8 @@ fn handle_command(
             false
         }
         SessionCommand::StopLog(reply) => {
-            let result = if let Some(mut active_logger) = logger.take() {
-                active_logger
-                    .writer
-                    .flush()
-                    .map_err(|error| format!("刷新日志文件失败：{error}"))
+            let result = if let Some(active_logger) = logger.take() {
+                active_logger.finish()
             } else {
                 Ok(())
             };
@@ -738,105 +680,6 @@ fn handle_command(
             false
         }
         SessionCommand::Close => true,
-    }
-}
-
-impl SessionLogger {
-    fn open(spec: LogStartSpec) -> Result<Self, String> {
-        let mut options = OpenOptions::new();
-        options.create(true).write(true);
-        if spec.append {
-            options.append(true);
-        } else {
-            options.truncate(true);
-        }
-        let file = options
-            .open(&spec.path)
-            .map_err(|error| format!("无法打开日志文件 {}：{error}", spec.path.display()))?;
-        Ok(Self {
-            writer: BufWriter::new(file),
-            mode: spec.mode,
-            decoder: spec.encoding.new_decoder_without_bom_handling(),
-            paused: false,
-            starts_new_line: true,
-            path: spec.path,
-        })
-    }
-
-    fn write(&mut self, bytes: &[u8]) -> Result<(), String> {
-        if self.paused || bytes.is_empty() {
-            return Ok(());
-        }
-
-        match self.mode {
-            LogMode::Raw => self
-                .writer
-                .write_all(bytes)
-                .map_err(|error| format!("写入原始日志失败：{error}"))?,
-            LogMode::Text => {
-                let capacity = self
-                    .decoder
-                    .max_utf8_buffer_length(bytes.len())
-                    .ok_or_else(|| "接收数据过大，无法写入文本日志。".to_string())?;
-                let mut decoded = String::with_capacity(capacity);
-                let (_, read, _) = self.decoder.decode_to_string(bytes, &mut decoded, false);
-                if read != bytes.len() {
-                    return Err("文本日志解码缓冲区不足。".into());
-                }
-                let timestamp: DateTime<Local> = Local::now();
-                let prefix = format!("[{}] ", timestamp.format("%Y-%m-%d %H:%M:%S%.3f"));
-                let mut rendered = String::with_capacity(decoded.len() + prefix.len());
-                for character in decoded.chars() {
-                    if self.starts_new_line {
-                        rendered.push_str(&prefix);
-                        self.starts_new_line = false;
-                    }
-                    rendered.push(character);
-                    if character == '\n' {
-                        self.starts_new_line = true;
-                    }
-                }
-                self.writer
-                    .write_all(rendered.as_bytes())
-                    .map_err(|error| format!("写入文本日志失败：{error}"))?;
-            }
-        }
-        self.writer
-            .flush()
-            .map_err(|error| format!("刷新日志文件失败：{error}"))
-    }
-}
-
-fn default_log_file_name(session_name: &str) -> String {
-    let safe_name = sanitize_file_stem(session_name);
-    format!(
-        "{}_{}.log",
-        safe_name,
-        Local::now().format("%Y-%m-%d_%H-%M-%S")
-    )
-}
-
-fn sanitize_file_stem(value: &str) -> String {
-    let sanitized: String = value
-        .chars()
-        .map(|character| {
-            if character.is_control()
-                || matches!(
-                    character,
-                    '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-                )
-            {
-                '_'
-            } else {
-                character
-            }
-        })
-        .collect();
-    let trimmed = sanitized.trim().trim_matches('.').trim();
-    if trimmed.is_empty() {
-        "serial".into()
-    } else {
-        trimmed.chars().take(80).collect()
     }
 }
 
@@ -985,61 +828,8 @@ mod tests {
     }
 
     #[test]
-    fn sanitizes_default_log_file_names() {
-        let name = default_log_file_name("Board/COM:1?");
-        assert!(name.starts_with("Board_COM_1_"));
-        assert!(name.ends_with(".log"));
-        assert_eq!(sanitize_file_stem(" ... "), "serial");
-    }
-
-    #[test]
-    fn raw_logger_preserves_every_byte() {
-        let path = temporary_log_path("raw");
-        let mut logger = SessionLogger::open(LogStartSpec {
-            path: path.clone(),
-            mode: LogMode::Raw,
-            encoding: encoding_rs::UTF_8,
-            append: false,
-        })
-        .unwrap();
-        logger.write(&[0x00, 0xff, 0x0d, 0x0a]).unwrap();
-        drop(logger);
-
-        assert_eq!(fs::read(&path).unwrap(), [0x00, 0xff, 0x0d, 0x0a]);
-        fs::remove_file(path).unwrap();
-    }
-
-    #[test]
-    fn text_logger_decodes_multibyte_characters_across_chunks() {
-        let path = temporary_log_path("text");
-        let mut logger = SessionLogger::open(LogStartSpec {
-            path: path.clone(),
-            mode: LogMode::Text,
-            encoding: Encoding::for_label(b"gbk").unwrap(),
-            append: false,
-        })
-        .unwrap();
-        logger.write(&[0xc4]).unwrap();
-        logger.write(&[0xe3, b'\n']).unwrap();
-        drop(logger);
-
-        let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("你\n"));
-        assert_eq!(content.matches('[').count(), 1);
-        fs::remove_file(path).unwrap();
-    }
-
-    #[test]
     fn enumerates_local_ports_without_error() {
         let ports = list_serial_ports().expect("serial port enumeration should succeed");
         println!("enumerated {} local serial ports", ports.len());
-    }
-
-    fn temporary_log_path(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "iterm-{label}-{}-{}.log",
-            std::process::id(),
-            unix_time_ms()
-        ))
     }
 }

@@ -1,3 +1,4 @@
+mod logging;
 mod process;
 mod serial;
 
