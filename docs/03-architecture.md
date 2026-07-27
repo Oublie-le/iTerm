@@ -13,8 +13,8 @@
 - **前端**：React + TypeScript + Vite；
 - **终端渲染**：xterm.js；
 - **串口抽象**：`serialport-rs`，外包一层自有 `SerialDriver` trait；
-- **SSH**：系统 OpenSSH 客户端，参数化启动，不经过本地 shell；
-- **ADB**：Android Platform Tools `adb` 客户端和长生命周期 Shell 子进程；
+- **SSH**：系统 OpenSSH 客户端，参数化启动并接入本地 PTY，不经过本地 shell；
+- **ADB**：Android Platform Tools `adb` 客户端、本地 PTY 和长生命周期 Shell 子进程；
 - **持久化**：SQLite + 版本化迁移；
 - **样式**：CSS Variables/Design Tokens + 独立组件库；
 - **测试**：Rust 单测/集成测试、Vitest、Playwright 截图测试、硬件矩阵。

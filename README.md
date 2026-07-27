@@ -16,6 +16,7 @@ SSH 和 ADB Shell。它采用本地优先的数据策略，并以 clean-room 方
 - Windows、macOS 和 Linux 串口枚举；
 - OpenSSH Agent/默认密钥和指定私钥连接；
 - ADB 设备发现、授权状态识别和交互式 Shell；
+- SSH/ADB 使用跨平台本地伪终端保持完整交互行为；
 - Serial、SSH、ADB 三类会话统一保存、切换和恢复；
 - 多会话配置、会话树和多标签终端；
 - 波特率、数据位、校验位、停止位和流控；

@@ -2,11 +2,12 @@ use crate::{
     logging::{build_log_spec, LogStartSpec, SessionLogger, StartLogRequest},
     serial::{ConnectionState, LogState, SerialEvent},
 };
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     io::{Read, Write},
-    process::{Child, ChildStdin, Command, Stdio},
+    process::Command,
     sync::{
         mpsc::{self, Receiver, Sender, TryRecvError},
         Arc, Mutex,
@@ -95,15 +96,10 @@ pub fn open_ssh_session(
     ensure_session_available(&registry, &request.session_id)?;
 
     let target = ssh_target(&request.username, &request.host);
-    let mut command = Command::new("ssh");
-    command
-        .args(ssh_arguments(&request))
-        .arg(&target)
-        .env("TERM", &request.term_type)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    hide_console_window(&mut command);
+    let mut command = CommandBuilder::new("ssh");
+    command.args(ssh_arguments(&request));
+    command.arg(&target);
+    command.env("TERM", &request.term_type);
 
     let message = format!("正在连接 SSH {target}:{}…", request.port);
     let _ = on_event.send(SerialEvent::State {
@@ -112,19 +108,12 @@ pub fn open_ssh_session(
         message: Some(message),
     });
 
-    let child = command.spawn().map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound {
-            "找不到 ssh 命令，请安装或启用系统 OpenSSH 客户端。".to_string()
-        } else {
-            format!("无法启动 ssh：{error}")
-        }
-    })?;
-
     start_process_session(
         &registry,
         request.session_id,
         format!("SSH {target}:{}", request.port),
-        child,
+        command,
+        "ssh",
         on_event,
     )
 }
@@ -162,13 +151,8 @@ pub fn open_adb_session(
     }
     ensure_session_available(&registry, &request.session_id)?;
 
-    let mut command = Command::new("adb");
+    let mut command = CommandBuilder::new("adb");
     command.args(adb_arguments(&request));
-    command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    hide_console_window(&mut command);
 
     let label = format!("ADB {}", request.device_id);
     let _ = on_event.send(SerialEvent::State {
@@ -176,14 +160,14 @@ pub fn open_adb_session(
         state: ConnectionState::Opening,
         message: Some(format!("正在打开 {label} Shell…")),
     });
-    let child = command.spawn().map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound {
-            "找不到 adb 命令，请安装 Android SDK Platform Tools。".to_string()
-        } else {
-            format!("无法启动 adb：{error}")
-        }
-    })?;
-    start_process_session(&registry, request.session_id, label, child, on_event)
+    start_process_session(
+        &registry,
+        request.session_id,
+        label,
+        command,
+        "adb",
+        on_event,
+    )
 }
 
 #[tauri::command]
@@ -411,21 +395,31 @@ fn start_process_session(
     registry: &State<'_, ProcessRegistry>,
     session_id: String,
     label: String,
-    mut child: Child,
+    command: CommandBuilder,
+    executable: &str,
     on_event: Channel<SerialEvent>,
 ) -> Result<(), String> {
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| format!("{label} 标准输入不可用。"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| format!("{label} 标准输出不可用。"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| format!("{label} 错误输出不可用。"))?;
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|error| format!("无法为 {label} 创建伪终端：{error}"))?;
+    let child = pair.slave.spawn_command(command).map_err(|error| {
+        format!("无法在伪终端中启动 {executable}：{error}。请确认系统已安装并可执行该命令。")
+    })?;
+    drop(pair.slave);
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|error| format!("{label} 终端输出不可用：{error}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|error| format!("{label} 终端输入不可用：{error}"))?;
 
     let (command_tx, command_rx) = mpsc::channel();
     registry
@@ -444,7 +438,15 @@ fn start_process_session(
         .name(format!("process-{session_id}"))
         .spawn(move || {
             process_worker(
-                session_id, label, child, stdin, stdout, stderr, command_rx, on_event, sessions,
+                session_id,
+                label,
+                child,
+                writer,
+                reader,
+                pair.master,
+                command_rx,
+                on_event,
+                sessions,
             )
         })
         .map_err(|error| format!("无法启动 SSH/ADB 读取线程：{error}"))?;
@@ -452,23 +454,19 @@ fn start_process_session(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn process_worker<R1, R2>(
+fn process_worker(
     session_id: String,
     label: String,
-    mut child: Child,
-    mut stdin: ChildStdin,
-    stdout: R1,
-    stderr: R2,
+    mut child: Box<dyn Child + Send + Sync>,
+    mut writer: Box<dyn Write + Send>,
+    reader: Box<dyn Read + Send>,
+    _master: Box<dyn MasterPty + Send>,
     commands: Receiver<ProcessCommand>,
     on_event: Channel<SerialEvent>,
     sessions: Arc<Mutex<HashMap<String, ProcessHandle>>>,
-) where
-    R1: Read + Send + 'static,
-    R2: Read + Send + 'static,
-{
+) {
     let (output_tx, output_rx) = mpsc::channel();
-    spawn_reader(stdout, output_tx.clone());
-    spawn_reader(stderr, output_tx);
+    spawn_reader(reader, output_tx);
 
     let _ = on_event.send(SerialEvent::State {
         session_id: session_id.clone(),
@@ -477,16 +475,16 @@ fn process_worker<R1, R2>(
     });
 
     let mut sequence = 0_u64;
-    let mut closed_readers = 0_u8;
+    let mut reader_closed = false;
     let mut requested_close = false;
     let mut logger: Option<SessionLogger> = None;
     let exit_status = loop {
         loop {
             match commands.try_recv() {
                 Ok(ProcessCommand::Write(bytes, reply)) => {
-                    let result = stdin
+                    let result = writer
                         .write_all(&bytes)
-                        .and_then(|_| stdin.flush())
+                        .and_then(|_| writer.flush())
                         .map(|_| bytes.len())
                         .map_err(|error| format!("写入 {label} 失败：{error}"));
                     let _ = reply.send(result);
@@ -572,7 +570,7 @@ fn process_worker<R1, R2>(
                     bytes,
                 });
             }
-            Ok(ProcessOutput::Closed) => closed_readers = closed_readers.saturating_add(1),
+            Ok(ProcessOutput::Closed) => reader_closed = true,
             Ok(ProcessOutput::Failed(message)) => {
                 let _ = on_event.send(SerialEvent::Error {
                     session_id: session_id.clone(),
@@ -582,11 +580,11 @@ fn process_worker<R1, R2>(
                 });
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => closed_readers = 2,
+            Err(mpsc::RecvTimeoutError::Disconnected) => reader_closed = true,
         }
 
         match child.try_wait() {
-            Ok(Some(status)) if closed_readers >= 2 || requested_close => break Some(status),
+            Ok(Some(status)) if reader_closed || requested_close => break Some(status),
             Ok(Some(_)) => {}
             Ok(None) if requested_close => break child.wait().ok(),
             Ok(None) => {}
@@ -617,7 +615,7 @@ fn process_worker<R1, R2>(
             state: ConnectionState::Disconnected,
             message: Some(format!("{label} 已断开。")),
         });
-    } else if exit_status.is_some_and(|status| status.success()) {
+    } else if exit_status.as_ref().is_some_and(|status| status.success()) {
         let _ = on_event.send(SerialEvent::State {
             session_id,
             state: ConnectionState::Disconnected,
@@ -636,10 +634,7 @@ fn process_worker<R1, R2>(
     }
 }
 
-fn spawn_reader<R>(mut reader: R, output: Sender<ProcessOutput>)
-where
-    R: Read + Send + 'static,
-{
+fn spawn_reader(mut reader: Box<dyn Read + Send>, output: Sender<ProcessOutput>) {
     thread::spawn(move || {
         let mut buffer = vec![0_u8; 16 * 1024];
         loop {
@@ -657,6 +652,10 @@ where
                     }
                 }
                 Err(error) => {
+                    if error.raw_os_error() == Some(5) {
+                        let _ = output.send(ProcessOutput::Closed);
+                        return;
+                    }
                     let _ = output.send(ProcessOutput::Failed(format!(
                         "读取 SSH/ADB 输出失败：{error}"
                     )));
@@ -701,15 +700,6 @@ fn unix_time_ms() -> u128 {
         .unwrap_or_default()
         .as_millis()
 }
-
-#[cfg(windows)]
-fn hide_console_window(command: &mut Command) {
-    use std::os::windows::process::CommandExt;
-    command.creation_flags(0x08000000);
-}
-
-#[cfg(not(windows))]
-fn hide_console_window(_: &mut Command) {}
 
 #[cfg(test)]
 mod tests {
@@ -783,5 +773,45 @@ mod tests {
             adb_arguments(&request),
             ["-s", "emulator-5554", "shell", "-tt"]
         );
+    }
+
+    #[test]
+    fn creates_a_native_pty_and_captures_output() {
+        let pty = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        #[cfg(unix)]
+        let command = {
+            let mut command = CommandBuilder::new("/bin/sh");
+            command.args(["-c", "printf PTY_OK"]);
+            command
+        };
+        #[cfg(windows)]
+        let command = {
+            let mut command = CommandBuilder::new("cmd.exe");
+            command.args(["/C", "echo PTY_OK"]);
+            command
+        };
+        let mut reader = pty.master.try_clone_reader().unwrap();
+        let mut child = pty.slave.spawn_command(command).unwrap();
+        drop(pty.slave);
+
+        let mut output = Vec::new();
+        let mut buffer = [0_u8; 256];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(count) => output.extend_from_slice(&buffer[..count]),
+                Err(error) if error.raw_os_error() == Some(5) => break,
+                Err(error) => panic!("failed to read PTY output: {error}"),
+            }
+        }
+        assert!(child.wait().unwrap().success());
+        assert!(String::from_utf8_lossy(&output).contains("PTY_OK"));
     }
 }
