@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  clampContextMenuPosition,
   executeTerminalCommand,
   requestTerminalCommand,
   requestTerminalSearch,
@@ -8,6 +9,17 @@ import {
 } from "./uiCommands";
 
 describe("UI commands", () => {
+  it("keeps terminal context menus inside the viewport", () => {
+    expect(clampContextMenuPosition(900, 700, 1_000, 800)).toEqual({
+      x: 802,
+      y: 568,
+    });
+    expect(clampContextMenuPosition(-10, -20, 1_000, 800)).toEqual({
+      x: 8,
+      y: 8,
+    });
+  });
+
   it("dispatches the terminal search request", () => {
     const dispatchEvent = vi.fn((_event: Event) => true);
     const target = { dispatchEvent };

@@ -2840,6 +2840,59 @@ textarea:disabled {
   color: #fff;
 }
 
+.terminal-context-menu {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  width: 190px;
+  padding: 5px;
+  background: rgba(38, 38, 40, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.38);
+  backdrop-filter: saturate(170%) blur(24px);
+  -webkit-backdrop-filter: saturate(170%) blur(24px);
+}
+
+.terminal-context-menu > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  text-align: left;
+}
+
+.terminal-context-menu > button:hover:not(:disabled) {
+  background: #0a84ff;
+  color: #fff;
+}
+
+.terminal-context-menu > button:disabled {
+  color: rgba(235, 235, 245, 0.3);
+}
+
+.terminal-context-menu kbd {
+  color: rgba(235, 235, 245, 0.48);
+  font: 9px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
+.terminal-context-menu > button:hover:not(:disabled) kbd {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.terminal-context-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .terminal-search {
   height: 34px;
   border: 1px solid rgba(255, 255, 255, 0.18);

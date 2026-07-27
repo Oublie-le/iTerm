@@ -13,6 +13,26 @@ export interface ClipboardAccess {
   writeText(value: string): Promise<void>;
 }
 
+export interface ContextMenuPosition {
+  x: number;
+  y: number;
+}
+
+export function clampContextMenuPosition(
+  x: number,
+  y: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  menuWidth = 190,
+  menuHeight = 224,
+): ContextMenuPosition {
+  const inset = 8;
+  return {
+    x: Math.max(inset, Math.min(x, viewportWidth - menuWidth - inset)),
+    y: Math.max(inset, Math.min(y, viewportHeight - menuHeight - inset)),
+  };
+}
+
 export function requestTerminalSearch(
   target: Pick<Window, "dispatchEvent"> = window,
 ): void {

@@ -1,12 +1,15 @@
 import {
   ChevronDown,
   ChevronUp,
+  ClipboardPaste,
   Clock3,
   Command as CommandIcon,
+  Copy,
   Minus,
   Plus,
   Power,
   RotateCcw,
+  ScanText,
   Search,
   SendHorizontal,
   Trash2,
@@ -39,6 +42,7 @@ import { sessionTargetLabel } from "../lib/types";
 import { useI18n } from "../lib/i18n";
 import {
   executeTerminalCommand,
+  clampContextMenuPosition,
   TERMINAL_COMMAND_EVENT,
   TERMINAL_SEARCH_EVENT,
   type TerminalUiCommand,
@@ -84,6 +88,7 @@ export function TerminalPane({
 }: TerminalPaneProps) {
   const { locale, t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
@@ -104,6 +109,11 @@ export function TerminalPane({
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandValue, setCommandValue] = useState("");
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    hasSelection: boolean;
+  } | null>(null);
   const [commandHistory, setCommandHistory] = useState<CommandHistoryEntry[]>(
     () => loadCommandHistory(profile.id),
   );
@@ -466,6 +476,29 @@ export function TerminalPane({
     };
   }, [active, session.state, visible]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    const dismissImmediately = () => setContextMenu(null);
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("pointerdown", dismiss);
+    window.addEventListener("blur", dismissImmediately);
+    window.addEventListener("resize", dismissImmediately);
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("blur", dismissImmediately);
+      window.removeEventListener("resize", dismissImmediately);
+      window.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [contextMenu]);
+
   const find = (
     direction: "next" | "previous",
     query = searchTerm,
@@ -492,6 +525,17 @@ export function TerminalPane({
     setSearchFound(null);
   };
 
+  const runContextCommand = (command: TerminalUiCommand) => {
+    if (!terminalRef.current) return;
+    void executeTerminalCommand(
+      command,
+      terminalRef.current,
+      (value) => trackedInputRef.current(value),
+    ).catch(() => undefined);
+    setContextMenu(null);
+    terminalRef.current.focus();
+  };
+
   const softResetTerminal = () => {
     if (!terminalRef.current) return;
     resetTerminal(terminalRef.current, "soft");
@@ -516,6 +560,20 @@ export function TerminalPane({
       }`}
       aria-label={t("terminal.label", { name: profile.name })}
       onMouseDown={onActivate}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onActivate();
+        const position = clampContextMenuPosition(
+          event.clientX,
+          event.clientY,
+          window.innerWidth,
+          window.innerHeight,
+        );
+        setContextMenu({
+          ...position,
+          hasSelection: terminalRef.current?.hasSelection() ?? false,
+        });
+      }}
       onWheel={(event) => {
         if (!event.ctrlKey && !event.metaKey) return;
         event.preventDefault();
@@ -792,6 +850,79 @@ export function TerminalPane({
               ))}
             </div>
           )}
+        </div>
+      )}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="terminal-context-menu"
+          role="menu"
+          aria-label={t("terminal.context.title")}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            role="menuitem"
+            disabled={!contextMenu.hasSelection}
+            onClick={() => runContextCommand("copy")}
+          >
+            <Copy size={14} />
+            <span>{t("terminal.context.copy")}</span>
+            <kbd>⌘C</kbd>
+          </button>
+          <button
+            role="menuitem"
+            disabled={session.state !== "connected" || session.transferActive}
+            onClick={() => runContextCommand("paste")}
+          >
+            <ClipboardPaste size={14} />
+            <span>{t("terminal.context.paste")}</span>
+            <kbd>⌘V</kbd>
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => runContextCommand("selectAll")}
+          >
+            <ScanText size={14} />
+            <span>{t("terminal.context.selectAll")}</span>
+            <kbd>⌘A</kbd>
+          </button>
+          <div className="terminal-context-separator" role="separator" />
+          <button
+            role="menuitem"
+            disabled={receiveMode === "hex"}
+            onClick={() => {
+              setContextMenu(null);
+              setSearchOpen(true);
+              window.setTimeout(() => searchInputRef.current?.focus(), 0);
+            }}
+          >
+            <Search size={14} />
+            <span>{t("terminal.context.find")}</span>
+            <kbd>⌘F</kbd>
+          </button>
+          <button
+            role="menuitem"
+            disabled={session.state !== "connected" || session.transferActive}
+            onClick={() => {
+              setContextMenu(null);
+              openCommandComposer();
+            }}
+          >
+            <CommandIcon size={14} />
+            <span>{t("terminal.context.command")}</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <div className="terminal-context-separator" role="separator" />
+          <button
+            role="menuitem"
+            onClick={() => {
+              setContextMenu(null);
+              clearTerminal();
+            }}
+          >
+            <Trash2 size={14} />
+            <span>{t("terminal.context.clear")}</span>
+          </button>
         </div>
       )}
       {session.state === "opening" && (
