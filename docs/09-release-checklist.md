@@ -94,8 +94,8 @@ pnpm tauri:build
 3. 创建与版本一致的带说明标签，例如：
 
    ```bash
-   git tag -a v0.5.0 -m "发布 iTerm v0.5.0"
-   git push origin v0.5.0
+   git tag -a v0.6.0 -m "发布 iTerm v0.6.0"
+   git push origin v0.6.0
    ```
 
 4. 等待 Release 工作流完成；
@@ -121,4 +121,3 @@ pnpm tauri:build
 - 已被用户下载：不要用同一版本号静默替换二进制，发布新的补丁版本并说明影响；
 - 安全问题：立即撤下受影响资产，发布公告和修复版本，并轮换可能泄露的凭据；
 - 配置迁移问题：保留旧安装包和恢复说明，禁止执行不可逆的数据删除。
-
