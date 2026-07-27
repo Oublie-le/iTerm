@@ -1,14 +1,22 @@
 import {
   CirclePlus,
+  Download,
   Eraser,
   FileUp,
   Play,
   Square,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { loadSenderPresets, saveSenderPresets } from "../lib/senders";
+import { openJsonDocument, saveJsonDocument } from "../lib/jsonFiles";
+import {
+  mergeImportedSenderPresets,
+  parseSenderPresets,
+  serializeSenderPresets,
+} from "../lib/senderTransfer";
 import {
   createSenderPreset,
   type FileTransferProtocol,
@@ -42,6 +50,7 @@ export function SenderPane({
   const [running, setRunning] = useState(false);
   const [sentBytes, setSentBytes] = useState(0);
   const [lastError, setLastError] = useState("");
+  const [templateNotice, setTemplateNotice] = useState("");
   const timerRef = useRef<number | null>(null);
   const cancelledRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -133,6 +142,41 @@ export function SenderPane({
     setActiveId(next[Math.max(0, index - 1)].id);
   };
 
+  const exportPresets = async () => {
+    setLastError("");
+    setTemplateNotice("");
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      const path = await saveJsonDocument(
+        `iTerm-commands-${date}.json`,
+        serializeSenderPresets(presets),
+      );
+      if (path) setTemplateNotice(`已导出 ${presets.length} 个命令模板`);
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const importPresets = async () => {
+    setLastError("");
+    setTemplateNotice("");
+    try {
+      const document = await openJsonDocument();
+      if (!document) return;
+      const imported = parseSenderPresets(document.contents);
+      const merged = mergeImportedSenderPresets(presets, imported);
+      setPresets(merged.presets);
+      setActiveId(merged.firstImportedId);
+      setTemplateNotice(
+        merged.remappedCount > 0
+          ? `已导入 ${merged.importedCount} 个模板，${merged.remappedCount} 个重复 ID 已重建`
+          : `已导入 ${merged.importedCount} 个命令模板`,
+      );
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const sendFiles = async (files: File[]) => {
     if (files.length === 0) return;
     setLastError("");
@@ -199,6 +243,24 @@ export function SenderPane({
             title="删除发送器"
           >
             <Trash2 size={16} />
+          </button>
+          <button
+            className="icon-button"
+            onClick={() => void importPresets()}
+            disabled={running}
+            title="导入命令模板"
+            aria-label="导入命令模板"
+          >
+            <Upload size={16} />
+          </button>
+          <button
+            className="icon-button"
+            onClick={() => void exportPresets()}
+            disabled={running}
+            title="导出全部命令模板"
+            aria-label="导出全部命令模板"
+          >
+            <Download size={16} />
           </button>
           <button
             className="icon-button"
@@ -351,6 +413,7 @@ export function SenderPane({
           </label>
           <div className="sender-stats">
             已发送 {sentBytes.toLocaleString()} B
+            {templateNotice && <span>{templateNotice}</span>}
             {lastError && <strong>{lastError}</strong>}
           </div>
           {fileTransfer && (

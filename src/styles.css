@@ -1111,6 +1111,10 @@ textarea:disabled {
   color: #79807e;
 }
 
+.sender-stats span {
+  color: #1f7a3d;
+}
+
 .sender-stats strong {
   overflow: hidden;
   color: #b33d3d;
