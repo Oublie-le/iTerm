@@ -5,8 +5,10 @@ use crate::{
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
-    env, fs,
+    collections::{HashMap, HashSet},
+    env,
+    ffi::OsString,
+    fs,
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -192,17 +194,11 @@ pub fn list_ssh_config_hosts() -> Result<Vec<SshConfigHost>, String> {
     let Some(config_path) = ssh_config_path() else {
         return Ok(Vec::new());
     };
-    let source = match fs::read_to_string(&config_path) {
-        Ok(source) => source,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(format!(
-                "无法读取 SSH 配置 {}：{error}",
-                config_path.display()
-            ))
-        }
-    };
-    let mut hosts = parse_ssh_config(&source, &config_path);
+    let home = config_path
+        .parent()
+        .and_then(Path::parent)
+        .unwrap_or_else(|| Path::new(""));
+    let mut hosts = load_ssh_config_tree(&config_path, home)?;
     hosts.sort_by(|left, right| {
         left.alias
             .to_ascii_lowercase()
@@ -366,6 +362,195 @@ fn validate_ssh_request(request: &OpenSshRequest) -> Result<(), String> {
 fn ssh_config_path() -> Option<PathBuf> {
     let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(".ssh").join("config"))
+}
+
+fn load_ssh_config_tree(config_path: &Path, home: &Path) -> Result<Vec<SshConfigHost>, String> {
+    let include_base = config_path.parent().unwrap_or(home);
+    let mut visited = HashSet::new();
+    let mut hosts = Vec::new();
+    collect_ssh_config_file(
+        config_path,
+        home,
+        include_base,
+        0,
+        &mut visited,
+        &mut hosts,
+        true,
+    )?;
+    Ok(hosts)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_ssh_config_file(
+    path: &Path,
+    home: &Path,
+    include_base: &Path,
+    depth: usize,
+    visited: &mut HashSet<PathBuf>,
+    hosts: &mut Vec<SshConfigHost>,
+    root: bool,
+) -> Result<(), String> {
+    if depth > 8 || visited.len() >= 256 {
+        return Ok(());
+    }
+    let identity = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if !visited.insert(identity) {
+        return Ok(());
+    }
+    let source = match fs::read_to_string(path) {
+        Ok(source) => source,
+        Err(_) if !root => return Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!("无法读取 SSH 配置 {}：{error}", path.display()));
+        }
+    };
+    hosts.extend(parse_ssh_config(&source, path));
+
+    for pattern in ssh_include_patterns(&source) {
+        for include_path in expand_ssh_include_pattern(&pattern, home, include_base) {
+            collect_ssh_config_file(
+                &include_path,
+                home,
+                include_base,
+                depth + 1,
+                visited,
+                hosts,
+                false,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn ssh_include_patterns(source: &str) -> Vec<String> {
+    source
+        .lines()
+        .filter_map(|raw_line| {
+            let line = strip_ssh_comment(raw_line).trim();
+            let (keyword, value) = split_ssh_directive(line)?;
+            keyword
+                .eq_ignore_ascii_case("include")
+                .then(|| split_ssh_words(value))
+        })
+        .flatten()
+        .collect()
+}
+
+fn split_ssh_words(value: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut quote = None;
+    let mut escaped = false;
+    for character in value.chars() {
+        if escaped {
+            current.push(character);
+            escaped = false;
+            continue;
+        }
+        if character == '\\' {
+            escaped = true;
+            continue;
+        }
+        match character {
+            '"' | '\'' if quote == Some(character) => quote = None,
+            '"' | '\'' if quote.is_none() => quote = Some(character),
+            _ if character.is_whitespace() && quote.is_none() => {
+                if !current.is_empty() {
+                    words.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(character),
+        }
+    }
+    if escaped {
+        current.push('\\');
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    words
+}
+
+fn expand_ssh_include_pattern(pattern: &str, home: &Path, base: &Path) -> Vec<PathBuf> {
+    let expanded = if pattern == "~" {
+        home.to_path_buf()
+    } else if let Some(relative) = pattern.strip_prefix("~/") {
+        home.join(relative)
+    } else {
+        PathBuf::from(pattern)
+    };
+    let path = if expanded.is_absolute() {
+        expanded
+    } else {
+        base.join(expanded)
+    };
+    let components: Vec<OsString> = path
+        .components()
+        .map(|component| component.as_os_str().to_owned())
+        .collect();
+    let mut matches = Vec::new();
+    collect_path_pattern_matches(PathBuf::new(), &components, 0, &mut matches);
+    matches.sort();
+    matches
+}
+
+fn collect_path_pattern_matches(
+    current: PathBuf,
+    components: &[OsString],
+    index: usize,
+    matches: &mut Vec<PathBuf>,
+) {
+    if index >= components.len() {
+        if current.is_file() {
+            matches.push(current);
+        }
+        return;
+    }
+    let component = components[index].to_string_lossy();
+    if component.contains('*') || component.contains('?') {
+        let directory = if current.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            current.as_path()
+        };
+        let Ok(entries) = fs::read_dir(directory) else {
+            return;
+        };
+        let mut entries: Vec<_> = entries.filter_map(Result::ok).collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            if wildcard_matches(&component, &entry.file_name().to_string_lossy()) {
+                collect_path_pattern_matches(entry.path(), components, index + 1, matches);
+            }
+        }
+        return;
+    }
+    let mut next = current;
+    next.push(&components[index]);
+    collect_path_pattern_matches(next, components, index + 1, matches);
+}
+
+fn wildcard_matches(pattern: &str, value: &str) -> bool {
+    let pattern: Vec<char> = pattern.chars().collect();
+    let value: Vec<char> = value.chars().collect();
+    let mut previous = vec![false; value.len() + 1];
+    previous[0] = true;
+    for token in pattern {
+        let mut current = vec![false; value.len() + 1];
+        if token == '*' {
+            current[0] = previous[0];
+        }
+        for index in 1..=value.len() {
+            current[index] = match token {
+                '*' => previous[index] || current[index - 1],
+                '?' => previous[index - 1],
+                literal => previous[index - 1] && literal == value[index - 1],
+            };
+        }
+        previous = current;
+    }
+    previous[value.len()]
 }
 
 fn parse_ssh_config(source: &str, source_path: &Path) -> Vec<SshConfigHost> {
@@ -1026,6 +1211,47 @@ mod tests {
         assert_eq!(hosts[0].alias, "lab");
         assert_eq!(hosts[0].host_name.as_deref(), Some("lab.local"));
         assert_eq!(hosts[0].user.as_deref(), Some("root"));
+    }
+
+    #[test]
+    fn discovers_hosts_from_recursive_include_globs() {
+        let root = env::temp_dir().join(format!("iterm-ssh-config-{}", unix_time_ms()));
+        let ssh_dir = root.join(".ssh");
+        let include_dir = ssh_dir.join("conf.d");
+        fs::create_dir_all(&include_dir).expect("create SSH include fixture");
+        fs::write(
+            ssh_dir.join("config"),
+            "Include conf.d/*.conf\nHost root-host\n  HostName root.local\n",
+        )
+        .expect("write root SSH config");
+        fs::write(
+            include_dir.join("devices.conf"),
+            "Host board\n  HostName board.local\n  IdentityFile ~/.ssh/board\n\
+             Include conf.d/nested.conf\n",
+        )
+        .expect("write included SSH config");
+        fs::write(
+            include_dir.join("nested.conf"),
+            "Host nested\n  ProxyJump bastion\nInclude conf.d/devices.conf\n",
+        )
+        .expect("write recursive SSH config");
+
+        let hosts =
+            load_ssh_config_tree(&ssh_dir.join("config"), &root).expect("load SSH config tree");
+        let aliases: Vec<_> = hosts.iter().map(|host| host.alias.as_str()).collect();
+
+        assert!(aliases.contains(&"root-host"));
+        assert!(aliases.contains(&"board"));
+        assert!(aliases.contains(&"nested"));
+        assert_eq!(hosts.iter().filter(|host| host.alias == "board").count(), 1);
+        fs::remove_dir_all(root).expect("remove SSH include fixture");
+    }
+
+    #[test]
+    fn matches_ssh_include_wildcards() {
+        assert!(wildcard_matches("*.conf", "devices.conf"));
+        assert!(wildcard_matches("host-?.cfg", "host-a.cfg"));
+        assert!(!wildcard_matches("*.conf", "devices.txt"));
     }
 
     #[test]
