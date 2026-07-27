@@ -87,7 +87,10 @@ export function TerminalPane({
 
     const terminal = new Terminal({
       allowProposedApi: false,
-      convertEol: false,
+      // Embedded devices commonly emit a bare LF instead of CRLF. xterm's
+      // conversion keeps those serial logs aligned without changing the PTY
+      // semantics expected by SSH and ADB applications.
+      convertEol: profile.protocol === "serial",
       cursorBlink: true,
       cursorStyle: profile.terminal.cursorStyle,
       fontFamily: profile.terminal.fontFamily,
@@ -95,6 +98,8 @@ export function TerminalPane({
       lineHeight: profile.terminal.lineHeight,
       scrollback: profile.terminal.scrollback,
       tabStopWidth: 8,
+      drawBoldTextInBrightColors: true,
+      minimumContrastRatio: 1,
       theme:
         theme === "dark"
           ? {
@@ -227,6 +232,7 @@ export function TerminalPane({
     profile.terminal.lineHeight,
     profile.terminal.scrollback,
     profile.terminal.timestamp,
+    profile.protocol,
     theme,
   ]);
 

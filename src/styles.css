@@ -1976,3 +1976,97 @@ textarea:disabled {
     padding-top: 14px;
   }
 }
+
+
+/* Apple-inspired desktop materials: soft depth, cool neutrals and a restrained
+   system-blue accent keep controls clear without competing with the terminal. */
+:root {
+  --green: #0a84ff;
+  --green-dark: #0066cc;
+  --green-soft: #e6f2ff;
+  --border: rgba(60, 60, 67, 0.2);
+  --border-light: rgba(60, 60, 67, 0.12);
+  --surface: #f5f5f7;
+  --surface-muted: rgba(255, 255, 255, 0.68);
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+}
+
+.app-shell {
+  background: radial-gradient(circle at 75% 0%, #ffffff 0, #f5f5f7 42%, #ececf0 100%);
+}
+
+.app-menubar,
+.session-sidebar,
+.session-toolbar,
+.sender-pane,
+.statusbar,
+.tab-strip {
+  border-color: var(--border);
+  background: rgba(246, 246, 248, 0.86);
+  box-shadow: none;
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+.dock-title,
+.sender-toolbar,
+.dialog-header,
+.dialog-footer {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.sidebar-search,
+.sender-body > textarea,
+.field-row input:not([type="checkbox"]):not([type="color"]),
+.field-row select,
+.field-row textarea {
+  border-color: rgba(60, 60, 67, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.icon-button,
+.toolbar-button,
+.signal-button,
+.primary-button,
+.secondary-button,
+.tabs > button,
+.dialog-nav > button {
+  border-radius: 7px;
+}
+
+.primary-button {
+  border-color: #0077ed;
+  background: #0a84ff;
+  box-shadow: 0 1px 2px rgba(0, 102, 204, 0.25);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #0077ed;
+}
+
+.session-dialog,
+.shortcut-dialog,
+.app-settings-dialog {
+  border-color: rgba(60, 60, 67, 0.22);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.modal-backdrop {
+  background: rgba(29, 29, 31, 0.34);
+  backdrop-filter: blur(8px);
+}
+
+.app-shell[data-theme="dark"] {
+  --green: #0a84ff;
+  --green-dark: #64d2ff;
+  --green-soft: rgba(10, 132, 255, 0.2);
+  --surface: #1c1c1e;
+  --surface-muted: rgba(44, 44, 46, 0.82);
+  --border: rgba(255, 255, 255, 0.14);
+  --border-light: rgba(255, 255, 255, 0.09);
+  --text: #f5f5f7;
+  --muted: #98989d;
+}
