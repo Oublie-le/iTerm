@@ -1,4 +1,7 @@
-use crate::logging::{build_log_spec, LogStartSpec, SessionLogger, StartLogRequest};
+use crate::{
+    debug_timing::DebugTimer,
+    logging::{build_log_spec, LogStartSpec, SessionLogger, StartLogRequest},
+};
 use encoding_rs::Encoding;
 use serde::{Deserialize, Serialize};
 use serialport::{
@@ -160,8 +163,9 @@ pub enum LogState {
     Error,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_serial_ports() -> Result<Vec<SerialPortDescriptor>, String> {
+    let _timer = DebugTimer::start("list_serial_ports");
     let ports =
         serialport::available_ports().map_err(|error| format!("无法枚举串口设备：{error}"))?;
 
@@ -225,7 +229,7 @@ pub fn list_serial_ports() -> Result<Vec<SerialPortDescriptor>, String> {
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_serial_session(
     request: OpenSessionRequest,
     on_event: Channel<SerialEvent>,
@@ -303,7 +307,7 @@ pub fn open_serial_session(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn close_serial_session(
     session_id: String,
     registry: State<'_, SerialRegistry>,
@@ -320,7 +324,7 @@ pub fn close_serial_session(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_serial_text(
     request: WriteTextRequest,
     registry: State<'_, SerialRegistry>,
@@ -329,7 +333,7 @@ pub fn write_serial_text(
     write_bytes(&registry, &request.session_id, payload)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_serial_text_many(
     request: WriteTextManyRequest,
     registry: State<'_, SerialRegistry>,
@@ -346,7 +350,7 @@ pub fn write_serial_text_many(
     Ok(results)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_serial_bytes(
     request: WriteBytesRequest,
     registry: State<'_, SerialRegistry>,
@@ -354,7 +358,7 @@ pub fn write_serial_bytes(
     write_bytes(&registry, &request.session_id, request.bytes)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_serial_signal(
     session_id: String,
     signal: String,
@@ -371,7 +375,7 @@ pub fn set_serial_signal(
     receive_reply(reply_rx, "设置信号")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn send_serial_break(
     session_id: String,
     duration_ms: u64,
@@ -386,7 +390,7 @@ pub fn send_serial_break(
     receive_reply(reply_rx, "发送 Break")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn clear_serial_buffers(
     session_id: String,
     target: String,
@@ -402,7 +406,7 @@ pub fn clear_serial_buffers(
     receive_reply(reply_rx, "清空串口缓冲")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_serial_log(
     request: StartLogRequest,
     app: AppHandle,
@@ -419,7 +423,7 @@ pub fn start_serial_log(
     receive_reply(reply_rx, "开始日志")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_serial_log_paused(
     session_id: String,
     paused: bool,
@@ -441,7 +445,7 @@ pub fn set_serial_log_paused(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_serial_log(
     session_id: String,
     registry: State<'_, SerialRegistry>,

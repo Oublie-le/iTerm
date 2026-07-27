@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { Terminal } from "@xterm/xterm";
 import {
   DEC_SOFT_RESET_SEQUENCE,
   clampTerminalFontSize,
   installUnicode11,
   mapTerminalSpecialKey,
   resetTerminal,
+  TERMINAL_CONVERT_EOL,
 } from "./terminal";
 
 describe("terminal font size", () => {
@@ -125,5 +127,27 @@ describe("terminal Unicode width", () => {
     expect(terminal.unicode.activeVersion).toBe("11");
     expect(addon).toBeInstanceOf(Unicode11Addon);
     expect(terminal.loadAddon).toHaveBeenCalledWith(addon);
+  });
+});
+
+describe("terminal line endings", () => {
+  it("starts bare-LF output at column one", async () => {
+    const terminal = new Terminal({
+      cols: 40,
+      rows: 10,
+      convertEol: TERMINAL_CONVERT_EOL,
+    });
+
+    await new Promise<void>((resolve) => {
+      terminal.write("first\nsecond\nthird", resolve);
+    });
+
+    expect(
+      [0, 1, 2].map((row) =>
+        terminal.buffer.active.getLine(row)?.translateToString(true),
+      ),
+    ).toEqual(["first", "second", "third"]);
+    expect(terminal.buffer.active.cursorX).toBe(5);
+    terminal.dispose();
   });
 });

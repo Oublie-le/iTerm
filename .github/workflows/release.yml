@@ -21,6 +21,7 @@ concurrency:
 jobs:
   prepare_release:
     name: Prepare GitHub release
+    needs: verify
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     outputs:
@@ -49,6 +50,57 @@ jobs:
           fi
 
           echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
+
+  verify:
+    name: Verify release source on Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check version consistency
+        run: pnpm version:check
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Run frontend tests
+        run: pnpm test
+
+      - name: Run terminal performance smoke test
+        run: pnpm bench:terminal:smoke
+
+      - name: Build production frontend
+        run: pnpm build
 
   publish:
     name: Publish (${{ matrix.name }})
@@ -79,6 +131,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -143,6 +197,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6

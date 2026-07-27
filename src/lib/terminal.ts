@@ -4,6 +4,7 @@ export const DEC_SOFT_RESET_SEQUENCE = "\u001b[!p";
 export const DEFAULT_TERMINAL_FONT_SIZE = 14;
 export const MIN_TERMINAL_FONT_SIZE = 8;
 export const MAX_TERMINAL_FONT_SIZE = 40;
+export const TERMINAL_CONVERT_EOL = true;
 
 export function clampTerminalFontSize(fontSize: number): number {
   return Math.min(

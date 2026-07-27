@@ -32,6 +32,7 @@ import {
   mapTerminalSpecialKey,
   MIN_TERMINAL_FONT_SIZE,
   resetTerminal,
+  TERMINAL_CONVERT_EOL,
 } from "../lib/terminal";
 import type {
   ReceiveMode,
@@ -215,7 +216,7 @@ export function TerminalPane({
 
     const terminal = new Terminal({
       allowProposedApi: true,
-      convertEol: false,
+      convertEol: TERMINAL_CONVERT_EOL,
       cursorBlink: true,
       cursorStyle: profile.terminal.cursorStyle,
       fontFamily: profile.terminal.fontFamily,

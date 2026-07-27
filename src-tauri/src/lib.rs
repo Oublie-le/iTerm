@@ -1,8 +1,10 @@
+mod debug_timing;
 mod logging;
 mod process;
 mod serial;
 mod storage;
 
+use debug_timing::DebugTimer;
 use process::ProcessRegistry;
 use serial::SerialRegistry;
 use storage::PersistentStore;
@@ -10,10 +12,12 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _run_timer = DebugTimer::start("app_run");
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            let _setup_timer = DebugTimer::start("app_setup");
             let store = PersistentStore::open(app.handle()).map_err(std::io::Error::other)?;
             app.manage(store);
             Ok(())

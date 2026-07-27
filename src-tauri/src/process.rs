@@ -1,4 +1,5 @@
 use crate::{
+    debug_timing::DebugTimer,
     logging::{build_log_spec, LogStartSpec, SessionLogger, StartLogRequest},
     serial::{ConnectionState, LogState, SerialEvent},
 };
@@ -118,12 +119,13 @@ pub struct WriteProcessRequest {
     bytes: Vec<u8>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_ssh_session(
     request: OpenSshRequest,
     on_event: Channel<SerialEvent>,
     registry: State<'_, ProcessRegistry>,
 ) -> Result<(), String> {
+    let _timer = DebugTimer::start("open_ssh_session");
     validate_ssh_request(&request)?;
     ensure_session_available(&registry, &request.session_id)?;
 
@@ -150,9 +152,10 @@ pub fn open_ssh_session(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_adb_devices() -> Result<Vec<AdbDeviceDescriptor>, String> {
-    let output = Command::new("adb")
+    let _timer = DebugTimer::start("list_adb_devices");
+    let output = background_command("adb")
         .args(["devices", "-l"])
         .output()
         .map_err(|error| {
@@ -171,8 +174,9 @@ pub fn list_adb_devices() -> Result<Vec<AdbDeviceDescriptor>, String> {
     Ok(parse_adb_devices(&String::from_utf8_lossy(&output.stdout)))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_external_tools() -> Vec<ExternalToolStatus> {
+    let _timer = DebugTimer::start("list_external_tools");
     vec![
         inspect_external_tool(
             "ssh",
@@ -189,8 +193,9 @@ pub fn list_external_tools() -> Vec<ExternalToolStatus> {
     ]
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_ssh_config_hosts() -> Result<Vec<SshConfigHost>, String> {
+    let _timer = DebugTimer::start("list_ssh_config_hosts");
     let Some(config_path) = ssh_config_path() else {
         return Ok(Vec::new());
     };
@@ -208,12 +213,13 @@ pub fn list_ssh_config_hosts() -> Result<Vec<SshConfigHost>, String> {
     Ok(hosts)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_adb_session(
     request: OpenAdbRequest,
     on_event: Channel<SerialEvent>,
     registry: State<'_, ProcessRegistry>,
 ) -> Result<(), String> {
+    let _timer = DebugTimer::start("open_adb_session");
     validate_argument("ADB 设备 ID", &request.device_id)?;
     if request.device_id.starts_with('-') {
         return Err("ADB 设备 ID 不能以连字符开头。".into());
@@ -239,7 +245,7 @@ pub fn open_adb_session(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn close_process_session(
     session_id: String,
     registry: State<'_, ProcessRegistry>,
@@ -255,7 +261,7 @@ pub fn close_process_session(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_process_bytes(
     request: WriteProcessRequest,
     registry: State<'_, ProcessRegistry>,
@@ -272,7 +278,7 @@ pub fn write_process_bytes(
     receive_process_reply(reply_rx, "写入 SSH/ADB 会话")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn resize_process_session(
     session_id: String,
     cols: u16,
@@ -288,7 +294,7 @@ pub fn resize_process_session(
     receive_process_reply(reply_rx, "调整 SSH/ADB 终端尺寸")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_process_log(
     request: StartLogRequest,
     app: AppHandle,
@@ -304,7 +310,7 @@ pub fn start_process_log(
     receive_process_reply(reply_rx, "开始 SSH/ADB 日志")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_process_log_paused(
     session_id: String,
     paused: bool,
@@ -326,7 +332,7 @@ pub fn set_process_log_paused(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_process_log(
     session_id: String,
     registry: State<'_, ProcessRegistry>,
@@ -744,6 +750,23 @@ fn terminal_size(cols: u16, rows: u16) -> PtySize {
     }
 }
 
+fn background_command(executable: &str) -> Command {
+    let mut command = Command::new(executable);
+    hide_console_window(&mut command);
+    command
+}
+
+#[cfg(windows)]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console_window(_: &mut Command) {}
+
 fn parse_adb_devices(output: &str) -> Vec<AdbDeviceDescriptor> {
     output
         .lines()
@@ -789,7 +812,9 @@ fn inspect_external_tool(
     arguments: &[&str],
     install_hint: &str,
 ) -> ExternalToolStatus {
-    match Command::new(executable).args(arguments).output() {
+    let _timer = DebugTimer::start(format!("inspect_external_tool:{executable}"));
+    let output = background_command(executable).args(arguments).output();
+    match output {
         Ok(output) => ExternalToolStatus {
             id: executable.into(),
             label: label.into(),
@@ -1343,6 +1368,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "ConPTY does not signal EOF while the master handle is alive"
+    )]
     fn creates_a_native_pty_and_captures_output() {
         let pty = native_pty_system()
             .openpty(PtySize {
@@ -1383,6 +1412,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "ConPTY does not signal EOF while the master handle is alive"
+    )]
     fn writes_resizes_and_reads_an_interactive_pty() {
         let pty = native_pty_system()
             .openpty(PtySize {

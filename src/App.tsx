@@ -366,6 +366,7 @@ export default function App() {
   const [dtr, setDtr] = useState(true);
   const [rts, setRts] = useState(true);
   const refreshInFlightRef = useRef(false);
+  const adbRefreshInFlightRef = useRef(false);
   const tabListRef = useRef<HTMLDivElement>(null);
   const topMenuBarRef = useRef<HTMLDivElement>(null);
   const triggerEvaluatorsRef = useRef(
@@ -561,6 +562,8 @@ export default function App() {
   }, [resolvedLocale, t]);
 
   const refreshAdbDevices = useCallback(async (silent = false) => {
+    if (adbRefreshInFlightRef.current) return;
+    adbRefreshInFlightRef.current = true;
     if (!silent) setAdbError("");
     try {
       setAdbDevices(await listAdbDevices());
@@ -576,6 +579,8 @@ export default function App() {
           ),
         );
       }
+    } finally {
+      adbRefreshInFlightRef.current = false;
     }
   }, [resolvedLocale, t]);
 
@@ -590,7 +595,7 @@ export default function App() {
 
   useEffect(() => {
     void refreshPorts();
-    const timer = window.setInterval(() => void refreshPorts(true), 1_000);
+    const timer = window.setInterval(() => void refreshPorts(true), 2_000);
     return () => window.clearInterval(timer);
   }, [refreshPorts]);
 
@@ -598,7 +603,7 @@ export default function App() {
     void refreshAdbDevices(true);
     const timer = window.setInterval(
       () => void refreshAdbDevices(true),
-      3_000,
+      5_000,
     );
     return () => window.clearInterval(timer);
   }, [refreshAdbDevices]);
