@@ -3,6 +3,9 @@ import {
   listAdbDevices,
   openAdbSession,
   openSshSession,
+  setProcessLogPaused,
+  startProcessLog,
+  stopProcessLog,
   writeProcessText,
 } from "./remote";
 import { createSessionProfile, type SerialEvent } from "./types";
@@ -59,5 +62,13 @@ describe("remote session browser mocks", () => {
     await expect(writeProcessText("session", "你好", "crlf")).resolves.toBe(
       new TextEncoder().encode("你好\r\n").length,
     );
+  });
+
+  it("supports the remote logging lifecycle", async () => {
+    await expect(
+      startProcessLog("ssh-1", "SSH/生产机", "text", "utf-8", false),
+    ).resolves.toBe("/mock/logs/SSH_生产机.log");
+    await expect(setProcessLogPaused("ssh-1", true)).resolves.toBeUndefined();
+    await expect(stopProcessLog("ssh-1")).resolves.toBeUndefined();
   });
 });

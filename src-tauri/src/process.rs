@@ -1,4 +1,7 @@
-use crate::serial::{ConnectionState, SerialEvent};
+use crate::{
+    logging::{build_log_spec, LogStartSpec, SessionLogger, StartLogRequest},
+    serial::{ConnectionState, LogState, SerialEvent},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,7 +14,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::{ipc::Channel, State};
+use tauri::{ipc::Channel, AppHandle, State};
 
 const COMMAND_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -26,6 +29,9 @@ struct ProcessHandle {
 
 enum ProcessCommand {
     Write(Vec<u8>, Sender<Result<usize, String>>),
+    StartLog(LogStartSpec, Sender<Result<String, String>>),
+    SetLogPaused(bool, Sender<Result<(), String>>),
+    StopLog(Sender<Result<(), String>>),
     Close,
 }
 
@@ -205,21 +211,60 @@ pub fn write_process_bytes(
         return Ok(0);
     }
     let (reply_tx, reply_rx) = mpsc::channel();
-    let sessions = registry
-        .sessions
-        .lock()
-        .map_err(|_| "命令会话注册表已损坏。")?;
-    let handle = sessions
-        .get(&request.session_id)
-        .ok_or_else(|| "SSH/ADB 会话不存在或已经关闭。".to_string())?;
-    handle
-        .commands
-        .send(ProcessCommand::Write(request.bytes, reply_tx))
-        .map_err(|_| "SSH/ADB 会话进程已经退出，请重新连接。".to_string())?;
-    drop(sessions);
-    reply_rx
-        .recv_timeout(COMMAND_REPLY_TIMEOUT)
-        .map_err(|_| "写入 SSH/ADB 会话超时。".to_string())?
+    send_process_command(
+        &registry,
+        &request.session_id,
+        ProcessCommand::Write(request.bytes, reply_tx),
+    )?;
+    receive_process_reply(reply_rx, "写入 SSH/ADB 会话")
+}
+
+#[tauri::command]
+pub fn start_process_log(
+    request: StartLogRequest,
+    app: AppHandle,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<String, String> {
+    let spec = build_log_spec(&app, &request)?;
+    let (reply_tx, reply_rx) = mpsc::channel();
+    send_process_command(
+        &registry,
+        &request.session_id,
+        ProcessCommand::StartLog(spec, reply_tx),
+    )?;
+    receive_process_reply(reply_rx, "开始 SSH/ADB 日志")
+}
+
+#[tauri::command]
+pub fn set_process_log_paused(
+    session_id: String,
+    paused: bool,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = mpsc::channel();
+    send_process_command(
+        &registry,
+        &session_id,
+        ProcessCommand::SetLogPaused(paused, reply_tx),
+    )?;
+    receive_process_reply(
+        reply_rx,
+        if paused {
+            "暂停 SSH/ADB 日志"
+        } else {
+            "继续 SSH/ADB 日志"
+        },
+    )
+}
+
+#[tauri::command]
+pub fn stop_process_log(
+    session_id: String,
+    registry: State<'_, ProcessRegistry>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = mpsc::channel();
+    send_process_command(&registry, &session_id, ProcessCommand::StopLog(reply_tx))?;
+    receive_process_reply(reply_rx, "停止 SSH/ADB 日志")
 }
 
 fn validate_ssh_request(request: &OpenSshRequest) -> Result<(), String> {
@@ -434,6 +479,7 @@ fn process_worker<R1, R2>(
     let mut sequence = 0_u64;
     let mut closed_readers = 0_u8;
     let mut requested_close = false;
+    let mut logger: Option<SessionLogger> = None;
     let exit_status = loop {
         loop {
             match commands.try_recv() {
@@ -443,6 +489,51 @@ fn process_worker<R1, R2>(
                         .and_then(|_| stdin.flush())
                         .map(|_| bytes.len())
                         .map_err(|error| format!("写入 {label} 失败：{error}"));
+                    let _ = reply.send(result);
+                }
+                Ok(ProcessCommand::StartLog(spec, reply)) => {
+                    let result = SessionLogger::open(spec).map(|new_logger| {
+                        let path = new_logger.path_string();
+                        logger = Some(new_logger);
+                        let _ = on_event.send(SerialEvent::Log {
+                            session_id: session_id.clone(),
+                            state: LogState::Recording,
+                            path: Some(path.clone()),
+                            message: None,
+                        });
+                        path
+                    });
+                    let _ = reply.send(result);
+                }
+                Ok(ProcessCommand::SetLogPaused(paused, reply)) => {
+                    let result = logger
+                        .as_mut()
+                        .ok_or_else(|| "当前会话没有活动日志。".to_string())
+                        .map(|active_logger| {
+                            active_logger.set_paused(paused);
+                            let _ = on_event.send(SerialEvent::Log {
+                                session_id: session_id.clone(),
+                                state: if paused {
+                                    LogState::Paused
+                                } else {
+                                    LogState::Recording
+                                },
+                                path: Some(active_logger.path_string()),
+                                message: None,
+                            });
+                        });
+                    let _ = reply.send(result);
+                }
+                Ok(ProcessCommand::StopLog(reply)) => {
+                    let result = logger.take().map(SessionLogger::finish).unwrap_or(Ok(()));
+                    if result.is_ok() {
+                        let _ = on_event.send(SerialEvent::Log {
+                            session_id: session_id.clone(),
+                            state: LogState::Stopped,
+                            path: None,
+                            message: None,
+                        });
+                    }
                     let _ = reply.send(result);
                 }
                 Ok(ProcessCommand::Close) => {
@@ -462,6 +553,18 @@ fn process_worker<R1, R2>(
         match output_rx.recv_timeout(Duration::from_millis(10)) {
             Ok(ProcessOutput::Data(bytes)) => {
                 sequence += 1;
+                if let Some(active_logger) = logger.as_mut() {
+                    if let Err(message) = active_logger.write(&bytes) {
+                        let path = active_logger.path_string();
+                        logger = None;
+                        let _ = on_event.send(SerialEvent::Log {
+                            session_id: session_id.clone(),
+                            state: LogState::Error,
+                            path: Some(path),
+                            message: Some(message),
+                        });
+                    }
+                }
                 let _ = on_event.send(SerialEvent::Data {
                     session_id: session_id.clone(),
                     sequence,
@@ -493,6 +596,19 @@ fn process_worker<R1, R2>(
 
     if let Ok(mut active_sessions) = sessions.lock() {
         active_sessions.remove(&session_id);
+    }
+    if let Some(active_logger) = logger.take() {
+        let result = active_logger.finish();
+        let _ = on_event.send(SerialEvent::Log {
+            session_id: session_id.clone(),
+            state: if result.is_ok() {
+                LogState::Stopped
+            } else {
+                LogState::Error
+            },
+            path: None,
+            message: result.err(),
+        });
     }
 
     if requested_close {
@@ -550,6 +666,33 @@ where
             }
         }
     });
+}
+
+fn send_process_command(
+    registry: &State<'_, ProcessRegistry>,
+    session_id: &str,
+    command: ProcessCommand,
+) -> Result<(), String> {
+    let sessions = registry
+        .sessions
+        .lock()
+        .map_err(|_| "命令会话注册表已损坏。")?;
+    let handle = sessions
+        .get(session_id)
+        .ok_or_else(|| "SSH/ADB 会话不存在或已经关闭。".to_string())?;
+    handle
+        .commands
+        .send(command)
+        .map_err(|_| "SSH/ADB 会话进程已经退出，请重新连接。".to_string())
+}
+
+fn receive_process_reply<T>(
+    receiver: Receiver<Result<T, String>>,
+    action: &str,
+) -> Result<T, String> {
+    receiver
+        .recv_timeout(COMMAND_REPLY_TIMEOUT)
+        .map_err(|_| format!("{action}超时。"))?
 }
 
 fn unix_time_ms() -> u128 {

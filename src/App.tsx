@@ -52,6 +52,9 @@ import {
   listAdbDevices,
   openAdbSession,
   openSshSession,
+  setProcessLogPaused,
+  startProcessLog,
+  stopProcessLog,
   writeProcessBytes,
   writeProcessText,
 } from "./lib/remote";
@@ -424,7 +427,9 @@ export default function App() {
   const startLogging = useCallback(
     async (sessionId: string, profile: SessionProfile) => {
       try {
-        const path = await startSerialLog(
+        const startLog =
+          profile.protocol === "serial" ? startSerialLog : startProcessLog;
+        const path = await startLog(
           sessionId,
           profile.name,
           profile.logging.mode,
@@ -490,7 +495,7 @@ export default function App() {
           );
           try {
             await openConfiguredSession(alreadyOpen.id, profile, applyEvent);
-            if (profile.protocol === "serial" && profile.logging.autoStart) {
+            if (profile.logging.autoStart) {
               await startLogging(alreadyOpen.id, profile);
             }
           } catch (error) {
@@ -538,7 +543,7 @@ export default function App() {
 
       try {
         await openConfiguredSession(sessionId, profile, applyEvent);
-        if (profile.protocol === "serial" && profile.logging.autoStart) {
+        if (profile.logging.autoStart) {
           await startLogging(sessionId, profile);
         }
       } catch (error) {
@@ -838,10 +843,14 @@ export default function App() {
   };
 
   const toggleLogPaused = async () => {
-    if (!activeSession) return;
+    if (!activeSession || !activeProfile) return;
     const paused = activeSession.logState === "recording";
     try {
-      await setSerialLogPaused(activeSession.id, paused);
+      const setPaused =
+        activeProfile.protocol === "serial"
+          ? setSerialLogPaused
+          : setProcessLogPaused;
+      await setPaused(activeSession.id, paused);
       setSessions((current) =>
         current.map((session) =>
           session.id === activeSession.id
@@ -868,9 +877,13 @@ export default function App() {
   };
 
   const stopLogging = async () => {
-    if (!activeSession) return;
+    if (!activeSession || !activeProfile) return;
     try {
-      await stopSerialLog(activeSession.id);
+      const stopLog =
+        activeProfile.protocol === "serial"
+          ? stopSerialLog
+          : stopProcessLog;
+      await stopLog(activeSession.id);
       setSessions((current) =>
         current.map((session) =>
           session.id === activeSession.id
@@ -1139,7 +1152,6 @@ export default function App() {
                   disabled={
                     !activeSession ||
                     !activeProfile ||
-                    activeProfile.protocol !== "serial" ||
                     activeSession.state !== "connected"
                   }
                   onClick={() =>

@@ -3,6 +3,7 @@ import { appendLineEnding, isTauriRuntime } from "./serial";
 import type {
   AdbDeviceDescriptor,
   LineEnding,
+  LogMode,
   SerialEvent,
   SessionProfile,
 } from "./types";
@@ -167,4 +168,34 @@ export async function writeProcessText(
     sessionId,
     new TextEncoder().encode(appendLineEnding(text, lineEnding)),
   );
+}
+
+export async function startProcessLog(
+  sessionId: string,
+  sessionName: string,
+  mode: LogMode,
+  encoding: string,
+  append: boolean,
+): Promise<string> {
+  if (isTauriRuntime()) {
+    return invoke<string>("start_process_log", {
+      request: { sessionId, sessionName, mode, encoding, append },
+    });
+  }
+  return `/mock/logs/${sessionName.replaceAll("/", "_")}.log`;
+}
+
+export async function setProcessLogPaused(
+  sessionId: string,
+  paused: boolean,
+): Promise<void> {
+  if (isTauriRuntime()) {
+    await invoke("set_process_log_paused", { sessionId, paused });
+  }
+}
+
+export async function stopProcessLog(sessionId: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invoke("stop_process_log", { sessionId });
+  }
 }

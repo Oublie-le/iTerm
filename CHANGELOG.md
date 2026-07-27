@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## Unreleased
+
+### Added
+
+- SSH 与 ADB 会话支持原始字节/文本日志及开始、暂停、继续、停止和自动记录。
+
 ## 0.3.0 - 2026-07-27
 
 ### Added
