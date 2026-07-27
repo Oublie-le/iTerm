@@ -22,6 +22,7 @@ import type {
   SessionProfile,
 } from "../lib/types";
 import { sessionTargetLabel } from "../lib/types";
+import { useI18n } from "../lib/i18n";
 
 interface TerminalPaneProps {
   session: RuntimeSession;
@@ -48,6 +49,7 @@ export function TerminalPane({
   onClear,
   onInput,
 }: TerminalPaneProps) {
+  const { locale, t } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -319,7 +321,7 @@ export function TerminalPane({
       className={`terminal-pane ${visible ? "is-visible" : ""} ${
         active ? "is-active" : ""
       }`}
-      aria-label={`${profile.name} 终端`}
+      aria-label={t("terminal.label", { name: profile.name })}
       onMouseDown={onActivate}
     >
       <div
@@ -327,13 +329,18 @@ export function TerminalPane({
         className={`terminal-host ${receiveMode === "text" ? "" : "is-hidden"}`}
       />
       {receiveMode === "hex" && (
-        <div className="terminal-hex-view" aria-label="Hex 接收视图">
+        <div
+          className="terminal-hex-view"
+          aria-label={t("terminal.hexView")}
+        >
           {hexDump.omittedBytes > 0 && (
             <div className="hex-omitted">
-              已隐藏较早的 {hexDump.omittedBytes.toLocaleString()} 字节
+              {t("terminal.hexOmitted", {
+                bytes: hexDump.omittedBytes.toLocaleString(locale),
+              })}
             </div>
           )}
-          <pre>{hexDump.text || "等待接收数据…"}</pre>
+          <pre>{hexDump.text || t("terminal.waiting")}</pre>
         </div>
       )}
       <div className="terminal-tools">
@@ -357,14 +364,24 @@ export function TerminalPane({
                   terminalRef.current?.focus();
                 }
               }}
-              placeholder="查找终端内容"
-              aria-label="查找终端内容"
+              placeholder={t("terminal.search")}
+              aria-label={t("terminal.search")}
             />
-            {searchFound === false && <span className="search-empty">无结果</span>}
-            <button onClick={() => find("previous")} title="上一个">
+            {searchFound === false && (
+              <span className="search-empty">
+                {t("terminal.search.empty")}
+              </span>
+            )}
+            <button
+              onClick={() => find("previous")}
+              title={t("terminal.search.previous")}
+            >
               <ChevronUp size={14} />
             </button>
-            <button onClick={() => find("next")} title="下一个">
+            <button
+              onClick={() => find("next")}
+              title={t("terminal.search.next")}
+            >
               <ChevronDown size={14} />
             </button>
             <button
@@ -372,7 +389,7 @@ export function TerminalPane({
                 setSearchOpen(false);
                 terminalRef.current?.focus();
               }}
-              title="关闭查找"
+              title={t("terminal.search.close")}
             >
               <X size={14} />
             </button>
@@ -385,30 +402,30 @@ export function TerminalPane({
             setSearchOpen(true);
             window.setTimeout(() => searchInputRef.current?.focus(), 0);
           }}
-          title="查找（Ctrl/⌘+F）"
+          title={t("terminal.search.title")}
         >
           <Search size={15} />
         </button>
         <button
           className="terminal-tool-button"
           onClick={clearTerminal}
-          title="清空接收视图"
+          title={t("terminal.clear")}
         >
           <Trash2 size={15} />
         </button>
         <button
           className="terminal-tool-button"
           onClick={softResetTerminal}
-          title="软复位终端（保留内容）"
-          aria-label="软复位终端"
+          title={t("terminal.softReset.title")}
+          aria-label={t("terminal.softReset")}
         >
           <RotateCcw size={15} />
         </button>
         <button
           className="terminal-tool-button"
           onClick={hardResetTerminal}
-          title="硬复位终端（清空内容和状态）"
-          aria-label="硬复位终端"
+          title={t("terminal.hardReset.title")}
+          aria-label={t("terminal.hardReset")}
         >
           <Power size={15} />
         </button>
@@ -416,7 +433,7 @@ export function TerminalPane({
       {session.state === "opening" && (
         <div className="terminal-loading">
           <span className="spinner" />
-          正在打开 {sessionTargetLabel(profile)}…
+          {t("terminal.opening", { target: sessionTargetLabel(profile) })}
         </div>
       )}
     </section>
