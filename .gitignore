@@ -1,7 +1,6 @@
 node_modules/
 .pnpm-store/
 dist/
-/iTerm-*-web.zip
 .DS_Store
 *.log
 
