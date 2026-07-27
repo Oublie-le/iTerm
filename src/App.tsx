@@ -144,7 +144,13 @@ import {
   PERSISTENCE_ERROR_EVENT,
   setPersistentItem,
 } from "./lib/persistence";
-import { I18nProvider, resolveLocale } from "./lib/i18n";
+import {
+  createTranslator,
+  I18nProvider,
+  resolveLocale,
+  type TranslationKey,
+  type Translator,
+} from "./lib/i18n";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -163,16 +169,19 @@ function loadProfiles(): SessionProfile[] {
   }
 }
 
-function stateLabel(state: RuntimeSession["state"]): string {
-  const labels: Record<RuntimeSession["state"], string> = {
-    disconnected: "已断开",
-    opening: "正在连接",
-    connected: "已连接",
-    closing: "正在关闭",
-    deviceLost: "设备丢失",
-    error: "连接错误",
+function stateLabel(
+  state: RuntimeSession["state"],
+  t: Translator,
+): string {
+  const labels: Record<RuntimeSession["state"], TranslationKey> = {
+    disconnected: "state.disconnected",
+    opening: "state.opening",
+    connected: "state.connected",
+    closing: "state.closing",
+    deviceLost: "state.deviceLost",
+    error: "state.error",
   };
-  return labels[state];
+  return t(labels[state]);
 }
 
 function hasConnectionTarget(profile: SessionProfile): boolean {
@@ -345,6 +354,10 @@ export default function App() {
   const resolvedLocale = resolveLocale(
     preferences.locale,
     navigator.language,
+  );
+  const t = useMemo(
+    () => createTranslator(resolvedLocale),
+    [resolvedLocale],
   );
   const workspaceSessionIdentity = sessions
     .map((session) => `${session.id}:${session.profileId}`)
@@ -1881,52 +1894,64 @@ export default function App() {
       >
       <header className="app-menubar">
         <div className="menu-items">
-          {["会话", "编辑", "搜索", "选择", "转到", "查看", "模式", "工具", "窗口", "帮助"].map(
-            (item) => (
+          {(
+            [
+              ["shell.menu.session", false],
+              ["shell.menu.edit", false],
+              ["shell.menu.search", false],
+              ["shell.menu.select", false],
+              ["shell.menu.go", false],
+              ["shell.menu.view", false],
+              ["shell.menu.mode", false],
+              ["shell.menu.tools", false],
+              ["shell.menu.window", false],
+              ["shell.menu.help", true],
+            ] as const
+          ).map(([key, isHelp]) => (
               <button
-                key={item}
-                onClick={() => item === "帮助" && setShortcutHelpOpen(true)}
-                title={item === "帮助" ? "快捷键帮助（Ctrl/⌘+/）" : item}
+                key={key}
+                onClick={() => isHelp && setShortcutHelpOpen(true)}
+                title={isHelp ? t("shell.shortcuts.openTitle") : t(key)}
               >
-                {item}
+                {t(key)}
               </button>
-            ),
-          )}
+            ))}
         </div>
         <div className="menu-actions">
-          <button title="搜索">
+          <button title={t("shell.search")}>
             <Search size={17} />
           </button>
           <button
             className={
               activeSession?.syncChannel !== "off" ? "is-active" : ""
             }
-            title="切换同步输入通道 A/B/C/D"
+            title={t("shell.sync.title")}
             disabled={!activeSession}
             onClick={cycleSyncChannel}
           >
             <Link2 size={17} />
-            同步{" "}
+            {t("shell.sync")}{" "}
             {activeSession?.syncChannel === "off"
               ? "—"
               : activeSession?.syncChannel}
           </button>
           <button
             className={focusMode ? "is-active" : ""}
-            title="专注模式（Ctrl/⌘+Shift+F）"
+            title={t("shell.focus.title")}
             onClick={() => setFocusMode((current) => !current)}
           >
             <Zap size={16} />
-            专注模式
+            {t("shell.focus")}
           </button>
           <button
-            title={`主题：${
-              preferences.theme === "light"
-                ? "浅色"
-                : preferences.theme === "dark"
-                  ? "深色"
-                  : "跟随系统"
-            }（点击切换）`}
+            title={t("shell.theme.title", {
+              theme:
+                preferences.theme === "light"
+                  ? t("shell.theme.light")
+                  : preferences.theme === "dark"
+                    ? t("shell.theme.dark")
+                    : t("shell.theme.system"),
+            })}
             onClick={() =>
               setPreferences((current) => ({
                 ...current,
@@ -1936,13 +1961,13 @@ export default function App() {
           >
             <SunMoon size={16} />
             {preferences.theme === "light"
-              ? "浅色"
+              ? t("shell.theme.light")
               : preferences.theme === "dark"
-                ? "深色"
-                : "系统"}
+                ? t("shell.theme.dark")
+                : t("shell.theme.systemShort")}
           </button>
           <button
-            title="应用设置"
+            title={t("shell.settings")}
             onClick={() => setAppSettingsOpen(true)}
           >
             <Menu size={18} />
@@ -1981,7 +2006,11 @@ export default function App() {
             <button
               className="sidebar-toggle"
               onClick={() => setSidebarOpen((value) => !value)}
-              title={sidebarOpen ? "隐藏会话管理器" : "显示会话管理器"}
+              title={
+                sidebarOpen
+                  ? t("shell.sidebar.hide")
+                  : t("shell.sidebar.show")
+              }
             >
               {sidebarOpen ? (
                 <PanelLeftClose size={17} />
@@ -2031,7 +2060,7 @@ export default function App() {
               }`}
               disabled={sessions.length < 2}
               onClick={() => changeSplitMode("horizontal")}
-              title="左右分屏"
+              title={t("shell.split.horizontal")}
             >
               <Columns2 size={17} />
             </button>
@@ -2041,7 +2070,7 @@ export default function App() {
               }`}
               disabled={sessions.length < 2}
               onClick={() => changeSplitMode("vertical")}
-              title="上下分屏"
+              title={t("shell.split.vertical")}
             >
               <Rows2 size={17} />
             </button>
@@ -2049,7 +2078,7 @@ export default function App() {
               <button
                 className="tab-action"
                 onClick={closeSplit}
-                title="关闭分屏"
+                title={t("shell.split.close")}
               >
                 <PanelTopClose size={17} />
               </button>
@@ -2057,11 +2086,11 @@ export default function App() {
             <button
               className="tab-action"
               onClick={openNewDialog}
-              title="新建会话（Ctrl/⌘+N）"
+              title={t("shell.session.newTitle")}
             >
               <CirclePlus size={18} />
             </button>
-            <button className="tab-action" title="标签列表">
+            <button className="tab-action" title={t("shell.tabs.list")}>
               <Menu size={17} />
             </button>
           </div>
@@ -2071,7 +2100,7 @@ export default function App() {
               <button
                 className="icon-button"
                 onClick={openNewDialog}
-                title="新建会话（Ctrl/⌘+N）"
+                title={t("shell.session.newTitle")}
               >
                 <CirclePlus size={19} />
               </button>
@@ -2079,7 +2108,7 @@ export default function App() {
                 <button
                   className="icon-button"
                   onClick={() => void disconnectSession(activeSession)}
-                  title="断开会话（Ctrl/⌘+Enter）"
+                  title={t("shell.session.disconnectTitle")}
                 >
                   <Unplug size={18} />
                 </button>
@@ -2090,7 +2119,7 @@ export default function App() {
                   onClick={() =>
                     activeProfile && void connectProfile(activeProfile)
                   }
-                  title="连接会话（Ctrl/⌘+Enter）"
+                  title={t("shell.session.connectTitle")}
                 >
                   <PlugZap size={18} />
                 </button>
@@ -2102,7 +2131,7 @@ export default function App() {
                   activeProfile &&
                   void connectProfile(activeProfile, activeSession?.id)
                 }
-                title="重新连接"
+                title={t("shell.session.reconnect")}
               >
                 <RotateCw size={18} />
               </button>
@@ -2114,7 +2143,7 @@ export default function App() {
                   setEditingProfile(activeProfile);
                   setSessionDialogOpen(true);
                 }}
-                title="会话设置（Ctrl/⌘+,）"
+                title={t("shell.session.settingsTitle")}
               >
                 <Settings size={18} />
               </button>
@@ -2129,7 +2158,7 @@ export default function App() {
               <span>
                 {activeProfile
                   ? sessionTargetLabel(activeProfile)
-                  : "尚未打开会话"}
+                  : t("shell.session.none")}
               </span>
             </div>
 
@@ -2144,8 +2173,8 @@ export default function App() {
                     onClick={() => void toggleLogPaused()}
                     title={
                       activeSession.logState === "recording"
-                        ? "暂停日志"
-                        : "继续日志"
+                        ? t("shell.log.pause")
+                        : t("shell.log.resume")
                     }
                   >
                     {activeSession.logState === "recording" ? (
@@ -2158,7 +2187,7 @@ export default function App() {
                   <button
                     className="icon-button"
                     onClick={() => void stopLogging()}
-                    title="停止日志"
+                    title={t("shell.log.stop")}
                   >
                     <CircleStop size={16} />
                   </button>
@@ -2176,7 +2205,7 @@ export default function App() {
                     activeProfile &&
                     void startLogging(activeSession.id, activeProfile)
                   }
-                  title="开始会话日志"
+                  title={t("shell.log.start")}
                 >
                   <FileClock size={14} />
                   LOG
@@ -2189,14 +2218,14 @@ export default function App() {
                   activeSession?.logPath &&
                   void openLogs(activeSession.logPath)
                 }
-                title="打开当前日志文件"
+                title={t("shell.log.openFile")}
               >
                 <FileText size={16} />
               </button>
               <button
                 className="icon-button"
                 onClick={() => void openLogs()}
-                title="打开日志目录"
+                title={t("shell.log.openDirectory")}
               >
                 <FolderOpen size={16} />
               </button>
@@ -2218,7 +2247,7 @@ export default function App() {
                     ),
                   )
                 }
-                title="切换文本与 Hex 接收视图"
+                title={t("shell.receive.toggle")}
               >
                 <Binary size={15} />
                 HEX
@@ -2230,7 +2259,7 @@ export default function App() {
                   activeSession?.state !== "connected"
                 }
                 onClick={() => void toggleSignal("dtr")}
-                title="切换 DTR"
+                title={t("shell.signal.dtr")}
               >
                 DTR
               </button>
@@ -2241,7 +2270,7 @@ export default function App() {
                   activeSession?.state !== "connected"
                 }
                 onClick={() => void toggleSignal("rts")}
-                title="切换 RTS"
+                title={t("shell.signal.rts")}
               >
                 RTS
               </button>
@@ -2254,7 +2283,7 @@ export default function App() {
                 onClick={() =>
                   activeSession && void sendSerialBreak(activeSession.id)
                 }
-                title="发送 Break"
+                title={t("shell.signal.break")}
               >
                 <CircleStop size={18} />
               </button>
@@ -2268,14 +2297,14 @@ export default function App() {
                   activeSession &&
                   void clearSerialBuffers(activeSession.id, "all")
                 }
-                title="清空串口输入/输出缓冲"
+                title={t("shell.signal.clear")}
               >
                 <Eraser size={17} />
               </button>
               <button
                 className="icon-button"
                 onClick={() => void refreshPorts()}
-                title="刷新设备"
+                title={t("shell.devices.refresh")}
               >
                 <RefreshCw size={18} />
               </button>
@@ -2286,7 +2315,7 @@ export default function App() {
             <div className="notice-bar error">
               <Info size={18} />
               <div>
-                <strong>读取串口列表失败</strong>
+                <strong>{t("shell.error.serialList")}</strong>
                 <span>{portError}</span>
               </div>
               <button onClick={() => setPortError("")}>
@@ -2299,7 +2328,7 @@ export default function App() {
             <div className="notice-bar error">
               <Info size={18} />
               <div>
-                <strong>读取 ADB 设备失败</strong>
+                <strong>{t("shell.error.adbList")}</strong>
                 <span>{adbError}</span>
               </div>
               <button onClick={() => setAdbError("")}>
@@ -2312,7 +2341,7 @@ export default function App() {
             <div className="notice-bar error">
               <Info size={18} />
               <div>
-                <strong>无法打开日志位置</strong>
+                <strong>{t("shell.error.logLocation")}</strong>
                 <span>{utilityError}</span>
               </div>
               <button onClick={() => setUtilityError("")}>
@@ -2325,8 +2354,10 @@ export default function App() {
             <div className="notice-bar error">
               <Info size={18} />
               <div>
-                <strong>配置数据库不可用</strong>
-                <span>{persistenceError} 当前继续使用浏览器存储。</span>
+                <strong>{t("shell.error.persistence")}</strong>
+                <span>
+                  {persistenceError} {t("shell.error.persistenceFallback")}
+                </span>
               </div>
               <button onClick={() => setPersistenceError("")}>
                 <X size={17} />
@@ -2368,7 +2399,7 @@ export default function App() {
                       void connectProfile(activeProfile, activeSession.id)
                     }
                   >
-                    重新连接
+                    {t("shell.action.reconnect")}
                   </button>
                 )}
               <button
@@ -2394,11 +2425,11 @@ export default function App() {
                   <Cable size={34} />
                 </div>
                 <h1>iTerm</h1>
-                <p>WindTerm 风格的串口、SSH 与 ADB 终端工作区</p>
+                <p>{t("shell.welcome.subtitle")}</p>
                 <div className="welcome-actions">
                   <button className="primary-button" onClick={openNewDialog}>
                     <CirclePlus size={17} />
-                    新建会话
+                    {t("shell.welcome.new")}
                   </button>
                   <button
                     className="secondary-button"
@@ -2408,13 +2439,15 @@ export default function App() {
                     }}
                   >
                     <RefreshCw size={16} />
-                    刷新设备
+                    {t("shell.welcome.refresh")}
                   </button>
                 </div>
                 <div className="available-port-summary">
                   <Cable size={15} />
-                  已发现 {ports.length} 个串口设备、{adbDevices.length} 个
-                  ADB 设备
+                  {t("shell.welcome.discovered", {
+                    serialCount: ports.length,
+                    adbCount: adbDevices.length,
+                  })}
                 </div>
               </div>
             )}
@@ -2457,7 +2490,7 @@ export default function App() {
                                     ...item,
                                     notice: {
                                       tone: "warning",
-                                      title: "远程终端尺寸同步失败",
+                                      title: t("shell.error.remoteResize"),
                                       detail:
                                         error instanceof Error
                                           ? error.message
@@ -2511,19 +2544,25 @@ export default function App() {
                 <Cable size={15} />
               </span>
               <strong>
-                {activeSession ? stateLabel(activeSession.state) : "就绪"}
+                {activeSession
+                  ? stateLabel(activeSession.state, t)
+                  : t("shell.status.ready")}
               </strong>
             </div>
             <div className="status-items">
               <button>
-                {activeSession?.state === "connected" ? "远程模式" : "本地模式"}
+                {activeSession?.state === "connected"
+                  ? t("shell.status.remote")
+                  : t("shell.status.local")}
               </button>
               <span>
-                窗口 {activeSession?.terminalCols ?? 80}×
-                {activeSession?.terminalRows ?? 24}
+                {t("shell.status.window", {
+                  cols: activeSession?.terminalCols ?? 80,
+                  rows: activeSession?.terminalRows ?? 24,
+                })}
               </span>
-              <span>行 1</span>
-              <span>字符 0</span>
+              <span>{t("shell.status.line")}</span>
+              <span>{t("shell.status.character")}</span>
               <span>{activeProfile?.terminal.termType ?? "Plain Text"}</span>
               <span>
                 RX {formatByteCount(activeSession?.bytesRead ?? 0)} · TX{" "}
@@ -2534,12 +2573,12 @@ export default function App() {
                   className={`log-status state-${activeSession.logState}`}
                   title={activeSession.logPath}
                 >
-                  日志{" "}
+                  {t("shell.status.log")}{" "}
                   {activeSession.logState === "recording"
-                    ? "记录中"
+                    ? t("shell.status.recording")
                     : activeSession.logState === "paused"
-                      ? "已暂停"
-                      : "错误"}
+                      ? t("shell.status.paused")
+                      : t("shell.status.error")}
                 </span>
               )}
               <button
@@ -2548,7 +2587,7 @@ export default function App() {
                 disabled={sessions.length === 0}
               >
                 <PanelBottom size={15} />
-                发送
+                {t("shell.status.sender")}
               </button>
             </div>
           </footer>
@@ -2594,30 +2633,35 @@ export default function App() {
               <div>
                 <Keyboard size={20} />
                 <div>
-                  <h2 id="shortcut-dialog-title">键盘快捷键</h2>
-                  <p>Ctrl 与 ⌘ 会根据当前平台使用。</p>
+                  <h2 id="shortcut-dialog-title">
+                    {t("shell.shortcuts.title")}
+                  </h2>
+                  <p>{t("shell.shortcuts.subtitle")}</p>
                 </div>
               </div>
               <button
                 className="icon-button"
                 onClick={() => setShortcutHelpOpen(false)}
-                aria-label="关闭快捷键帮助"
+                aria-label={t("shell.shortcuts.close")}
               >
                 <X size={17} />
               </button>
             </header>
             <div className="shortcut-list">
               {[
-                ["新建会话", "Ctrl/⌘ + N"],
-                ["关闭当前标签", "Ctrl/⌘ + W"],
-                ["下一个 / 上一个标签", "Ctrl/⌘ + Tab / Shift + Tab"],
-                ["连接或断开", "Ctrl/⌘ + Enter"],
-                ["会话设置", "Ctrl/⌘ + ,"],
-                ["切换会话侧栏", "Ctrl/⌘ + B"],
-                ["切换发送窗格", "Ctrl/⌘ + J"],
-                ["切换专注模式", "Ctrl/⌘ + Shift + F"],
-                ["打开快捷键帮助", "Ctrl/⌘ + /"],
-                ["关闭对话框 / 退出专注", "Esc"],
+                [t("shell.shortcuts.new"), "Ctrl/⌘ + N"],
+                [t("shell.shortcuts.closeTab"), "Ctrl/⌘ + W"],
+                [
+                  t("shell.shortcuts.switchTabs"),
+                  "Ctrl/⌘ + Tab / Shift + Tab",
+                ],
+                [t("shell.shortcuts.connect"), "Ctrl/⌘ + Enter"],
+                [t("shell.shortcuts.settings"), "Ctrl/⌘ + ,"],
+                [t("shell.shortcuts.sidebar"), "Ctrl/⌘ + B"],
+                [t("shell.shortcuts.sender"), "Ctrl/⌘ + J"],
+                [t("shell.shortcuts.focus"), "Ctrl/⌘ + Shift + F"],
+                [t("shell.shortcuts.help"), "Ctrl/⌘ + /"],
+                [t("shell.shortcuts.dismiss"), "Esc"],
               ].map(([label, keys]) => (
                 <div key={label}>
                   <span>{label}</span>
@@ -2632,10 +2676,10 @@ export default function App() {
         <button
           className="focus-exit-button"
           onClick={() => setFocusMode(false)}
-          title="退出专注模式（Esc）"
+          title={t("shell.focus.exitTitle")}
         >
           <Zap size={15} />
-          退出专注
+          {t("shell.focus.exit")}
         </button>
       )}
       </div>
