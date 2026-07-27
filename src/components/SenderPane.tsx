@@ -20,8 +20,8 @@ interface SenderPaneProps {
   connected: boolean;
   onClose: () => void;
   onSend: (preset: SenderPreset) => Promise<number>;
-  onSendFile: (
-    file: File,
+  onSendFiles: (
+    files: File[],
     protocol: FileTransferProtocol,
     onProgress: (sentBytes: number, totalBytes: number) => void,
     signal: AbortSignal,
@@ -33,7 +33,7 @@ export function SenderPane({
   connected,
   onClose,
   onSend,
-  onSendFile,
+  onSendFiles,
 }: SenderPaneProps) {
   const [presets, setPresets] = useState<SenderPreset[]>(() =>
     loadSenderPresets(profileId),
@@ -133,22 +133,26 @@ export function SenderPane({
     setActiveId(next[Math.max(0, index - 1)].id);
   };
 
-  const sendFile = async (file: File) => {
+  const sendFiles = async (files: File[]) => {
+    if (files.length === 0) return;
     setLastError("");
     const controller = new AbortController();
     fileAbortRef.current = controller;
     setRunning(true);
+    const transferName =
+      files.length === 1 ? files[0].name : `${files.length} 个文件`;
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
     setFileTransfer({
-      name: file.name,
+      name: transferName,
       sentBytes: 0,
-      totalBytes: file.size,
+      totalBytes,
     });
     try {
-      const count = await onSendFile(
-        file,
+      const count = await onSendFiles(
+        files,
         fileProtocol,
         (sentBytes, totalBytes) =>
-          setFileTransfer({ name: file.name, sentBytes, totalBytes }),
+          setFileTransfer({ name: transferName, sentBytes, totalBytes }),
         controller.signal,
       );
       setSentBytes((value) => value + count);
@@ -211,7 +215,9 @@ export function SenderPane({
             title={
               fileProtocol === "raw"
                 ? "发送原始文件"
-                : "使用 XModem-CRC 发送文件"
+                : fileProtocol === "xmodemCrc"
+                  ? "使用 XModem-CRC 发送文件"
+                  : "使用 YModem 批量发送文件"
             }
           >
             <FileUp size={16} />
@@ -227,14 +233,16 @@ export function SenderPane({
           >
             <option value="raw">Raw</option>
             <option value="xmodemCrc">XModem-CRC</option>
+            <option value="ymodem">YModem Batch</option>
           </select>
           <input
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
+            multiple={fileProtocol === "ymodem"}
             onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void sendFile(file);
+              const files = Array.from(event.target.files ?? []);
+              if (files.length > 0) void sendFiles(files);
               event.target.value = "";
             }}
           />

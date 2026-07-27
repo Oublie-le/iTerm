@@ -22,7 +22,7 @@ export type SessionProtocol = "serial" | "ssh" | "adb";
 export type SshAuthMode = "agent" | "privateKey" | "password";
 export type TriggerMatcher = "text" | "regex";
 export type TriggerAction = "sendText" | "startLog" | "notification";
-export type FileTransferProtocol = "raw" | "xmodemCrc";
+export type FileTransferProtocol = "raw" | "xmodemCrc" | "ymodem";
 
 export interface SerialPortDescriptor {
   path: string;

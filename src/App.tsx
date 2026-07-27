@@ -111,6 +111,7 @@ import {
   type SplitSessionIds,
 } from "./lib/layout";
 import { AsyncByteQueue, sendXmodemCrc } from "./lib/xmodem";
+import { sendYmodemBatch } from "./lib/ymodem";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -1126,12 +1127,14 @@ export default function App() {
     return count;
   };
 
-  const sendFile = async (
-    file: File,
+  const sendFiles = async (
+    files: File[],
     protocol: FileTransferProtocol,
     onProgress: (sentBytes: number, totalBytes: number) => void,
     signal: AbortSignal,
   ): Promise<number> => {
+    const file = files[0];
+    if (!file) throw new Error("请选择要发送的文件。");
     if (
       !activeSession ||
       !activeProfile ||
@@ -1143,7 +1146,7 @@ export default function App() {
     const sessionId = activeSession.id;
     const profile = activeProfile;
     const byteQueue =
-      protocol === "xmodemCrc" ? new AsyncByteQueue() : undefined;
+      protocol === "raw" ? undefined : new AsyncByteQueue();
     if (byteQueue) transferByteQueuesRef.current.set(sessionId, byteQueue);
     setSessions((current) =>
       current.map((session) =>
@@ -1167,15 +1170,25 @@ export default function App() {
         );
         return count;
       };
-      return protocol === "xmodemCrc" && byteQueue
-        ? await sendXmodemCrc(
-            file,
-            sendBytes,
-            byteQueue,
-            onProgress,
-            signal,
-          )
-        : await sendFileInChunks(
+      if (protocol === "xmodemCrc" && byteQueue) {
+        return await sendXmodemCrc(
+          file,
+          sendBytes,
+          byteQueue,
+          onProgress,
+          signal,
+        );
+      }
+      if (protocol === "ymodem" && byteQueue) {
+        return await sendYmodemBatch(
+          files,
+          sendBytes,
+          byteQueue,
+          ({ sentBytes, totalBytes }) => onProgress(sentBytes, totalBytes),
+          signal,
+        );
+      }
+      return await sendFileInChunks(
             file,
             sendBytes,
             onProgress,
@@ -1917,7 +1930,7 @@ export default function App() {
               connected={activeSession?.state === "connected"}
               onClose={() => setSenderOpen(false)}
               onSend={sendPreset}
-              onSendFile={sendFile}
+              onSendFiles={sendFiles}
             />
           )}
 
