@@ -201,6 +201,7 @@ UI 通过命令执行连接和发送，接收数据通过 Tauri Channel 按序�
 - [实施与验收计划](docs/04-implementation-plan.md)
 - [功能与跨平台验收矩阵](docs/06-feature-matrix.md)
 - [数据与隐私说明](docs/07-privacy.md)
+- [故障排查](docs/08-troubleshooting.md)
 
 ## 自动化
 
