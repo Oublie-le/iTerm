@@ -144,6 +144,7 @@ import {
   PERSISTENCE_ERROR_EVENT,
   setPersistentItem,
 } from "./lib/persistence";
+import { I18nProvider, resolveLocale } from "./lib/i18n";
 
 const PROFILE_STORAGE_KEY = "iterm.profiles.v1";
 const LEGACY_PROFILE_STORAGE_KEY = "serialterm.profiles.v1";
@@ -341,6 +342,10 @@ export default function App() {
     (profile) => profile.id === activeSession?.profileId,
   );
   const resolvedTheme = resolveTheme(preferences.theme, systemPrefersDark);
+  const resolvedLocale = resolveLocale(
+    preferences.locale,
+    navigator.language,
+  );
   const workspaceSessionIdentity = sessions
     .map((session) => `${session.id}:${session.profileId}`)
     .join("|");
@@ -354,6 +359,10 @@ export default function App() {
     });
     // Startup is recorded once; later profile/session changes are separate events.
   }, [captureDiagnostic]);
+
+  useEffect(() => {
+    document.documentElement.lang = resolvedLocale;
+  }, [resolvedLocale]);
 
   useEffect(() => {
     const handlePersistenceError = (event: Event) => {
@@ -1865,10 +1874,11 @@ export default function App() {
   );
 
   return (
-    <div
-      className={`app-shell ${focusMode ? "is-focus-mode" : ""}`}
-      data-theme={resolvedTheme}
-    >
+    <I18nProvider locale={resolvedLocale}>
+      <div
+        className={`app-shell ${focusMode ? "is-focus-mode" : ""}`}
+        data-theme={resolvedTheme}
+      >
       <header className="app-menubar">
         <div className="menu-items">
           {["会话", "编辑", "搜索", "选择", "转到", "查看", "模式", "工具", "窗口", "帮助"].map(
@@ -2628,6 +2638,7 @@ export default function App() {
           退出专注
         </button>
       )}
-    </div>
+      </div>
+    </I18nProvider>
   );
 }

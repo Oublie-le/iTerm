@@ -9,11 +9,13 @@ import {
   type TerminalConfig,
 } from "./types";
 import { setPersistentItem } from "./persistence";
+import type { AppLocale } from "./i18n";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 export interface AppPreferences {
+  locale: AppLocale;
   theme: ThemeMode;
   confirmActiveSessionClose: boolean;
   defaultProtocol: SessionProtocol;
@@ -26,6 +28,7 @@ export interface AppPreferences {
 const PREFERENCES_STORAGE_KEY = "iterm.preferences.v1";
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  locale: "zh-CN",
   theme: "light",
   confirmActiveSessionClose: true,
   defaultProtocol: "serial",
@@ -43,10 +46,15 @@ export function loadAppPreferences(
       storage.getItem(PREFERENCES_STORAGE_KEY) ?? "null",
     ) as Partial<AppPreferences> | null;
     const theme = parsed?.theme;
+    const locale = parsed?.locale;
     const defaultProtocol = parsed?.defaultProtocol;
     const enterKey = parsed?.sessionDefaults?.terminal?.enterKey;
     const backspaceKey = parsed?.sessionDefaults?.terminal?.backspaceKey;
     return {
+      locale:
+        locale === "zh-CN" || locale === "en-US"
+          ? locale
+          : DEFAULT_APP_PREFERENCES.locale,
       theme:
         theme === "light" || theme === "dark" || theme === "system"
           ? theme

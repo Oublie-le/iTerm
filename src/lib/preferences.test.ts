@@ -34,6 +34,15 @@ describe("application preferences", () => {
     );
   });
 
+  it("validates the saved interface language", () => {
+    expect(
+      loadAppPreferences({ getItem: () => '{"locale":"en-US"}' }).locale,
+    ).toBe("en-US");
+    expect(
+      loadAppPreferences({ getItem: () => '{"locale":"fr-FR"}' }).locale,
+    ).toBe("zh-CN");
+  });
+
   it("rejects unsupported default terminal key mappings", () => {
     const loaded = loadAppPreferences({
       getItem: () =>
