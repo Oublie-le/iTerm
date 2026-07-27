@@ -144,6 +144,21 @@ const zhCN = {
   "state.closing": "正在关闭",
   "state.deviceLost": "设备丢失",
   "state.error": "连接错误",
+  "sidebar.title": "会话管理器",
+  "sidebar.import": "导入会话配置",
+  "sidebar.export": "导出全部会话配置",
+  "sidebar.new": "新建会话",
+  "sidebar.filter": "筛选会话",
+  "sidebar.refresh": "刷新串口和 ADB 设备",
+  "sidebar.saved": "保存的会话",
+  "sidebar.empty": "新建第一个会话",
+  "sidebar.interactionHint": "双击连接，单击打开或编辑",
+  "sidebar.edit": "编辑 {name}",
+  "sidebar.duplicate": "复制 {name}",
+  "sidebar.delete": "删除 {name}",
+  "sidebar.available": "可用设备",
+  "sidebar.adb": "ADB 设备",
+  "sidebar.deviceCount": "{count} 个设备",
 } as const;
 
 export type TranslationKey = keyof typeof zhCN;
@@ -286,6 +301,21 @@ const enUS: Record<TranslationKey, string> = {
   "state.closing": "Disconnecting",
   "state.deviceLost": "Device lost",
   "state.error": "Connection error",
+  "sidebar.title": "Session Manager",
+  "sidebar.import": "Import session profiles",
+  "sidebar.export": "Export all session profiles",
+  "sidebar.new": "New Session",
+  "sidebar.filter": "Filter sessions",
+  "sidebar.refresh": "Refresh serial and ADB devices",
+  "sidebar.saved": "Saved Sessions",
+  "sidebar.empty": "Create your first session",
+  "sidebar.interactionHint": "Double-click to connect; click to open or edit",
+  "sidebar.edit": "Edit {name}",
+  "sidebar.duplicate": "Duplicate {name}",
+  "sidebar.delete": "Delete {name}",
+  "sidebar.available": "Available Devices",
+  "sidebar.adb": "ADB Devices",
+  "sidebar.deviceCount": "{count} devices",
 };
 
 export function createTranslator(locale: AppLocale): Translator {
