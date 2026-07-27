@@ -381,6 +381,26 @@ export default function App() {
   }, [resolvedLocale]);
 
   useEffect(() => {
+    const restoredMessages = new Set([
+      createTranslator("zh-CN")("runtime.workspaceRestored"),
+      createTranslator("en-US")("runtime.workspaceRestored"),
+    ]);
+    setSessions((current) =>
+      current.map((session) =>
+        session.notice && restoredMessages.has(session.notice.title)
+          ? {
+              ...session,
+              notice: {
+                ...session.notice,
+                title: t("runtime.workspaceRestored"),
+              },
+            }
+          : session,
+      ),
+    );
+  }, [t]);
+
+  useEffect(() => {
     const handlePersistenceError = (event: Event) => {
       const message = (event as CustomEvent<string>).detail;
       setPersistenceError(localizedErrorMessage(message, resolvedLocale));
