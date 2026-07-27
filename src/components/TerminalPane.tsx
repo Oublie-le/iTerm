@@ -15,7 +15,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { formatHexDump, timestampReceivedText } from "../lib/receive";
 import type { ResolvedTheme } from "../lib/preferences";
-import { resetTerminal } from "../lib/terminal";
+import { mapTerminalSpecialKey, resetTerminal } from "../lib/terminal";
 import type {
   ReceiveMode,
   RuntimeSession,
@@ -169,6 +169,11 @@ export function TerminalPane({
         window.setTimeout(() => searchInputRef.current?.focus(), 0);
         return false;
       }
+      const mappedInput = mapTerminalSpecialKey(event, profile.terminal);
+      if (mappedInput !== null) {
+        inputRef.current(mappedInput);
+        return false;
+      }
       return true;
     });
     const inputDisposable = terminal.onData((value) => inputRef.current(value));
@@ -228,6 +233,8 @@ export function TerminalPane({
     profile.terminal.fontFamily,
     profile.terminal.fontSize,
     profile.terminal.lineHeight,
+    profile.terminal.backspaceKey,
+    profile.terminal.enterKey,
     profile.terminal.scrollback,
     profile.terminal.timestamp,
     theme,

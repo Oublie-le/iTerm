@@ -43,6 +43,8 @@ export function loadAppPreferences(
     ) as Partial<AppPreferences> | null;
     const theme = parsed?.theme;
     const defaultProtocol = parsed?.defaultProtocol;
+    const enterKey = parsed?.sessionDefaults?.terminal?.enterKey;
+    const backspaceKey = parsed?.sessionDefaults?.terminal?.backspaceKey;
     return {
       theme:
         theme === "light" || theme === "dark" || theme === "system"
@@ -62,6 +64,14 @@ export function loadAppPreferences(
         terminal: {
           ...DEFAULT_TERMINAL_CONFIG,
           ...parsed?.sessionDefaults?.terminal,
+          enterKey:
+            enterKey === "cr" || enterKey === "lf" || enterKey === "crlf"
+              ? enterKey
+              : DEFAULT_TERMINAL_CONFIG.enterKey,
+          backspaceKey:
+            backspaceKey === "del" || backspaceKey === "bs"
+              ? backspaceKey
+              : DEFAULT_TERMINAL_CONFIG.backspaceKey,
         },
         logging: {
           ...DEFAULT_LOGGING_CONFIG,

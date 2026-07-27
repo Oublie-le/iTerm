@@ -62,6 +62,23 @@ describe("normalizeSessionProfile", () => {
 
     expect(normalizeSessionProfile(legacy).triggers).toEqual([]);
   });
+
+  it("adds default Enter and Backspace mappings to legacy profiles", () => {
+    const source = createSessionProfile();
+    const legacy = {
+      ...source,
+      terminal: {
+        ...source.terminal,
+        enterKey: undefined,
+        backspaceKey: undefined,
+      },
+    } as unknown as typeof source;
+
+    expect(normalizeSessionProfile(legacy).terminal).toMatchObject({
+      enterKey: "cr",
+      backspaceKey: "del",
+    });
+  });
 });
 
 describe("multi-protocol profiles", () => {

@@ -177,6 +177,36 @@ export function AppSettingsDialog({
                 </select>
               </label>
               <label className="field-row">
+                <span>Enter 键</span>
+                <select
+                  value={draft.sessionDefaults.terminal.enterKey}
+                  onChange={(event) =>
+                    updateTerminal({
+                      enterKey: event.target.value as TerminalConfig["enterKey"],
+                    })
+                  }
+                >
+                  <option value="cr">CR</option>
+                  <option value="lf">LF</option>
+                  <option value="crlf">CRLF</option>
+                </select>
+              </label>
+              <label className="field-row">
+                <span>Backspace 键</span>
+                <select
+                  value={draft.sessionDefaults.terminal.backspaceKey}
+                  onChange={(event) =>
+                    updateTerminal({
+                      backspaceKey: event.target
+                        .value as TerminalConfig["backspaceKey"],
+                    })
+                  }
+                >
+                  <option value="del">DEL（0x7F）</option>
+                  <option value="bs">BS（0x08）</option>
+                </select>
+              </label>
+              <label className="field-row">
                 <span>字号</span>
                 <input
                   type="number"

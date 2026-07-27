@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   DEC_SOFT_RESET_SEQUENCE,
+  mapTerminalSpecialKey,
   resetTerminal,
 } from "./terminal";
 
@@ -31,5 +32,73 @@ describe("terminal reset", () => {
     expect(terminal.reset).toHaveBeenCalledOnce();
     expect(terminal.write).not.toHaveBeenCalled();
     expect(terminal.focus).toHaveBeenCalledOnce();
+  });
+});
+
+describe("terminal special key mapping", () => {
+  const keyEvent = (key: string) => ({
+    type: "keydown",
+    key,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    isComposing: false,
+  });
+
+  it("maps Enter to CR, LF, or CRLF", () => {
+    expect(
+      mapTerminalSpecialKey(keyEvent("Enter"), {
+        enterKey: "cr",
+        backspaceKey: "del",
+      }),
+    ).toBe("\r");
+    expect(
+      mapTerminalSpecialKey(keyEvent("Enter"), {
+        enterKey: "lf",
+        backspaceKey: "del",
+      }),
+    ).toBe("\n");
+    expect(
+      mapTerminalSpecialKey(keyEvent("Enter"), {
+        enterKey: "crlf",
+        backspaceKey: "del",
+      }),
+    ).toBe("\r\n");
+  });
+
+  it("maps Backspace to DEL or BS", () => {
+    expect(
+      mapTerminalSpecialKey(keyEvent("Backspace"), {
+        enterKey: "cr",
+        backspaceKey: "del",
+      }),
+    ).toBe("\u007f");
+    expect(
+      mapTerminalSpecialKey(keyEvent("Backspace"), {
+        enterKey: "cr",
+        backspaceKey: "bs",
+      }),
+    ).toBe("\b");
+  });
+
+  it("leaves modified, composing, and unrelated keys to xterm", () => {
+    expect(
+      mapTerminalSpecialKey(
+        { ...keyEvent("Enter"), ctrlKey: true },
+        { enterKey: "lf", backspaceKey: "bs" },
+      ),
+    ).toBeNull();
+    expect(
+      mapTerminalSpecialKey(
+        { ...keyEvent("Backspace"), isComposing: true },
+        { enterKey: "lf", backspaceKey: "bs" },
+      ),
+    ).toBeNull();
+    expect(
+      mapTerminalSpecialKey(keyEvent("F5"), {
+        enterKey: "lf",
+        backspaceKey: "bs",
+      }),
+    ).toBeNull();
   });
 });

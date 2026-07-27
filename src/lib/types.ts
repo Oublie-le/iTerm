@@ -86,6 +86,8 @@ export interface ExternalToolStatus {
 export interface TerminalConfig {
   encoding: string;
   termType: string;
+  enterKey: "cr" | "lf" | "crlf";
+  backspaceKey: "del" | "bs";
   scrollback: number;
   fontFamily: string;
   fontSize: number;
@@ -251,6 +253,8 @@ export const DEFAULT_ADB_CONFIG: AdbConfig = {
 export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   encoding: "utf-8",
   termType: "xterm-256color",
+  enterKey: "cr",
+  backspaceKey: "del",
   scrollback: 999_999,
   fontFamily: '"Roboto Mono", "SFMono-Regular", Consolas, monospace',
   fontSize: 14,
@@ -330,13 +334,26 @@ export function duplicateSessionProfile(
 export function normalizeSessionProfile(
   profile: SessionProfile,
 ): SessionProfile {
+  const enterKey = profile.terminal?.enterKey;
+  const backspaceKey = profile.terminal?.backspaceKey;
   return {
     ...profile,
     protocol: profile.protocol ?? "serial",
     serial: { ...DEFAULT_SERIAL_CONFIG, ...profile.serial },
     ssh: { ...DEFAULT_SSH_CONFIG, ...profile.ssh },
     adb: { ...DEFAULT_ADB_CONFIG, ...profile.adb },
-    terminal: { ...DEFAULT_TERMINAL_CONFIG, ...profile.terminal },
+    terminal: {
+      ...DEFAULT_TERMINAL_CONFIG,
+      ...profile.terminal,
+      enterKey:
+        enterKey === "cr" || enterKey === "lf" || enterKey === "crlf"
+          ? enterKey
+          : DEFAULT_TERMINAL_CONFIG.enterKey,
+      backspaceKey:
+        backspaceKey === "del" || backspaceKey === "bs"
+          ? backspaceKey
+          : DEFAULT_TERMINAL_CONFIG.backspaceKey,
+    },
     logging: { ...DEFAULT_LOGGING_CONFIG, ...profile.logging },
     triggers: Array.isArray(profile.triggers)
       ? profile.triggers.map((trigger) => ({ ...trigger }))

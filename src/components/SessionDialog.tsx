@@ -881,6 +881,37 @@ export function SessionDialog({
                     </select>
                   </label>
                   <label className="field-row">
+                    <span>Enter 键</span>
+                    <select
+                      value={draft.terminal.enterKey}
+                      onChange={(event) =>
+                        updateTerminal({
+                          enterKey: event.target
+                            .value as SessionProfile["terminal"]["enterKey"],
+                        })
+                      }
+                    >
+                      <option value="cr">CR</option>
+                      <option value="lf">LF</option>
+                      <option value="crlf">CRLF</option>
+                    </select>
+                  </label>
+                  <label className="field-row">
+                    <span>Backspace 键</span>
+                    <select
+                      value={draft.terminal.backspaceKey}
+                      onChange={(event) =>
+                        updateTerminal({
+                          backspaceKey: event.target
+                            .value as SessionProfile["terminal"]["backspaceKey"],
+                        })
+                      }
+                    >
+                      <option value="del">DEL（0x7F）</option>
+                      <option value="bs">BS（0x08）</option>
+                    </select>
+                  </label>
+                  <label className="field-row">
                     <span>字体</span>
                     <input
                       value={draft.terminal.fontFamily}
