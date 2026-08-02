@@ -36,7 +36,7 @@ jobs:
     steps:
       - name: Create or locate release
         id: release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         with:
@@ -266,7 +266,7 @@ jobs:
 
     steps:
       - name: Verify expected assets
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         with:
