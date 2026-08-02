@@ -33,7 +33,7 @@
     "@xterm/addon-unicode11": "0.9.0",
     "@xterm/addon-webgl": "0.19.0",
     "@xterm/xterm": "6.0.0",
-    "lucide-react": "1.27.0",
+    "lucide-react": "1.28.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zmodem.js": "0.1.10",
@@ -43,13 +43,13 @@
   "devDependencies": {
     "@playwright/test": "1.62.0",
     "@tauri-apps/cli": "2.11.4",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "6.0.4",
-    "jsdom": "^29.1.1",
+    "@vitejs/plugin-react": "6.0.5",
+    "jsdom": "^30.0.1",
     "typescript": "7.0.2",
-    "vite": "8.1.5",
+    "vite": "8.2.0",
     "vitest": "4.1.10"
   },
   "packageManager": "pnpm@11.9.0"
