@@ -26,31 +26,31 @@
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
-    "@tauri-apps/plugin-dialog": "2.7.2",
-    "@tauri-apps/plugin-fs": "2.5.1",
+    "@tauri-apps/plugin-dialog": "2.7.3",
+    "@tauri-apps/plugin-fs": "2.5.2",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-search": "0.16.0",
     "@xterm/addon-unicode11": "0.9.0",
     "@xterm/addon-webgl": "0.19.0",
     "@xterm/xterm": "6.0.0",
-    "lucide-react": "1.27.0",
+    "lucide-react": "1.40.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zmodem.js": "0.1.10",
-    "zod": "4.4.3",
-    "zustand": "5.0.14"
+    "zod": "4.5.4",
+    "zustand": "5.0.15"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.0",
+    "@playwright/test": "1.62.1",
     "@tauri-apps/cli": "2.11.4",
-    "@types/node": "^26.1.1",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "6.0.4",
-    "jsdom": "^29.1.1",
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "^30.0.1",
     "typescript": "7.0.2",
-    "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
   },
   "packageManager": "pnpm@11.9.0"
 }
